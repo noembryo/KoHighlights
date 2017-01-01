@@ -54,7 +54,7 @@ class Base(QMainWindow, Ui_Base):
 
         self.skip_version = 0
         self.last_dir = os.getcwd()
-        self.exit_msg = False
+        self.exit_msg = True
 
         self.file_table.verticalHeader().setResizeMode(QHeaderView.Fixed)
         self.header_main = self.file_table.horizontalHeader()
