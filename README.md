@@ -3,7 +3,7 @@
 
 **KoHighlights** is a utility for viewing and converting the [Koreader](https://github.com/koreader/koreader)'s history files to simple text.  
 This is a totally re-written application using the Qt framework (PySide).  
-The original KoHighlights (using the wxPython) can be found [here](https://github.com/noonkey/KoHighlights) but is considered deprecated.
+The original KoHighlights (using the wxPython) can be found [here](https://github.com/noonkey/KoHighlights), but is considered deprecated.
 
 
 ![HighLights ScreenShot 01](screen1.png)
