@@ -18,6 +18,6 @@ The original KoHighlights (using the wxPython) can be found [here](https://githu
     * A text file for every selected book or
     * A single text file with all highlights combined
 
-# Downloads
+# Downloads 
 
 Check the latest release on the [Downloads Page](https://github.com/noembryo/KoHighlights/releases)
