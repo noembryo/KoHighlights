@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_main.ui'
 #
-# Created: Sat Dec 31 20:31:03 2016
+# Created: Sun May 28 21:02:32 2017
 #      by: pyside-uic 0.2.15 running on PySide 1.2.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -15,7 +15,7 @@ class Ui_Base(object):
         Base.resize(650, 600)
         Base.setWindowTitle("KoHighlights")
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(":/stuff/icon.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap("stuff/icon.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         Base.setWindowIcon(icon)
         Base.setLocale(QtCore.QLocale(QtCore.QLocale.English, QtCore.QLocale.UnitedStates))
         Base.setToolButtonStyle(QtCore.Qt.ToolButtonIconOnly)
@@ -35,9 +35,9 @@ class Ui_Base(object):
         self.file_table.setSelectionBehavior(QtGui.QAbstractItemView.SelectRows)
         self.file_table.setHorizontalScrollMode(QtGui.QAbstractItemView.ScrollPerPixel)
         self.file_table.setCornerButtonEnabled(False)
-        self.file_table.setColumnCount(3)
+        self.file_table.setColumnCount(4)
         self.file_table.setObjectName("file_table")
-        self.file_table.setColumnCount(3)
+        self.file_table.setColumnCount(4)
         self.file_table.setRowCount(0)
         item = QtGui.QTableWidgetItem()
         self.file_table.setHorizontalHeaderItem(0, item)
@@ -45,6 +45,8 @@ class Ui_Base(object):
         self.file_table.setHorizontalHeaderItem(1, item)
         item = QtGui.QTableWidgetItem()
         self.file_table.setHorizontalHeaderItem(2, item)
+        item = QtGui.QTableWidgetItem()
+        self.file_table.setHorizontalHeaderItem(3, item)
         self.file_table.horizontalHeader().setHighlightSections(False)
         self.file_table.horizontalHeader().setMinimumSectionSize(22)
         self.file_table.horizontalHeader().setSortIndicatorShown(True)
@@ -85,9 +87,9 @@ class Ui_Base(object):
         self.file_table.setSortingEnabled(True)
         self.file_table.horizontalHeaderItem(0).setText(QtGui.QApplication.translate("Base", "Title", None, QtGui.QApplication.UnicodeUTF8))
         self.file_table.horizontalHeaderItem(1).setText(QtGui.QApplication.translate("Base", "Author", None, QtGui.QApplication.UnicodeUTF8))
-        self.file_table.horizontalHeaderItem(2).setText(QtGui.QApplication.translate("Base", "Path", None, QtGui.QApplication.UnicodeUTF8))
+        self.file_table.horizontalHeaderItem(2).setText(QtGui.QApplication.translate("Base", "Modified", None, QtGui.QApplication.UnicodeUTF8))
+        self.file_table.horizontalHeaderItem(3).setText(QtGui.QApplication.translate("Base", "Path", None, QtGui.QApplication.UnicodeUTF8))
         self.act_english.setText(QtGui.QApplication.translate("Base", "English", None, QtGui.QApplication.UnicodeUTF8))
         self.act_greek.setText(QtGui.QApplication.translate("Base", "Greek", None, QtGui.QApplication.UnicodeUTF8))
 
 from main import DropTableWidget
-import images_rc

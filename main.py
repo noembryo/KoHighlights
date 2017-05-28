@@ -8,13 +8,16 @@ import json
 import traceback
 import cPickle
 import time
-import mechanize
+
 import urllib2
 import webbrowser
+from distutils.version import LooseVersion
 from os.path import (isdir, join, basename, splitext, dirname)
 from pprint import pprint
 
-from bs4 import BeautifulSoup  # __ ###########   DEPENDENCIES   ############
+import mechanize  # __ ####################   DEPENDENCIES   ############
+from bs4 import BeautifulSoup
+from datetime import datetime
 from slpp import slpp as lua
 from PySide.QtCore import (Qt, QTimer, Slot, QObject, Signal, QThread)
 from PySide.QtGui import (QMainWindow, QApplication, QMessageBox, QIcon,
@@ -29,7 +32,7 @@ from gui_toolbar import Ui_ToolBar
 
 
 __author__ = 'noEmbryo'
-__version__ = '0.2.0.1'
+__version__ = '0.2.1.1'
 
 
 def _(text):
@@ -96,6 +99,7 @@ class Base(QMainWindow, Ui_Base):
         self.toolbar.save_btn.setMenu(self.save_menu())  # assign/create menu
         self.connect_gui()
         self.show()
+        self.passed_files()
 
     ########################################################
     # __                   EVENTS STUFF                    #
@@ -276,14 +280,15 @@ class Base(QMainWindow, Ui_Base):
             except KeyError:  # old type history file
                 break
         else:
-            self.popup('Book Info', text.rstrip(), icon=QMessageBox.Information)
+            self.popup(_('Book Info'), text.rstrip(), icon=QMessageBox.Information)
             return
 
+        # If older type file or other problems
         path = self.file_table.item(row, 2).data(0)
         stats = self.get_item_stats(path, data)
-        text += 'Title: {}\n'.format(stats[1])
-        text += 'Authors: {}'.format(stats[2])
-        self.popup('Book Info', text, icon=QMessageBox.Information)
+        text += _('Title: {}\n').format(stats[1])
+        text += _('Authors: {}').format(stats[2])
+        self.popup(_('Book Info'), text, icon=QMessageBox.Information)
 
     def scan_files_thread(self, path):
         """ Gets all the history files that are inside
@@ -333,9 +338,15 @@ class Base(QMainWindow, Ui_Base):
                 author_item.setToolTip(authors)
                 self.file_table.setItem(idx, 1, author_item)
 
+                date = str(datetime.fromtimestamp(os.path.getmtime(filename)))
+                date_item = QTableWidgetItem(date)
+                date_item.setToolTip(date)
+                self.file_table.setItem(idx, 2, date_item)
+
                 path_item = QTableWidgetItem(filename)
                 path_item.setToolTip(filename)
-                self.file_table.setItem(idx, 2, path_item)
+                self.file_table.setItem(idx, 3, path_item)
+
         self.file_table.resizeColumnsToContents()
 
     @staticmethod
@@ -373,15 +384,14 @@ class Base(QMainWindow, Ui_Base):
                 title = splitext(name)[0]
             except IndexError:  # no '#] ' in filename
                 pass
-            authors = 'OLD TYPE FILE'
+            authors = _('OLD TYPE FILE')
         if not title:
             try:
                 name = filename.split('#] ')[1]
                 title = splitext(name)[0]
             except IndexError:  # no '#] ' in filename
-                title = 'NO TITLE FOUND'
-        # title = title if title else 'NO TITLE'
-        authors = authors if authors else 'NO AUTHOR FOUND'
+                title = _('NO TITLE FOUND')
+        authors = authors if authors else _('NO AUTHOR FOUND')
         return icon, title, authors
 
     ########################################################
@@ -439,10 +449,11 @@ class Base(QMainWindow, Ui_Base):
                 if not highlights:  # no highlights
                     continue
                 title = self.file_table.item(row, 0).data(0)
-                if title == 'NO TITLE FOUND':
+                if title == _('NO TITLE FOUND'):
                     title += str(title_counter)
                     title_counter += 1
                 authors = self.file_table.item(row, 1).data(0)
+                # 2check: problem if using gettext (needs translated strings too
                 if authors in ['OLD TYPE FILE', 'NO AUTHOR FOUND']:
                     authors = ''
                 name = title
@@ -475,10 +486,11 @@ class Base(QMainWindow, Ui_Base):
                 if not highlights:  # no highlights
                     continue
                 title = self.file_table.item(row, 0).data(0)
-                if title == 'NO TITLE FOUND':
+                if title == _('NO TITLE FOUND'):
                     title += str(title_counter)
                     title_counter += 1
                 authors = self.file_table.item(row, 1).data(0)
+                # 2check: problem if using gettext (needs translated strings too
                 if authors in ['OLD TYPE FILE', 'NO AUTHOR FOUND']:
                     authors = ''
                 name = title
@@ -494,8 +506,8 @@ class Base(QMainWindow, Ui_Base):
 
         self.status_animation('stop')
         all_files = len(self.file_table.selectionModel().selectedRows())
-        self.popup('Finished!', '{} texts were saved from the {} processed.\n'
-                                '{} files with no highlights.'
+        self.popup(_('Finished!'), _('{} texts were saved from the {} processed.\n'
+                                     '{} files with no highlights.')
                    .format(saved, all_files, all_files - saved),
                    icon=QMessageBox.Information)
 
@@ -503,15 +515,14 @@ class Base(QMainWindow, Ui_Base):
     # __                  UTILITY STUFF                    #
     ########################################################
 
-    @staticmethod
-    def passed_files():
+    def passed_files(self):
         """ Command line parameters that are passed to the program.
         """
         # args = QApplication.instance().arguments()
         try:
             if sys.argv[1]:
-                for filename in sys.argv[1:]:
-                    print(filename.decode('mbcs'))
+                dropped = [i.decode('mbcs') for i in sys.argv[1:]]
+                self.items_dropped(dropped)
         except IndexError:
             pass
 
@@ -595,7 +606,9 @@ class Base(QMainWindow, Ui_Base):
             return
         if not version_new:
             return
-        if version_new > self.version and version_new != self.skip_version:
+        version = LooseVersion(self.version)
+        skip_version = LooseVersion(self.skip_version)
+        if version_new > version and version_new != skip_version:
             popup = self.popup(_('Newer version exists!'),
                                _('There is a newer version (v.{}) online.\n'
                                  'Open the site to download it now?')
@@ -620,7 +633,12 @@ class Base(QMainWindow, Ui_Base):
 
         if self.sender().objectName() == 'err':
             text = '\033[91m' + text + '\033[0m'
-        sys.__stdout__.write(text)
+
+        # noinspection PyBroadException
+        try:
+            sys.__stdout__.write(text)
+        except Exception:  # a problematic print that WE HAVE to ignore or we LOOP
+            pass
 
     def on_check_btn(self):
         QMessageBox.information(self, _('Info'), _('Tool button is pressed'))
@@ -651,7 +669,7 @@ class About(QDialog, Ui_About):
             self.base.popup(_('No response!'), _('Version info is unreachable!\n'
                                                  'Please, try again later...'), buttons=1)
             return
-        version = self.base.version
+        version = LooseVersion(self.base.version)
         if version_new > version:
             popup = self.base.popup(_('Newer version exists!'),
                                     _('There is a newer version (v.{}) online.\n'
@@ -691,13 +709,13 @@ class About(QDialog, Ui_About):
             version_new = match.group(0)
         except AttributeError:  # no match found
             return
-        return version_new
+        return LooseVersion(version_new)
 
     def create_text(self):
         # color = self.palette().color(QPalette.WindowText).name()  # for links
         splash = ":/stuff/logo.png"
         paypal = ":/stuff/paypal.png"
-        info = """<body style="font-size:10pt; font-weight:400; font-style:normal">
+        info = _("""<body style="font-size:10pt; font-weight:400; font-style:normal">
         <center>
           <table width="100%" border="0">
             <tr>
@@ -707,7 +725,9 @@ class About(QDialog, Ui_About):
                  text&nbsp;&nbsp;</p>
                 <p align="center">Version {1}</p>
                 <p align="center"><a href="https://github.com/noEmbryo/KoHighlights">
-                 Visit  KoHighlights page at GitHub</a></p>
+                 Visit  KoHighlights page at GitHub</a>, or</p>
+                <p align="center"><a href="http://www.noEmbryo.com">
+                 noEmbryo's page with more Apps and stuff</a>...</p>
                 <p align="center">Use it and if you like it, consider to
                 <p align="center"><a href="https://www.paypal.com/cgi-bin/webscr?
                 cmd=_s-xclick &hosted_button_id=RBYLVRYG9RU2S">
@@ -717,7 +737,7 @@ class About(QDialog, Ui_About):
             </tr>
           </table>
         </center>
-        </body>""".format(splash, self.base.version, paypal)
+        </body>""").format(splash, self.base.version, paypal)
         self.text_lbl.setText(info)
 
 
@@ -900,6 +920,20 @@ def print_error():
     traceback.print_exc()
 
 
+def except_hook(class_type, value, trace_back):
+    """ Print the error to a log file
+    """
+    # log the exception here
+    with open("err_log.txt", "a") as log:
+        log.write('\nCrash@{}\n'.format(time.strftime("%Y-%m-%d %H:%M:%S")))
+    traceback.print_exception(class_type, value, trace_back, limit=2,
+                              file=open("err_log.txt", "a"))
+    # then call the default handler
+    sys.__excepthook__(class_type, value, trace_back)
+
+sys.excepthook = except_hook
+
+
 class KoHighlights(QApplication):
     def __init__(self, *args, **kwargs):
         super(KoHighlights, self).__init__(*args, **kwargs)
@@ -908,13 +942,8 @@ class KoHighlights(QApplication):
         os.chdir(os.path.dirname(os.path.abspath(sys.argv[0])))
 
         self.base = Base()
-        self.base.passed_files()
         self.exec_()
 
 
 if __name__ == '__main__':
-    # noinspection PyBroadException
-    try:
-        app = KoHighlights(sys.argv)
-    except:
-        print_error()
+    app = KoHighlights(sys.argv)
