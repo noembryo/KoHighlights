@@ -34,7 +34,7 @@ from gui_toolbar import Ui_ToolBar
 
 
 __author__ = 'noEmbryo'
-__version__ = '0.3.1.0'
+__version__ = '0.3.1.2'
 
 
 def _(text):
