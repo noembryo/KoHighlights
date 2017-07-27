@@ -12,10 +12,12 @@ import time
 import urllib2
 import webbrowser
 from distutils.version import LooseVersion
-from os.path import (isdir, join, basename, splitext, dirname)
+from genericpath import exists
+from os.path import (isdir, isfile, join, basename, splitext, dirname, split)
 from pprint import pprint
 
 import mechanize  # __ ####################   DEPENDENCIES   ############
+import shutil
 from bs4 import BeautifulSoup
 from datetime import datetime
 from slpp import slpp as lua
@@ -23,7 +25,7 @@ from PySide.QtCore import (Qt, QTimer, Slot, QObject, Signal, QThread)
 from PySide.QtGui import (QMainWindow, QApplication, QMessageBox, QIcon,
                           QFileDialog, QTableWidgetItem, QTextCursor, QDialog,
                           QWidget, QLabel, QMovie, QFont, QMenu, QAction,
-                          QTableWidget, QCheckBox, QHeaderView)
+                          QTableWidget, QCheckBox, QHeaderView, QBrush, QColor, QCursor)
 
 from gui_main import Ui_Base  # __ ###########   GUI STUFF   ############
 from gui_about import Ui_About
@@ -32,19 +34,25 @@ from gui_toolbar import Ui_ToolBar
 
 
 __author__ = 'noEmbryo'
-__version__ = '0.2.1.1'
+__version__ = '0.3.1.0'
 
 
 def _(text):
     return text
 
+APP_NAME = "KoHighlights"
+APP_DIR = dirname(os.path.abspath(sys.argv[0]))
+os.chdir(APP_DIR)  # Set the current working directory to the app's directory
+PROFILE_DIR = join(os.environ['APPDATA'], APP_NAME)
+os.makedirs(PROFILE_DIR) if not exists(PROFILE_DIR) else None
 try:
-    with gzip.GzipFile('settings.json.gz', 'rb') as settings:
+    with gzip.GzipFile(join(PROFILE_DIR, 'settings.json.gz'), 'rb') as settings:
         app_config = json.loads(settings.read())
 except IOError:  # first run
     app_config = {}
 
 FIRST_RUN = not bool(app_config)
+TITLE, AUTHOR, TYPE, PERCENT, MODIFIED, PATH = range(6)
 
 
 # noinspection PyCallByClass
@@ -54,6 +62,11 @@ class Base(QMainWindow, Ui_Base):
         self.scan_thread = QThread()
         self.setupUi(self)
         self.version = __version__
+        self.sel_idx = None
+        self.sel_indexes = []
+        self.file_selection = None
+        self.col_sort = MODIFIED
+        self.col_sort_asc = False
 
         self.skip_version = 0
         self.last_dir = os.getcwd()
@@ -95,8 +108,9 @@ class Base(QMainWindow, Ui_Base):
         """
         self.settings_load()
         if FIRST_RUN:  # on first run
-            pass
+            self.splitter.setSizes((500, 250))
         self.toolbar.save_btn.setMenu(self.save_menu())  # assign/create menu
+        self.toolbar.delete_btn.setMenu(self.delete_menu())  # assign/create menu
         self.connect_gui()
         self.show()
         self.passed_files()
@@ -109,10 +123,15 @@ class Base(QMainWindow, Ui_Base):
     def connect_gui(self):
         """ Make all the signal/slots connections
         """
+        self.file_selection = self.file_table.selectionModel()
+        self.file_selection.selectionChanged.connect(self.file_selection_update)
+        self.header_main.sectionClicked.connect(self.on_column_clicked)
         self.file_table.fileDropped.connect(self.items_dropped)
         self.file_table.itemClicked.connect(self.on_item_clicked)
         self.file_table.itemDoubleClicked.connect(self.on_item_double_clicked)
+        self.file_table.customContextMenuRequested.connect(self.on_item_right_clicked)
         self.toolbar.save_btn.clicked.connect(lambda: self.save_actions(0))
+        self.toolbar.delete_btn.clicked.connect(lambda: self.delete_actions(0))
 
         sys.stdout = LogStream()
         sys.stdout.setObjectName('out')
@@ -132,16 +151,16 @@ class Base(QMainWindow, Ui_Base):
             if key == Qt.Key_D:
                 print('control + D')
                 return True
-            if key == Qt.Key_Delete:  # ctrl+Del
+            if key == Qt.Key_Backspace:  # ctrl+Backspace
                 self.toolbar.on_clear_btn_clicked()
                 return True
-            if key == Qt.Key_O:  # ctrl+O
+            if key == Qt.Key_L:  # ctrl+L
                 self.toolbar.on_select_btn_clicked()
                 return True
             if key == Qt.Key_S:  # ctrl+S
                 self.save_actions(0)
                 return True
-            if key == Qt.Key_I:  # ctrl+I
+            if key == Qt.Key_O:  # ctrl+O
                 self.toolbar.on_info_btn_clicked()
                 return True
             if key == Qt.Key_Q:  # ctrl+Q
@@ -150,9 +169,10 @@ class Base(QMainWindow, Ui_Base):
             self.close()
 
         if key == Qt.Key_Delete:  # Delete
-            for idx in sorted(self.file_table.selectionModel().selectedRows(),
-                              reverse=True):
-                self.file_table.removeRow(idx.row())
+            self.delete_actions(0)
+            # for idx in sorted(self.file_table.selectionModel().selectedRows(),
+            #                   reverse=True):
+            #     self.file_table.removeRow(idx.row())
             return True
 
     def closeEvent(self, event):
@@ -190,28 +210,26 @@ class Base(QMainWindow, Ui_Base):
             self.restoreState(self.unpickle('state'))
             self.splitter.restoreState(self.unpickle('splitter'))
             self.about.restoreGeometry(self.unpickle('about_geometry'))
-            # window = app_config.get('window', None)
-            # if window:
-            #     self.move(*window[0])
-            #     self.resize(*window[1])
+            self.col_sort = app_config.get('col_sort', 3)
+            self.col_sort_asc = app_config.get('col_sort_asc', False)
             self.last_dir = app_config.get('last_dir', os.getcwd())
+            self.fold_btn.setChecked(app_config.get('show_info', True))
             self.skip_version = app_config.get('skip_version', None)
 
     def settings_save(self):
         """ Saves the jason based configuration settings
         """
-        # window = self.pos().toTuple(), self.size().toTuple()
-
         config = {'geometry': cPickle.dumps(self.saveGeometry()),
                   'state': cPickle.dumps(self.saveState()),
                   'splitter': cPickle.dumps(self.splitter.saveState()),
                   'about_geometry': cPickle.dumps(self.about.saveGeometry()),
-                  # 'window': window,
+                  'col_sort_asc': self.col_sort_asc, 'col_sort': self.col_sort,
                   'last_dir': self.last_dir,
+                  'show_info': self.fold_btn.isChecked(),
                   'skip_version': self.skip_version,
                   }
         try:
-            with gzip.GzipFile('settings.json.gz', 'w+') as gz_file:
+            with gzip.GzipFile(join(PROFILE_DIR, 'settings.json.gz'), 'w+') as gz_file:
                 gz_file.write(json.dumps(config, sort_keys=True, indent=4))
         except IOError as error:
             print('On saving settings:', error)
@@ -237,8 +255,9 @@ class Base(QMainWindow, Ui_Base):
         :type dropped: list
         :param dropped: The items dropped
         """
-        files = [i for i in dropped if splitext(i)[1] == '.lua']
-        self.create_items(files)
+        for i in dropped:
+            if splitext(i)[1] == '.lua':
+                self.create_row(i)
         folders = [j for j in dropped if isdir(j)]
         for folder in folders:
             self.scan_files_thread(folder)
@@ -249,14 +268,58 @@ class Base(QMainWindow, Ui_Base):
         :param item: The item (cell) that is clicked
         """
         row = item.row()
-        data = self.file_table.item(row, 0).data(Qt.UserRole)
+        data = self.file_table.item(row, TITLE).data(Qt.UserRole)
 
         self.text_box.clear()
+        highlights = ''
         for i in data['highlight']:
             try:
-                self.text_box.appendPlainText(data['highlight'][i][1]['text'] + '\n')
+                highlights += data['highlight'][i][1]['text'] + '\n\n'
             except KeyError:  # blank highlight
                 continue
+        self.text_box.setPlainText(highlights)
+        self.populate_book_info(data, row)
+
+    def populate_book_info(self, data, row):
+        """ When an item of the FileTable is double-clicked
+        :type data: dict
+        :param data: The items data
+        :type row: int
+        :param row: The items row number
+        """
+        items = ['title', 'authors', 'series', 'language',
+                 'pages', 'total_time_in_sec', 'status']
+        fields = [self.title_txt, self.author_txt, self.series_txt, self.lang_txt,
+                  self.pages_txt, self.time_txt, self.status_txt]
+        for item, field in zip(items, fields):
+            try:
+                # 2check if no title in metadata
+                if item == 'title' and not data['stats'][item]:
+                    path = self.file_table.item(row, PATH).data(0)
+                    try:
+                        name = path.split('#] ')[1]
+                        value = splitext(name)[0]
+                    except IndexError:  # no '#] ' in filename
+                        pass
+                elif item == 'total_time_in_sec':
+                    value = self.get_time_str(data['stats'][item])
+                elif item == 'status':
+                    value = data['summary']['status'].title()
+                else:
+                    value = data['stats'][item]
+                try:
+                    field.setText(value)
+                except TypeError:  # Needs sting only
+                    field.setText(str(value) if value else '')
+            except KeyError:  # older type file or other problems
+                path = self.file_table.item(row, PATH).data(0)
+                stats = self.get_item_stats(path, data)
+                if item == 'title':
+                    field.setText(stats[1])
+                elif item == 'authors':
+                    field.setText(stats[2])
+                else:
+                    field.setText('')
 
     def on_item_double_clicked(self, item):
         """ When an item of the FileTable is double-clicked
@@ -264,31 +327,82 @@ class Base(QMainWindow, Ui_Base):
         :param item: The item (cell) that is double-clicked
         """
         row = item.row()
-        data = self.file_table.item(row, 0).data(Qt.UserRole)
-        items = ['title', 'authors', 'series', 'language',
-                 'pages', 'total_time_in_sec']
-        text = ''
-        for item in items:
-            try:
-                value = data['stats'][item]
-                if item == 'title' and not value:
-                    break
-                if item == 'total_time_in_sec':
-                    value = self.get_time_str(data['stats'][item])
-                    item = 'total time'
-                text += '{}: {}\n'.format(item.capitalize(), value)
-            except KeyError:  # old type history file
-                break
-        else:
-            self.popup(_('Book Info'), text.rstrip(), icon=QMessageBox.Information)
-            return
+        path = splitext(self.file_table.item(row, PATH).data(0))[0]
+        path = self.get_book_path(path)
+        (os.startfile(path) if isfile(path) else
+         self.popup(_('Error opening file!'), _('{} does not exists!').format(path)))
 
-        # If older type file or other problems
-        path = self.file_table.item(row, 2).data(0)
-        stats = self.get_item_stats(path, data)
-        text += _('Title: {}\n').format(stats[1])
-        text += _('Authors: {}').format(stats[2])
-        self.popup(_('Book Info'), text, icon=QMessageBox.Information)
+    @staticmethod
+    def get_book_path(path):
+        """ Returns the filename of the book that the metadata refers to
+        :type path: str|unicode
+        :param path: The path of the metadata file
+        """
+        path, ext = splitext(path)
+        path = splitext(split(path)[0])[0] + ext
+        return path
+
+    # noinspection PyUnusedLocal
+    def on_item_right_clicked(self, point):
+        """ When an item of the FileTable is right-clicked
+        :type point: QPoint
+        :param point: The point where the right-click happened
+        """
+        # row = self.file_table.itemAt(point).row()
+
+        menu = QMenu(self.file_table)
+
+        menu.addAction(self.act_view_book)
+
+        save_menu = self.save_menu()
+        save_menu.setIcon(QIcon(':/stuff/file_save.png'))
+        save_menu.setTitle(_('Save selected'))
+        menu.addMenu(save_menu)
+
+        delete_menu = self.delete_menu()
+        delete_menu.setIcon(QIcon(':/stuff/files_delete.png'))
+        delete_menu.setTitle(_('Delete\tDel'))
+        menu.addMenu(delete_menu)
+
+        # noinspection PyArgumentList
+        menu.exec_(QCursor.pos())
+
+    # noinspection PyUnusedLocal
+    def file_selection_update(self, selected, deselected):
+        """ When a row in FileTable gets selected
+        :type selected: QModelIndex
+        :parameter selected: The selected row
+        :type deselected: QModelIndex
+        :parameter deselected: The deselected row
+        """
+        try:
+            self.sel_indexes = self.file_selection.selectedRows()
+            self.sel_idx = self.sel_indexes[-1]
+        except IndexError:  # empty table
+            pass
+
+    def on_column_clicked(self, column):
+        """ Sets the current sorting column
+        :type column: int
+        :parameter column: The column where the filtering is applied
+        """
+        if column == self.col_sort:
+            self.col_sort_asc = not self.col_sort_asc
+        self.col_sort = column
+
+    @Slot(bool)
+    def on_fold_btn_toggled(self, pressed):
+        """ Open/closes the Book info panel
+        :type pressed: bool
+        :param pressed: The arrow button's status
+        """
+        if pressed:  # Closed
+            self.fold_btn.setText(_('Show Book Info'))
+            self.fold_btn.setArrowType(Qt.RightArrow)
+        else:  # Opened
+            self.fold_btn.setText(_('Hide Book Info'))
+            self.fold_btn.setArrowType(Qt.DownArrow)
+        self.book_info.setHidden(pressed)
 
     def scan_files_thread(self, path):
         """ Gets all the history files that are inside
@@ -296,9 +410,12 @@ class Base(QMainWindow, Ui_Base):
         :type path: str|unicode
         :param path: The root path
         """
+        self.file_table.setSortingEnabled(False)  # need this before populating table
+
         scanner = Scanner(path)
         scanner.moveToThread(self.scan_thread)
-        scanner.found.connect(self.create_items)
+        scanner.found.connect(self.create_row)
+        scanner.found_empty_sdr.connect(self.add_to_empty)
         scanner.finished.connect(self.scan_finished)
         scanner.finished.connect(self.scan_thread.quit)
         self.scan_thread.downer = scanner
@@ -307,51 +424,99 @@ class Base(QMainWindow, Ui_Base):
 
         self.status_animation('start')
 
-        self.auto_info.set_text(_("Scanning for KoReader history files.\n"
+        self.auto_info.set_text(_("Scanning for KoReader metadata files.\n"
                                   "Please Wait..."))
         self.auto_info.show()
 
     def scan_finished(self):
+        """ What will happen after the scanning for history files ends
+        """
         self.status_animation('stop')
         self.auto_info.hide()
-
-    def create_items(self, files):
-        """ Creates table items out of the files given
-        :type files: list
-        :param files: The files given
-        """
-        for idx, filename in enumerate(files):
-            if os.path.exists(filename) and splitext(filename)[1].lower() == '.lua':
-                self.file_table.insertRow(idx)
-                data = self.convert_data(filename)
-                if not data:
-                    print('No data here!', filename)
-                    continue
-                icon, title, authors = self.get_item_stats(filename, data)
-
-                title_item = QTableWidgetItem(icon, title)
-                title_item.setToolTip(title)
-                title_item.setData(Qt.UserRole, data)
-                self.file_table.setItem(idx, 0, title_item)
-
-                author_item = QTableWidgetItem(authors)
-                author_item.setToolTip(authors)
-                self.file_table.setItem(idx, 1, author_item)
-
-                date = str(datetime.fromtimestamp(os.path.getmtime(filename)))
-                date_item = QTableWidgetItem(date)
-                date_item.setToolTip(date)
-                self.file_table.setItem(idx, 2, date_item)
-
-                path_item = QTableWidgetItem(filename)
-                path_item.setToolTip(filename)
-                self.file_table.setItem(idx, 3, path_item)
-
         self.file_table.resizeColumnsToContents()
 
+        self.file_table.setSortingEnabled(True)  # re-enable it after populating table
+        order = Qt.AscendingOrder if self.col_sort_asc else Qt.DescendingOrder
+        self.file_table.sortByColumn(self.col_sort, order)
+
+    def create_row(self, filename):
+        """ Creates a table row from the given file
+        :type filename: str|unicode
+        :param filename: The file to be read
+        """
+        if os.path.exists(filename) and splitext(filename)[1].lower() == '.lua':
+            self.file_table.insertRow(0)
+            data = self.decode_data(filename)
+            if not data:
+                print('No data here!', filename)
+                return
+            icon, title, authors, status, percent = self.get_item_stats(filename, data)
+            ext = splitext(splitext(filename)[0])[1][1:]
+            book_path = splitext(self.get_book_path(filename))[0] + '.' + ext
+            book_exists = isfile(book_path)
+            if book_exists:
+                green = '#005500'
+                red = '#660000'
+                normal = None
+                book_icon = QIcon(':/stuff/file_exists.png')
+            else:
+                green = '#559955'
+                red = '#996666'
+                normal = '#666666'
+                book_icon = QIcon(':/stuff/file_missing.png')
+
+            color = (green if status == 'complete' else red
+                     if status == 'abandoned' else None) if status else normal
+
+            title_item = QTableWidgetItem(icon, title)
+            title_item.setToolTip(title)
+            title_item.setData(Qt.UserRole, data)
+            title_item.setForeground(QBrush(QColor(color)))
+            self.file_table.setItem(0, TITLE, title_item)
+
+            author_item = QTableWidgetItem(authors)
+            author_item.setToolTip(authors)
+            author_item.setForeground(QBrush(QColor(color)))
+            self.file_table.setItem(0, AUTHOR, author_item)
+
+            type_item = QTableWidgetItem(book_icon, ext)
+            type_item.setToolTip('The {} file {}'.format(ext, (_('exists') if book_exists
+                                                         else _('is missing'))))
+            type_item.setData(Qt.UserRole, (book_path, book_exists))
+            type_item.setForeground(QBrush(QColor(color)))
+            self.file_table.setItem(0, TYPE, type_item)
+
+            percent_item = QTableWidgetItem(percent)
+            percent_item.setToolTip(percent)
+            percent_item.setTextAlignment(Qt.AlignRight)
+            percent_item.setForeground(QBrush(QColor(color)))
+            self.file_table.setItem(0, PERCENT, percent_item)
+
+            date = str(datetime.fromtimestamp(os.path.getmtime(filename)))
+            date_item = QTableWidgetItem(date)
+            date_item.setToolTip(date)
+            date_item.setForeground(QBrush(QColor(color)))
+            self.file_table.setItem(0, MODIFIED, date_item)
+
+            path_item = QTableWidgetItem(filename)
+            path_item.setToolTip(filename)
+            path_item.setForeground(QBrush(QColor(color)))
+            self.file_table.setItem(0, PATH, path_item)
+
+    def add_to_empty(self, filename):
+        """ Adds empty .sdr folders to a list
+        :type filename: str|unicode
+        :param filename: The folder to be added
+        """
+        self.file_table.insertRow(0)
+
+        path_item = QTableWidgetItem(filename)
+        path_item.setToolTip(filename)
+        self.file_table.setItem(0, PATH, path_item)
+
     @staticmethod
-    def convert_data(path):
-        """ Converts the lua table to Python dict
+    def decode_data(path):
+        """ Converts a lua table to a Python dict
         :type path: str|unicode
         :param path: The path to the lua file
         """
@@ -362,6 +527,19 @@ class Base(QMainWindow, Ui_Base):
                 return data
 
     @staticmethod
+    def encode_data(path, dict_data):
+        """ Converts a Python dict to a lua table
+        :type path: str|unicode
+        :param path: The path to the lua file
+        :type dict_data: dict
+        :param dict_data: The dictionary to be encoded as lua table
+        """
+        with codecs.open(path, 'w+', encoding='utf8') as txt_file:
+            lua_text = '-- we can read Lua syntax here!\nreturn '
+            lua_text += lua.encode(dict_data)
+            txt_file.write(lua_text)
+
+    @staticmethod
     def get_item_stats(filename, data):
         """ Returns the title and authors of a history file
         :type filename: str|unicode
@@ -370,7 +548,7 @@ class Base(QMainWindow, Ui_Base):
         :param data: The dict converted lua file
         """
         if data['highlight']:
-            icon = QIcon(':/stuff/check.png')
+            icon = QIcon(':/stuff/label_green.png')
         else:
             icon = QIcon(':/stuff/trans32.png')
 
@@ -392,7 +570,107 @@ class Base(QMainWindow, Ui_Base):
             except IndexError:  # no '#] ' in filename
                 title = _('NO TITLE FOUND')
         authors = authors if authors else _('NO AUTHOR FOUND')
-        return icon, title, authors
+        try:
+            status = data['summary']['status']
+        except KeyError:
+            status = None
+        try:
+            percent = data['percent_finished']
+            percent = str(int(percent * 100)) + '%'
+            percent = 'Complete' if percent == '100%' else percent
+        except KeyError:
+            percent = None
+        return icon, title, authors, status, percent
+
+    ########################################################
+    # __                 DELETING STUFF                    #
+    ########################################################
+
+    def delete_menu(self):
+        """ Creates the `Delete` button menu
+        """
+        menu = QMenu(self)
+        icon = QIcon(':/stuff/files_delete.png')
+        # for idx, item in enumerate([_("selected .sdr folders"),
+        #                             _("selected books"),
+        #                             _("all .sdr folders with missing books"),
+        #                             ]):
+        for idx, item in enumerate([_("selected books' info"),
+                                    _("selected books"),
+                                    _("all missing books' info"),
+                                    ]):
+            action = QAction(item, menu)
+            action.triggered.connect(self.on_delete_actions)
+            action.setData(idx)
+            action.setIcon(icon)
+            menu.addAction(action)
+        return menu
+
+    def on_delete_actions(self):
+        """ When a `Delete action` is selected
+        """
+        idx = self.sender().data()
+        self.delete_actions(idx)
+
+    def delete_actions(self, idx):
+        """ Execute the selected `Delete action`
+        :type idx: int
+        :param idx: The action type
+        """
+        if not self.sel_indexes and idx in [0, 1]:
+            return
+
+        if idx == 0:
+            text = _("This will delete the selected books' information\n"
+                     "but will keep the equivalent books.")
+        elif idx == 1:
+            text = _("This will delete the selected books and their information.")
+        elif idx == 2:
+            text = _("This will delete all the books' information "
+                     "that refers to missing books.")
+        else:
+            text = ''
+        popup = self.popup(_('Warning!'), text, buttons=2)
+        if popup.buttonRole(popup.clickedButton()) == QMessageBox.RejectRole:
+            return
+
+        if idx == 0:
+            for index in sorted(self.sel_indexes)[::-1]:
+                row = index.row()
+                path = self.get_sdr_folder(row)
+                shutil.rmtree(path)
+                self.file_table.removeRow(row)
+        elif idx == 1:
+            for index in sorted(self.sel_indexes)[::-1]:
+                row = index.row()
+                path = self.get_sdr_folder(row)
+                shutil.rmtree(path)
+                try:
+                    book_path = self.file_table.item(row, TYPE).data(Qt.UserRole)[0]
+                    os.remove(book_path) if isfile(book_path) else None
+                    self.file_table.removeRow(row)
+                except AttributeError:  # empty entry
+                    self.file_table.removeRow(row)
+                    continue
+        elif idx == 2:
+            for i in range(self.file_table.rowCount())[::-1]:
+                try:
+                    book_exists = self.file_table.item(i, TYPE).data(Qt.UserRole)[1]
+                except AttributeError:  # empty entry
+                    continue
+                if not book_exists:
+                    shutil.rmtree(self.get_sdr_folder(i))
+                    self.file_table.removeRow(i)
+
+    def get_sdr_folder(self, row):
+        """ Get the .sdr folder path for an entry
+        :type row: int
+        :param row: The entry's row
+        """
+        path = split(self.file_table.item(row, PATH).data(0))[0]
+        if not path.lower().endswith('.sdr'):
+            path = self.file_table.item(row, PATH).data(0)
+        return path
 
     ########################################################
     # __                  SAVING STUFF                     #
@@ -403,8 +681,8 @@ class Base(QMainWindow, Ui_Base):
         """
         menu = QMenu(self)
         icon = QIcon(':/stuff/file_save.png')
-        for idx, item in enumerate([_("... to individual text files"),
-                                    _("... combined to one text file")]):
+        for idx, item in enumerate([_("to individual text files"),
+                                    _("combined to one text file")]):
             action = QAction(item, menu)
             action.triggered.connect(self.on_save_actions)
             action.setData(idx)
@@ -425,7 +703,7 @@ class Base(QMainWindow, Ui_Base):
         """
         title_counter = 0
         saved = 0
-        if not self.file_table.selectionModel().selectedRows():
+        if not self.sel_indexes:
             return
         if idx == 0:  # save to different text files
             path = QFileDialog.getExistingDirectory(self,
@@ -437,7 +715,7 @@ class Base(QMainWindow, Ui_Base):
                 self.status_animation('start')
             else:
                 return
-            for i in self.file_table.selectionModel().selectedRows():
+            for i in self.sel_indexes:
                 row = i.row()
                 data = self.file_table.item(row, 0).data(Qt.UserRole)
                 highlights = []
@@ -453,7 +731,7 @@ class Base(QMainWindow, Ui_Base):
                     title += str(title_counter)
                     title_counter += 1
                 authors = self.file_table.item(row, 1).data(0)
-                # 2check: problem if using gettext (needs translated strings too
+                # 2check: problem if using gettext (needs translated strings too)
                 if authors in ['OLD TYPE FILE', 'NO AUTHOR FOUND']:
                     authors = ''
                 name = title
@@ -474,7 +752,7 @@ class Base(QMainWindow, Ui_Base):
             else:
                 return
             blocks = []
-            for i in self.file_table.selectionModel().selectedRows():
+            for i in self.sel_indexes:
                 row = i.row()
                 data = self.file_table.item(row, 0).data(Qt.UserRole)
                 highlights = []
@@ -490,7 +768,7 @@ class Base(QMainWindow, Ui_Base):
                     title += str(title_counter)
                     title_counter += 1
                 authors = self.file_table.item(row, 1).data(0)
-                # 2check: problem if using gettext (needs translated strings too
+                # 2check: problem if using gettext (needs translated strings too)
                 if authors in ['OLD TYPE FILE', 'NO AUTHOR FOUND']:
                     authors = ''
                 name = title
@@ -645,6 +923,11 @@ class Base(QMainWindow, Ui_Base):
         # QMessageBox.aboutQt(self, title="")
 
 
+########################################################
+# __                  EXTRA CLASSES                    #
+########################################################
+
+
 class About(QDialog, Ui_About):
 
     def __init__(self, parent=None):
@@ -777,11 +1060,14 @@ class ToolBar(QWidget, Ui_ToolBar):
     @Slot()
     def on_select_btn_clicked(self):
         path = QFileDialog.getExistingDirectory(self.base,
-                                                _("Select a directory with books"),
+                                                _("Select a directory with books or "
+                                                  "your eReader's drive"),
                                                 self.base.last_dir,
                                                 QFileDialog.ShowDirsOnly)
         if path:
             self.base.last_dir = path
+            self.base.empty_folders = []
+            self.base.file_table.setRowCount(0)
             self.base.scan_files_thread(path)
 
     @Slot()
@@ -828,7 +1114,8 @@ class LogStream(QObject):
 
 
 class Scanner(QObject):
-    found = Signal(list)
+    found = Signal(unicode)
+    found_empty_sdr = Signal(unicode)
     finished = Signal()
 
     def __init__(self, path):
@@ -842,19 +1129,23 @@ class Scanner(QObject):
 
     def start_scan(self):
         for i in os.walk(self.path):
-            dir_path = i[0].lower()
-            if dir_path.endswith('koreader\\history'):
+            dir_path = i[0]
+            if dir_path.lower().endswith('koreader\\history'):
                 for j in i[2]:
                     if splitext(j)[1].lower() == '.lua':
                         filename = join(dir_path, j)
-                        self.found.emit([filename])
+                        self.found.emit(filename)
                 continue
-            elif dir_path.endswith('.sdr'):
-                if dir_path.endswith('evernote.sdr'):
+            elif dir_path.lower().endswith('.sdr'):
+                if dir_path.lower().endswith('evernote.sdr'):
                     continue
-                filename = join(dir_path, i[2][0])
+                try:
+                    filename = join(dir_path, i[2][0])
+                except IndexError:  # no metadata in folder
+                    self.found_empty_sdr.emit(dir_path)
+                    continue
                 if splitext(filename)[1] == '.lua':
-                    self.found.emit([filename])
+                    self.found.emit(filename)
 
 
 class DropTableWidget(QTableWidget):
