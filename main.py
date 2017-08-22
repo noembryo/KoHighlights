@@ -31,10 +31,11 @@ from gui_main import Ui_Base  # __ ###########   GUI STUFF   ############
 from gui_about import Ui_About
 from gui_auto_info import Ui_AutoInfo
 from gui_toolbar import Ui_ToolBar
+from gui_status import Ui_Status
 
 
 __author__ = 'noEmbryo'
-__version__ = '0.3.1.2'
+__version__ = '0.3.2.0'
 
 
 def _(text):
@@ -83,11 +84,8 @@ class Base(QMainWindow, Ui_Base):
         self.toolbar = ToolBar(self)
         self.tool_bar.addWidget(self.toolbar)
 
-        self.anim_lbl = QLabel(self)
-        self.statusbar.addPermanentWidget(self.anim_lbl)
-        self.wait_anim = QMovie(':/stuff/wait.gif')
-        self.anim_lbl.setMovie(self.wait_anim)
-        self.anim_lbl.hide()
+        self.status = Status(self)
+        self.statusbar.addPermanentWidget(self.status)
 
         self.splitter.setCollapsible(0, False)
         self.splitter.setCollapsible(1, False)
@@ -130,8 +128,6 @@ class Base(QMainWindow, Ui_Base):
         self.file_table.itemClicked.connect(self.on_item_clicked)
         self.file_table.itemDoubleClicked.connect(self.on_item_double_clicked)
         self.file_table.customContextMenuRequested.connect(self.on_item_right_clicked)
-        self.toolbar.save_btn.clicked.connect(lambda: self.save_actions(0))
-        self.toolbar.delete_btn.clicked.connect(lambda: self.delete_actions(0))
 
         sys.stdout = LogStream()
         sys.stdout.setObjectName('out')
@@ -214,7 +210,10 @@ class Base(QMainWindow, Ui_Base):
             self.col_sort_asc = app_config.get('col_sort_asc', False)
             self.last_dir = app_config.get('last_dir', os.getcwd())
             self.fold_btn.setChecked(app_config.get('show_info', True))
+            self.status.show_pages_btn.setChecked(app_config.get('show_pages', True))
             self.skip_version = app_config.get('skip_version', None)
+        else:
+            self.resize(800, 600)
 
     def settings_save(self):
         """ Saves the jason based configuration settings
@@ -226,6 +225,7 @@ class Base(QMainWindow, Ui_Base):
                   'col_sort_asc': self.col_sort_asc, 'col_sort': self.col_sort,
                   'last_dir': self.last_dir,
                   'show_info': self.fold_btn.isChecked(),
+                  'show_pages': self.status.show_pages_btn.isChecked(),
                   'skip_version': self.skip_version,
                   }
         try:
@@ -270,10 +270,18 @@ class Base(QMainWindow, Ui_Base):
         row = item.row()
         data = self.file_table.item(row, TITLE).data(Qt.UserRole)
 
+        if self.file_table.item(row, TYPE).data(Qt.UserRole)[1]:
+            self.toolbar.open_btn.setEnabled(True)
+        else:
+            self.toolbar.open_btn.setEnabled(False)
+
         self.text_box.clear()
         highlights = ''
-        for i in data['highlight']:
+        for i in sorted(data['highlight']):
             try:
+                if self.status.show_pages_btn.isChecked():
+                    date = data['highlight'][i][1]['datetime']
+                    highlights += 'Page {} [{}]:\n'.format(i, date)
                 highlights += data['highlight'][i][1]['text'] + '\n\n'
             except KeyError:  # blank highlight
                 continue
@@ -309,8 +317,10 @@ class Base(QMainWindow, Ui_Base):
                     value = data['stats'][item]
                 try:
                     field.setText(value)
-                except TypeError:  # Needs sting only
-                    field.setText(str(value) if value else '')
+                except TypeError:  # Needs string only
+                    field.setText(str(value) if value else '')  # '' if 0
+                except UnboundLocalError:  # no value exists
+                    field.setText('')
             except KeyError:  # older type file or other problems
                 path = self.file_table.item(row, PATH).data(0)
                 stats = self.get_item_stats(path, data)
@@ -348,16 +358,24 @@ class Base(QMainWindow, Ui_Base):
         :type point: QPoint
         :param point: The point where the right-click happened
         """
-        # row = self.file_table.itemAt(point).row()
-
         menu = QMenu(self.file_table)
 
-        menu.addAction(self.act_view_book)
+        if self.toolbar.open_btn.isEnabled():  # there is a book for the item
+            row = self.file_table.itemAt(point).row()
+            self.act_view_book.setData(row)
+            menu.addAction(self.act_view_book)
 
-        save_menu = self.save_menu()
-        save_menu.setIcon(QIcon(':/stuff/file_save.png'))
-        save_menu.setTitle(_('Save selected'))
-        menu.addMenu(save_menu)
+        if len(self.file_selection.selectedRows()) > 1:  # many items selected
+            save_menu = self.save_menu()
+            save_menu.setIcon(QIcon(':/stuff/file_save.png'))
+            save_menu.setTitle(_('Save selected'))
+            menu.addMenu(save_menu)
+        else:  # only one item selected
+            action = QAction(_("Save to text file"), menu)
+            action.triggered.connect(self.on_save_actions)
+            action.setData(0)
+            action.setIcon(QIcon(':/stuff/file_save.png'))
+            menu.addAction(action)
 
         delete_menu = self.delete_menu()
         delete_menu.setIcon(QIcon(':/stuff/files_delete.png'))
@@ -366,6 +384,14 @@ class Base(QMainWindow, Ui_Base):
 
         # noinspection PyArgumentList
         menu.exec_(QCursor.pos())
+
+    @Slot()
+    def on_act_view_book_triggered(self):
+        """ The View Book menu entry is pressed
+        """
+        row = self.sender().data()
+        item = self.file_table.itemAt(row, 0)
+        self.on_item_double_clicked(item)
 
     # noinspection PyUnusedLocal
     def file_selection_update(self, selected, deselected):
@@ -422,7 +448,7 @@ class Base(QMainWindow, Ui_Base):
         self.scan_thread.started.connect(scanner.process)
         self.scan_thread.start(QThread.IdlePriority)
 
-        self.status_animation('start')
+        self.status.animation('start')
 
         self.auto_info.set_text(_("Scanning for KoReader metadata files.\n"
                                   "Please Wait..."))
@@ -431,7 +457,7 @@ class Base(QMainWindow, Ui_Base):
     def scan_finished(self):
         """ What will happen after the scanning for history files ends
         """
-        self.status_animation('stop')
+        self.status.animation('stop')
         self.auto_info.hide()
         self.file_table.resizeColumnsToContents()
 
@@ -591,10 +617,6 @@ class Base(QMainWindow, Ui_Base):
         """
         menu = QMenu(self)
         icon = QIcon(':/stuff/files_delete.png')
-        # for idx, item in enumerate([_("selected .sdr folders"),
-        #                             _("selected books"),
-        #                             _("all .sdr folders with missing books"),
-        #                             ]):
         for idx, item in enumerate([_("selected books' info"),
                                     _("selected books"),
                                     _("all missing books' info"),
@@ -712,16 +734,22 @@ class Base(QMainWindow, Ui_Base):
                                                     QFileDialog.ShowDirsOnly)
             if path:
                 self.last_dir = path
-                self.status_animation('start')
+                self.status.animation('start')
             else:
                 return
             for i in self.sel_indexes:
                 row = i.row()
                 data = self.file_table.item(row, 0).data(Qt.UserRole)
                 highlights = []
-                for j in data['highlight']:
+                for j in sorted(data['highlight']):
                     try:
-                        highlights.append(data['highlight'][j][1]['text'])
+                        if self.status.show_pages_btn.isChecked():
+                            date = data['highlight'][j][1]['datetime']
+                            text = 'Page {0} [{1}]:{2}'.format(j, date, os.linesep)
+                            text += data['highlight'][j][1]['text']
+                        else:
+                            text = data['highlight'][j][1]['text']
+                        highlights.append(text)
                     except KeyError:  # blank highlight
                         continue
                 if not highlights:  # no highlights
@@ -740,7 +768,7 @@ class Base(QMainWindow, Ui_Base):
                 filename = join(path, self.sanitize_filename(name) + '.txt')
                 with codecs.open(filename, 'w+', encoding='utf-8') as text_file:
                     for highlight in highlights:
-                        text_file.write(highlight + '\n\n')
+                        text_file.write(highlight + 2 * os.linesep)
                     saved += 1
         if idx == 1:  # save combined text to one file
             filename = QFileDialog.getSaveFileName(self, "Save to Text file",
@@ -756,9 +784,15 @@ class Base(QMainWindow, Ui_Base):
                 row = i.row()
                 data = self.file_table.item(row, 0).data(Qt.UserRole)
                 highlights = []
-                for j in data['highlight']:
+                for j in sorted(data['highlight']):
                     try:
-                        highlights.append(data['highlight'][j][1]['text'])
+                        if self.status.show_pages_btn.isChecked():
+                            date = data['highlight'][j][1]['datetime']
+                            text = 'Page {0} [{1}]:{2}'.format(j, date, os.linesep)
+                            text += data['highlight'][j][1]['text']
+                        else:
+                            text = data['highlight'][j][1]['text']
+                        highlights.append(text)
                     except KeyError:  # blank highlight
                         continue
                 if not highlights:  # no highlights
@@ -774,15 +808,16 @@ class Base(QMainWindow, Ui_Base):
                 name = title
                 if authors:
                     name = '{} - {}'.format(authors, title)
-                blocks.append((name, '\n\n'.join(highlights)))
+                # noinspection PyUnresolvedReferences
+                blocks.append((name, (2 * os.linesep).join(highlights)))
                 saved += 1
             line = '-' * 80
             with codecs.open(filename, 'w+', encoding='utf-8') as text_file:
                 for block in blocks:
-                    text_file.write('{0}\n{1}\n{0}\n{2}\n\n'.format(line, block[0],
-                                                                    block[1]))
+                    text_file.write('{0}{3}{1}{3}{0}{3}{2}{3}{3}'
+                                    .format(line, block[0], block[1], os.linesep))
 
-        self.status_animation('stop')
+        self.status.animation('stop')
         all_files = len(self.file_table.selectionModel().selectedRows())
         self.popup(_('Finished!'), _('{} texts were saved from the {} processed.\n'
                                      '{} files with no highlights.')
@@ -843,18 +878,6 @@ class Base(QMainWindow, Ui_Base):
         popup.checked = popup.exec_()[1]
 
         return popup
-
-    def status_animation(self, action):
-        """ Creates or deletes temporary files and folders
-        :type action: str|unicode
-        :param action: The action that must be done
-        """
-        if action == 'start':
-            self.anim_lbl.show()
-            self.wait_anim.start()
-        elif action == 'stop':
-            self.anim_lbl.hide()
-            self.wait_anim.stop()
 
     @staticmethod
     def sanitize_filename(filename):
@@ -1059,6 +1082,8 @@ class ToolBar(QWidget, Ui_ToolBar):
 
     @Slot()
     def on_select_btn_clicked(self):
+        """ The `Scan Directory` button is pressed
+        """
         path = QFileDialog.getExistingDirectory(self.base,
                                                 _("Select a directory with books or "
                                                   "your eReader's drive"),
@@ -1071,8 +1096,14 @@ class ToolBar(QWidget, Ui_ToolBar):
             self.base.scan_files_thread(path)
 
     @Slot()
-    def on_info_btn_clicked(self):
-        """ The `Book Info` button is pressed
+    def on_save_btn_clicked(self):
+        """ The `Save Selected` button is pressed
+        """
+        self.base.save_actions(0)
+
+    @Slot()
+    def on_open_btn_clicked(self):
+        """ The `Open Book` button is pressed
         """
         try:
             idx = self.base.file_table.selectionModel().selectedRows()[-1]
@@ -1082,8 +1113,14 @@ class ToolBar(QWidget, Ui_ToolBar):
         self.base.on_item_double_clicked(item)
 
     @Slot()
+    def on_delete_btn_clicked(self):
+        """ The `Delete` button is pressed
+        """
+        self.base.delete_actions(0)
+
+    @Slot()
     def on_clear_btn_clicked(self):
-        """ The `Clear` button is pressed
+        """ The `Clear List` button is pressed
         """
         self.base.file_table.setRowCount(0)
 
@@ -1099,6 +1136,44 @@ class ToolBar(QWidget, Ui_ToolBar):
         """ The `Exit` button is pressed
         """
         self.base.close()
+
+
+class Status(QWidget, Ui_Status):
+
+    def __init__(self, parent=None):
+        super(Status, self).__init__(parent)
+        self.setupUi(self)
+        self.base = parent
+
+        self.wait_anim = QMovie(':/stuff/wait.gif')
+        self.anim_lbl.setMovie(self.wait_anim)
+        self.anim_lbl.hide()
+
+    def animation(self, action):
+        """ Creates or deletes temporary files and folders
+        :type action: str|unicode
+        :param action: The action that must be done
+        """
+        if action == 'start':
+            self.anim_lbl.show()
+            self.wait_anim.start()
+        elif action == 'stop':
+            self.anim_lbl.hide()
+            self.wait_anim.stop()
+
+    # noinspection PyUnusedLocal
+    @Slot(bool)
+    def on_show_pages_btn_clicked(self, pressed):
+        """ Show/Hide the Page/Date highlight info
+        :type pressed: bool
+        :param pressed: Show (True), Hide (False)
+        """
+        try:
+            idx = self.base.file_table.selectionModel().selectedRows()[-1]
+        except IndexError:  # nothing selected
+            return
+        item = self.base.file_table.item(idx.row(), 0)
+        self.base.on_item_clicked(item)
 
 
 class LogStream(QObject):
@@ -1139,13 +1214,11 @@ class Scanner(QObject):
             elif dir_path.lower().endswith('.sdr'):
                 if dir_path.lower().endswith('evernote.sdr'):
                     continue
-                try:
-                    filename = join(dir_path, i[2][0])
-                except IndexError:  # no metadata in folder
-                    self.found_empty_sdr.emit(dir_path)
-                    continue
-                if splitext(filename)[1] == '.lua':
-                    self.found.emit(filename)
+                for j in i[2]:  # get the .lua file not the .old (backup)
+                    if splitext(j)[1].lower() == '.lua':
+                        filename = join(dir_path, j)
+                        self.found.emit(filename)
+                        break
 
 
 class DropTableWidget(QTableWidget):
@@ -1215,10 +1288,10 @@ def except_hook(class_type, value, trace_back):
     """ Print the error to a log file
     """
     # log the exception here
-    with open("err_log.txt", "a") as log:
+    with open(join(PROFILE_DIR, "error_log.txt"), "a") as log:
         log.write('\nCrash@{}\n'.format(time.strftime("%Y-%m-%d %H:%M:%S")))
     traceback.print_exception(class_type, value, trace_back, limit=2,
-                              file=open("err_log.txt", "a"))
+                              file=open(join(PROFILE_DIR, "error_log.txt"), "a"))
     # then call the default handler
     sys.__excepthook__(class_type, value, trace_back)
 

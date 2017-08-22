@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_toolbar.ui'
 #
-# Created: Fri Jul 28 00:11:11 2017
+# Created: Tue Aug 22 13:11:14 2017
 #      by: pyside-uic 0.2.15 running on PySide 1.2.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -70,23 +70,23 @@ class Ui_ToolBar(object):
         self.save_btn.setArrowType(QtCore.Qt.NoArrow)
         self.save_btn.setObjectName("save_btn")
         self.horizontalLayout.addWidget(self.save_btn)
-        self.info_btn = QtGui.QToolButton(self.frame)
+        self.open_btn = QtGui.QToolButton(self.frame)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.info_btn.sizePolicy().hasHeightForWidth())
-        self.info_btn.setSizePolicy(sizePolicy)
-        self.info_btn.setMinimumSize(QtCore.QSize(80, 0))
+        sizePolicy.setHeightForWidth(self.open_btn.sizePolicy().hasHeightForWidth())
+        self.open_btn.setSizePolicy(sizePolicy)
+        self.open_btn.setMinimumSize(QtCore.QSize(80, 0))
         icon3 = QtGui.QIcon()
         icon3.addPixmap(QtGui.QPixmap(":/stuff/files_view.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
-        self.info_btn.setIcon(icon3)
-        self.info_btn.setIconSize(QtCore.QSize(48, 48))
-        self.info_btn.setCheckable(False)
-        self.info_btn.setPopupMode(QtGui.QToolButton.DelayedPopup)
-        self.info_btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextUnderIcon)
-        self.info_btn.setAutoRaise(True)
-        self.info_btn.setObjectName("info_btn")
-        self.horizontalLayout.addWidget(self.info_btn)
+        self.open_btn.setIcon(icon3)
+        self.open_btn.setIconSize(QtCore.QSize(48, 48))
+        self.open_btn.setCheckable(False)
+        self.open_btn.setPopupMode(QtGui.QToolButton.DelayedPopup)
+        self.open_btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextUnderIcon)
+        self.open_btn.setAutoRaise(True)
+        self.open_btn.setObjectName("open_btn")
+        self.horizontalLayout.addWidget(self.open_btn)
         self.delete_btn = QtGui.QToolButton(self.frame)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Fixed)
         sizePolicy.setHorizontalStretch(0)
@@ -173,9 +173,9 @@ class Ui_ToolBar(object):
         self.save_btn.setToolTip(QtGui.QApplication.translate("ToolBar", "Save selected highlights to text (Ctrl+S)", None, QtGui.QApplication.UnicodeUTF8))
         self.save_btn.setStatusTip(QtGui.QApplication.translate("ToolBar", "Save selected highlights to text (Ctrl+S)", None, QtGui.QApplication.UnicodeUTF8))
         self.save_btn.setText(QtGui.QApplication.translate("ToolBar", "Save selected", None, QtGui.QApplication.UnicodeUTF8))
-        self.info_btn.setToolTip(QtGui.QApplication.translate("ToolBar", "View the selected book (Ctrl+B)", None, QtGui.QApplication.UnicodeUTF8))
-        self.info_btn.setStatusTip(QtGui.QApplication.translate("ToolBar", "View the selected book (Ctrl+B)", None, QtGui.QApplication.UnicodeUTF8))
-        self.info_btn.setText(QtGui.QApplication.translate("ToolBar", "Open Book", None, QtGui.QApplication.UnicodeUTF8))
+        self.open_btn.setToolTip(QtGui.QApplication.translate("ToolBar", "View the selected book (Ctrl+B)", None, QtGui.QApplication.UnicodeUTF8))
+        self.open_btn.setStatusTip(QtGui.QApplication.translate("ToolBar", "View the selected book (Ctrl+B)", None, QtGui.QApplication.UnicodeUTF8))
+        self.open_btn.setText(QtGui.QApplication.translate("ToolBar", "Open Book", None, QtGui.QApplication.UnicodeUTF8))
         self.delete_btn.setToolTip(QtGui.QApplication.translate("ToolBar", "Delete selected highlights (Del)", None, QtGui.QApplication.UnicodeUTF8))
         self.delete_btn.setStatusTip(QtGui.QApplication.translate("ToolBar", "Delete selected highlights (Del)", None, QtGui.QApplication.UnicodeUTF8))
         self.delete_btn.setText(QtGui.QApplication.translate("ToolBar", "Delete", None, QtGui.QApplication.UnicodeUTF8))
