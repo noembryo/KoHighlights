@@ -10,13 +10,15 @@ The original KoHighlights (using the wxPython) can be found [here](https://githu
 
 # Usage
 * Load items by:
-    * Selecting the reader's drive or any folder that contains books that where opened with Koreader. This will automatically load all the history files from all subdirectories.
+    * Selecting the reader's drive or any folder that contains books that where opened with Koreader. This will automatically load all the metadata files from all subdirectories.
     * Drag and drop files or folders. This will load the files and/or all the files inside the folders.
 * View the highlights and various info for a book by selecting it in the list.
+* Show/hide the page, date or even the highlight text while viewing or saving the highlights of the books. 
 * Double click or press the Open Book button to view the book in your system's reader.
 * Save all the selected books' highlights:
     * A text file for every selected book or
     * A single text file with all highlights combined
+* Delete some or all the highlights of any book.
 * Clear the .sdr folders with the metadata or the books in the eReader.
 
 # Downloads
