@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_main.ui'
 #
-# Created: Tue Aug 22 13:11:14 2017
+# Created: Tue Sep 19 17:26:05 2017
 #      by: pyside-uic 0.2.15 running on PySide 1.2.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -146,12 +146,16 @@ class Ui_Base(object):
         self.series_txt.setObjectName("series_txt")
         self.gridLayout.addWidget(self.series_txt, 2, 2, 1, 3)
         self.verticalLayout.addWidget(self.book_info)
-        self.text_box = QtGui.QPlainTextEdit(self.frame)
-        self.text_box.setFrameShape(QtGui.QFrame.WinPanel)
-        self.text_box.setReadOnly(True)
-        self.text_box.setTextInteractionFlags(QtCore.Qt.TextSelectableByKeyboard|QtCore.Qt.TextSelectableByMouse)
-        self.text_box.setObjectName("text_box")
-        self.verticalLayout.addWidget(self.text_box)
+        self.highlights_list = QtGui.QListWidget(self.frame)
+        self.highlights_list.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.highlights_list.setFrameShape(QtGui.QFrame.WinPanel)
+        self.highlights_list.setEditTriggers(QtGui.QAbstractItemView.NoEditTriggers)
+        self.highlights_list.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
+        self.highlights_list.setSelectionBehavior(QtGui.QAbstractItemView.SelectRows)
+        self.highlights_list.setVerticalScrollMode(QtGui.QAbstractItemView.ScrollPerPixel)
+        self.highlights_list.setWordWrap(True)
+        self.highlights_list.setObjectName("highlights_list")
+        self.verticalLayout.addWidget(self.highlights_list)
         self.horizontalLayout_2.addWidget(self.splitter)
         Base.setCentralWidget(self.centralwidget)
         self.statusbar = QtGui.QStatusBar(Base)

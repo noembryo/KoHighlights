@@ -19,7 +19,11 @@ The original KoHighlights (using the wxPython) can be found [here](https://githu
     * A single text file with all highlights combined
 * Clear the .sdr folders with the metadata or the books in the eReader.
 
-# Downloads 
-
+# Downloads
 Check the latest release on the [Downloads Page](https://github.com/noembryo/KoHighlights/releases).  
 Read the version history at [App's Page](http://www.noembryo.com/apps.php?kohighlights).
+
+# Extra
+KoHighlights includes SLPPU (a converter between python and lua objects).  
+If you want it globally available, get it from its [GitHub's page](https://github.com/noembryo/slppu) or install it with:  
+`pip install git+https://github.com/noembryo/slppu`  

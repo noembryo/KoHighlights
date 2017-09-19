@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_about.ui'
 #
-# Created: Tue Aug 22 13:11:14 2017
+# Created: Tue Sep 19 17:26:05 2017
 #      by: pyside-uic 0.2.15 running on PySide 1.2.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -13,7 +13,7 @@ class Ui_About(object):
     def setupUi(self, About):
         About.setObjectName("About")
         About.setWindowModality(QtCore.Qt.ApplicationModal)
-        About.resize(420, 520)
+        About.resize(480, 560)
         About.setLocale(QtCore.QLocale(QtCore.QLocale.English, QtCore.QLocale.UnitedStates))
         About.setModal(False)
         self.verticalLayout = QtGui.QVBoxLayout(About)
@@ -31,7 +31,7 @@ class Ui_About(object):
         self.scrollArea_2.setWidgetResizable(True)
         self.scrollArea_2.setObjectName("scrollArea_2")
         self.scrollAreaWidgetContents_2 = QtGui.QWidget()
-        self.scrollAreaWidgetContents_2.setGeometry(QtCore.QRect(0, 0, 394, 443))
+        self.scrollAreaWidgetContents_2.setGeometry(QtCore.QRect(0, 0, 454, 483))
         self.scrollAreaWidgetContents_2.setStyleSheet("background-color:transparent;")
         self.scrollAreaWidgetContents_2.setObjectName("scrollAreaWidgetContents_2")
         self.verticalLayout_6 = QtGui.QVBoxLayout(self.scrollAreaWidgetContents_2)
