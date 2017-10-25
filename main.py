@@ -1,19 +1,17 @@
 # coding=utf-8
 from __future__ import (absolute_import, division, print_function, unicode_literals)
+from boot_config import *
 
 import os, sys, re
 import codecs
 import gzip
 import json
-import traceback
 import cPickle
-import time
 import shutil
 import urllib2
 import webbrowser
 from datetime import datetime
 from distutils.version import LooseVersion
-from genericpath import exists
 from os.path import (isdir, isfile, join, basename, splitext, dirname, split)
 from slppu import slppu as lua
 from pprint import pprint
@@ -24,36 +22,22 @@ from PySide.QtCore import (Qt, QTimer, Slot, QObject, Signal, QThread, QMimeData
 from PySide.QtGui import (QMainWindow, QApplication, QMessageBox, QIcon, QFileDialog,
                           QTableWidgetItem, QTextCursor, QDialog, QWidget, QMovie,
                           QFont, QMenu, QAction, QTableWidget, QCheckBox, QHeaderView,
-                          QBrush, QColor, QCursor, QListWidgetItem)
+                          QBrush, QColor, QCursor, QListWidgetItem, QPixmap)
 
 from gui_main import Ui_Base  # __ ###########   GUI STUFF   ############
 from gui_about import Ui_About
 from gui_auto_info import Ui_AutoInfo
 from gui_toolbar import Ui_ToolBar
 from gui_status import Ui_Status
+from gui_edit import Ui_EditHighlight
 
 
 __author__ = 'noEmbryo'
-__version__ = '0.3.4.0'
+__version__ = '0.3.5.0'
 
 
 def _(text):
     return text
-
-APP_NAME = "KoHighlights"
-APP_DIR = dirname(os.path.abspath(sys.argv[0]))
-os.chdir(APP_DIR)  # Set the current working directory to the app's directory
-PROFILE_DIR = join(os.environ['APPDATA'], APP_NAME)
-os.makedirs(PROFILE_DIR) if not exists(PROFILE_DIR) else None
-try:
-    with gzip.GzipFile(join(PROFILE_DIR, 'settings.json.gz'), 'rb') as settings:
-        app_config = json.loads(settings.read())
-except IOError:  # first run
-    app_config = {}
-
-FIRST_RUN = not bool(app_config)
-TITLE, AUTHOR, TYPE, PERCENT, MODIFIED, PATH = range(6)
-PAGE, HIGHLIGHT_TEXT, DATE, PAGE_ID = range(4)
 
 
 # noinspection PyCallByClass
@@ -71,7 +55,8 @@ class Base(QMainWindow, Ui_Base):
         self.col_sort = MODIFIED
         self.col_sort_asc = False
 
-        self.skip_version = 0
+        self.skip_version = '0.0.0.0'
+        self.opened_times = 0
         self.last_dir = os.getcwd()
         self.edit_lua_file_warning = True
         self.exit_msg = True
@@ -89,6 +74,8 @@ class Base(QMainWindow, Ui_Base):
 
         self.status = Status(self)
         self.statusbar.addPermanentWidget(self.status)
+
+        self.edit_high = EditHighlight(self)
 
         self.splitter.setCollapsible(0, False)
         self.splitter.setCollapsible(1, False)
@@ -201,6 +188,7 @@ class Base(QMainWindow, Ui_Base):
         """ Things to do before exit
         """
         self.settings_save()
+        self.delete_logs()
 
     ########################################################
     # __                  SETTINGS STUFF                   #
@@ -218,13 +206,17 @@ class Base(QMainWindow, Ui_Base):
             self.col_sort_asc = app_config.get('col_sort_asc', False)
             self.last_dir = app_config.get('last_dir', os.getcwd())
             self.fold_btn.setChecked(app_config.get('show_info', True))
+            self.opened_times = app_config.get('opened_times', 0)
             self.skip_version = app_config.get('skip_version', None)
             self.edit_lua_file_warning = app_config.get('edit_lua_file_warning', True)
 
-            checked = app_config.get('show_items', (True, True, True))
+            checked = app_config.get('show_items', (True, True, True, True))
+            # noinspection PyTypeChecker
+            checked = checked if len(checked) == 4 else checked + [True]  # 4compatibility
             self.status.act_page.setChecked(checked[0])
             self.status.act_date.setChecked(checked[1])
             self.status.act_text.setChecked(checked[2])
+            self.status.act_comment.setChecked(checked[3])
         else:
             self.resize(800, 600)
 
@@ -240,12 +232,13 @@ class Base(QMainWindow, Ui_Base):
                   'show_info': self.fold_btn.isChecked(),
                   'show_items': (self.status.act_page.isChecked(),
                                  self.status.act_date.isChecked(),
-                                 self.status.act_text.isChecked()),
-                  'skip_version': self.skip_version,
+                                 self.status.act_text.isChecked(),
+                                 self.status.act_comment.isChecked()),
+                  'skip_version': self.skip_version, 'opened_times': self.opened_times,
                   'edit_lua_file_warning': self.edit_lua_file_warning,
                   }
         try:
-            with gzip.GzipFile(join(PROFILE_DIR, 'settings.json.gz'), 'w+') as gz_file:
+            with gzip.GzipFile(join(SETTINGS_DIR, 'settings.json.gz'), 'w+') as gz_file:
                 gz_file.write(json.dumps(config, sort_keys=True, indent=4))
         except IOError as error:
             print('On saving settings:', error)
@@ -279,6 +272,7 @@ class Base(QMainWindow, Ui_Base):
         for folder in folders:
             self.scan_files_thread(folder)
 
+
     @Slot(QTableWidgetItem)
     def on_file_table_itemClicked(self, item):
         """ When an item of the FileTable is clicked
@@ -294,27 +288,45 @@ class Base(QMainWindow, Ui_Base):
             self.toolbar.open_btn.setEnabled(False)
 
         self.highlights_list.clear()
+
+        extra = (' ' if self.status.act_page.isChecked() and
+                 self.status.act_date.isChecked() else '')
+        line_break = (':\n' if self.status.act_page.isChecked() or
+                      self.status.act_date.isChecked() else '')
         for page in sorted(data['highlight']):
             for page_id in data['highlight'][page]:
                 highlight = ''
                 try:
                     date = data['highlight'][page][page_id]['datetime']
-                    text = data['highlight'][page][page_id]['text']
-                    page_text = ('Page ' + str(page) + ' '
+                    text = data['highlight'][page][page_id]['text'].replace("\\\n", "\n")
+                    comment = ''
+                    for idx in data['bookmarks']:
+                        if text == data['bookmarks'][idx]["notes"]:
+                            book_text = data['bookmarks'][idx].get("text", '')
+                            if not book_text:
+                                break
+                            book_text = re.sub(r"Page \d+ (.+) @ \d+-\d+-\d+ \d+:\d+:\d+",
+                                               r"\1", book_text)
+                            if text != book_text:
+                                comment = book_text.replace("\\\n", "\n")
+                            break
+                    page_text = ('Page ' + str(page)
                                  if self.status.act_page.isChecked() else '')
                     date_text = ('[' + date + ']'
                                  if self.status.act_date.isChecked() else '')
-                    line_break = (':\n' if self.status.act_page.isChecked() or
-                                  self.status.act_date.isChecked() else '')
-                    highlight_text = (text if self.status.act_text.isChecked()
-                                      else '')
-                    highlight += (page_text + date_text +
-                                  line_break + highlight_text + '\n')
+                    high_text = text if self.status.act_text.isChecked() else ''
+                    line_break2 = ('\n' if self.status.act_text.isChecked() and
+                                   comment else '')
+                    high_comment = (line_break2 + "● " + comment
+                                    if self.status.act_comment.isChecked() and comment
+                                    else '')
+                    highlight += (page_text + extra + date_text + line_break +
+                                  high_text + high_comment + '\n')
                 except KeyError:  # blank highlight
                     continue
-                highlight_item = QListWidgetItem(highlight, self.highlights_list)
-                highlight_item.setData(Qt.UserRole, (page, text, date, page_id))
 
+                highlight_item = QListWidgetItem(highlight, self.highlights_list)
+                highlight_item.setData(Qt.UserRole, (page, text, date, page_id, comment))
         self.populate_book_info(data, row)
 
     def populate_book_info(self, data, row):
@@ -438,6 +450,12 @@ class Base(QMainWindow, Ui_Base):
             self.sel_idx = self.sel_indexes[-1]
         except IndexError:  # empty table
             pass
+        if not self.file_selection.selectedRows():
+            self.highlights_list.clear()
+            fields = [self.title_txt, self.author_txt, self.series_txt, self.lang_txt,
+                      self.pages_txt, self.time_txt, self.status_txt]
+            for field in fields:
+                field.setText('')
 
     def on_column_clicked(self, column):
         """ Sets the current sorting column
@@ -509,19 +527,16 @@ class Base(QMainWindow, Ui_Base):
                 print('No data here!', filename)
                 return
             icon, title, authors, status, percent = self.get_item_stats(filename, data)
+
             ext = splitext(splitext(filename)[0])[1][1:]
             book_path = splitext(self.get_book_path(filename))[0] + '.' + ext
             book_exists = isfile(book_path)
-            if book_exists:
-                green = '#005500'
-                red = '#660000'
-                normal = None
-                book_icon = QIcon(':/stuff/file_exists.png')
-            else:
-                green = '#559955'
-                red = '#996666'
-                normal = '#666666'
-                book_icon = QIcon(':/stuff/file_missing.png')
+
+            img = ':/stuff/file_exists.png' if book_exists else ':/stuff/file_missing.png'
+            book_icon = QIcon(img)
+            normal = None if book_exists else '#666666'
+            green = '#005500' if book_exists else '#559955'
+            red = '#660000' if book_exists else '#996666'
 
             color = (green if status == 'complete' else red
                      if status == 'abandoned' else None) if status else normal
@@ -626,6 +641,11 @@ class Base(QMainWindow, Ui_Base):
         if self.sel_highlights:
             menu = QMenu(self.highlights_list)
 
+            action = QAction(_("Edit"), menu)
+            action.triggered.connect(self.on_edit_highlight)
+            action.setIcon(QIcon(':/stuff/file_edit.png'))
+            menu.addAction(action)
+
             action = QAction(_("Copy"), menu)
             action.triggered.connect(self.on_copy_highlights)
             action.setIcon(QIcon(':/stuff/copy.png'))
@@ -638,6 +658,43 @@ class Base(QMainWindow, Ui_Base):
 
             # noinspection PyArgumentList
             menu.exec_(QCursor.pos())
+
+    @Slot()
+    def on_highlights_list_itemDoubleClicked(self):
+        """ An item on the Highlight List is double-clicked
+        """
+        self.on_edit_highlight()
+
+    def on_edit_highlight(self):
+        """ Opens a window to edit the selected highlight's comment
+        """
+        highlight = self.sel_highlights[-1]
+        row = highlight.row()
+        comment = self.highlights_list.item(row).data(Qt.UserRole)[COMMENT]
+        self.edit_high.high_edit_txt.setText(comment)
+        # self.edit_high.high_edit_txt.setFocus()
+        self.edit_high.show()
+
+
+    def edit_highlight_ok(self):
+        """ Change the selected highlight's comment
+        """
+        text = self.edit_high.high_edit_txt.toPlainText()
+        highlight = self.sel_highlights[-1]
+        high_row = highlight.row()
+        high_data = self.highlights_list.item(high_row).data(Qt.UserRole)
+        high_text = high_data[HIGHLIGHT_TEXT]
+        high_data[HIGHLIGHT_TEXT] = text
+        self.highlights_list.item(high_row).data(Qt.UserRole)
+
+        row = self.sel_idx.row()
+        data = self.file_table.item(row, TITLE).data(Qt.UserRole)
+        for bookmark in data['bookmarks'].keys():
+            if high_text == data['bookmarks'][bookmark]['notes']:
+                data['bookmarks'][bookmark]['text'] = text.replace("\n", "\\\n")
+                break
+        self.file_table.item(row, TITLE).setData(Qt.UserRole, data)
+        self.save_book_data(row, data)
 
     def on_copy_highlights(self):
         """ Copy the selected highlights to clipboard
@@ -671,6 +728,7 @@ class Base(QMainWindow, Ui_Base):
             return
         self.delete_highlights()
 
+
     def delete_highlights(self):
         """ Delete the selected highlights
         """
@@ -684,9 +742,9 @@ class Base(QMainWindow, Ui_Base):
 
             # delete the associated bookmark
             text = self.highlights_list.item(high_row).data(Qt.UserRole)[HIGHLIGHT_TEXT]
-            for mark in data['bookmarks'].keys():
-                if text == data['bookmarks'][mark]['notes']:
-                    del data['bookmarks'][mark]
+            for bookmark in data['bookmarks'].keys():
+                if text == data['bookmarks'][bookmark]['notes']:
+                    del data['bookmarks'][bookmark]
 
         for i in data['highlight'].keys():
             if not data['highlight'][i]:  # delete page dicts with no highlights
@@ -699,22 +757,30 @@ class Base(QMainWindow, Ui_Base):
                     for k in range(len(contents)):      # rewrite them with the new keys
                         data['highlight'][i][k + 1] = contents[k]
 
-        contents = [data['bookmarks'][mark] for mark in sorted(data['bookmarks'])]
+        contents = [data['bookmarks'][bookmark] for bookmark in sorted(data['bookmarks'])]
         if contents:  # renumbering the bookmarks keys
-            for mark in data['bookmarks'].keys():  # delete all the items and
-                del data['bookmarks'][mark]
+            for bookmark in data['bookmarks'].keys():  # delete all the items and
+                del data['bookmarks'][bookmark]
             for content in range(len(contents)):  # rewrite them with the new keys
                 data['bookmarks'][content + 1] = contents[content]
         if not data['highlight']:  # change icon if no highlights
             item = self.file_table.item(0, 0)
             item.setIcon(QIcon(':/stuff/trans32.png'))
+        self.save_book_data(row, data)
+
+    def save_book_data(self, row, data):
+        """ Saves the data of a book to its lua file
+        :type row: int
+        :param row: The book;s row
+        :type data: dict
+        :param data: The book's data
+        """
         path = self.file_table.item(row, PATH).text()
         times = os.stat(path)  # read the file's created/modified times
         self.encode_data(path, data)
         os.utime(path, (times.st_ctime, times.st_mtime))  # reapply original times
-
-        self.on_file_table_itemClicked(self.file_table.item(self.sel_idx.row(),
-                                                            self.sel_idx.column()))
+        self.on_file_table_itemClicked(
+            self.file_table.item(self.sel_idx.row(), self.sel_idx.column()))
 
     # noinspection PyUnusedLocal
     def highlights_selection_update(self, selected, deselected):
@@ -843,6 +909,10 @@ class Base(QMainWindow, Ui_Base):
         saved = 0
         if not self.sel_indexes:
             return
+        extra = (' ' if self.status.act_page.isChecked() and
+                 self.status.act_date.isChecked() else '')
+        line_break = (':\n' if self.status.act_page.isChecked() or
+                      self.status.act_date.isChecked() else '')
         if idx == 0:  # save to different text files
             path = QFileDialog.getExistingDirectory(self,
                                                     _("Select destination folder for the "
@@ -860,18 +930,10 @@ class Base(QMainWindow, Ui_Base):
                 for page in sorted(data['highlight']):
                     for page_id in data['highlight'][page]:
                         try:
-                            date = data['highlight'][page][page_id]['datetime']
-                            text = data['highlight'][page][page_id]['text']
-                            page_text = ('Page ' + str(page) + ' '
-                                         if self.status.act_page.isChecked() else '')
-                            date_text = ('[' + date + ']'
-                                         if self.status.act_date.isChecked() else '')
-                            line_break = (':\n' if self.status.act_page.isChecked() or
-                                          self.status.act_date.isChecked() else '')
-                            highlight_text = (text if self.status.act_text.isChecked()
-                                              else '')
-                            highlights.append(page_text + date_text +
-                                              line_break + highlight_text)
+                            date_text, high_comment, high_text, page_text = \
+                                self.analyze_high(data, page, page_id)
+                            highlights.append(page_text + extra + date_text + line_break +
+                                              high_text + high_comment)
                         except KeyError:  # blank highlight
                             continue
                 if not highlights:  # no highlights
@@ -891,7 +953,7 @@ class Base(QMainWindow, Ui_Base):
                     for highlight in highlights:
                         text_file.write(highlight + 2 * os.linesep)
                     saved += 1
-        if idx == 1:  # save combined text to one file
+        elif idx == 1:  # save combined text to one file
             filename = QFileDialog.getSaveFileName(self, "Save to Text file",
                                                    self.last_dir,
                                                    "text files (*.txt);;all files (*.*)")
@@ -908,18 +970,10 @@ class Base(QMainWindow, Ui_Base):
                 for page in sorted(data['highlight']):
                     for page_id in data['highlight'][page]:
                         try:
-                            date = data['highlight'][page][page_id]['datetime']
-                            text = data['highlight'][page][page_id]['text']
-                            page_text = ('Page ' + str(page) + ' '
-                                         if self.status.act_page.isChecked() else '')
-                            date_text = ('[' + date + ']'
-                                         if self.status.act_date.isChecked() else '')
-                            line_break = (':\n' if self.status.act_page.isChecked() or
-                                          self.status.act_date.isChecked() else '')
-                            highlight_text = (text if self.status.act_text.isChecked()
-                                              else '')
-                            highlights.append(page_text + date_text +
-                                              line_break + highlight_text)
+                            date_text, high_comment, high_text, page_text = \
+                                self.analyze_high(data, page, page_id)
+                            highlights.append(page_text + extra + date_text + line_break +
+                                              high_text + high_comment)
                         except KeyError:  # blank highlight
                             continue
                 if not highlights:  # no highlights
@@ -950,6 +1004,32 @@ class Base(QMainWindow, Ui_Base):
                    .format(saved, all_files, all_files - saved),
                    icon=QMessageBox.Information)
 
+    def analyze_high(self, data, page, page_id):
+        date = data['highlight'][page][page_id]['datetime']
+        text = data['highlight'][page][page_id]['text']
+        pos_0 = data['highlight'][page][page_id]['pos0']
+        pos_1 = data['highlight'][page][page_id]['pos1']
+        comment = ''
+        for b in data['bookmarks']:
+            book_pos0 = data['bookmarks'][b]["pos0"]
+            book_pos1 = data['bookmarks'][b]["pos1"]
+            if (pos_0 == book_pos0) and (pos_1 == book_pos1):
+                book_text = data['bookmarks'][b].get("text", '')
+                if not book_text:
+                    break
+                book_text = re.sub(r"Page \d+ (.+) @ \d+-\d+-\d+ "
+                                   r"\d+:\d+:\d+", r"\1", book_text)
+                if text != book_text:
+                    comment = book_text
+                break
+        page_text = ('Page ' + str(page) if self.status.act_page.isChecked() else '')
+        date_text = ('[' + date + ']' if self.status.act_date.isChecked() else '')
+        high_text = text if self.status.act_text.isChecked() else ''
+        line_break2 = ('\n' if self.status.act_text.isChecked() and comment else '')
+        high_comment = (line_break2 + "● " + comment
+                        if self.status.act_comment.isChecked() and comment else '')
+        return date_text, high_comment, high_text, page_text
+
     ########################################################
     # __                  UTILITY STUFF                    #
     ########################################################
@@ -969,21 +1049,28 @@ class Base(QMainWindow, Ui_Base):
               extra_text='', check_text=''):
         """ Creates and returns a Popup dialog
         :type title: str|unicode
-        :param title: The Popup's title
+        :parameter title: The Popup's title
         :type text: str|unicode
-        :param text: The Popup's text
-        :type icon: int
-        :param icon: The Popup's icon
+        :parameter text: The Popup's text
+        :type icon: int|unicode|QPixmap
+        :parameter icon: The Popup's icon
         :type buttons: int
-        :param buttons: The number of the Popup's buttons
+        :parameter buttons: The number of the Popup's buttons
         :type extra_text: str|unicode
-        :param extra_text: The extra button's text (omitted if '')
+        :parameter extra_text: The extra button's text (button is omitted if '')
         :type check_text: str|unicode
-        :param check_text: The checkbox's text (omitted if '')
+        :parameter check_text: The checkbox's text (checkbox is omitted if '')
         """
         popup = XMessageBox(self)
         popup.setWindowIcon(QIcon(":/stuff/icon.png"))
-        popup.setIcon(icon)
+        if type(icon) == QMessageBox.Icon:
+            popup.setIcon(icon)
+        elif type(icon) == unicode:
+            popup.setIconPixmap(QPixmap(icon))
+        elif type(icon) == QPixmap:
+            popup.setIconPixmap(icon)
+        else:
+            raise TypeError("Wrong icon type!")
         popup.setWindowTitle(title)
         popup.setText(text + '\n' if check_text else text)
         if buttons == 1:
@@ -996,7 +1083,6 @@ class Base(QMainWindow, Ui_Base):
             popup.addButton(_('No'), QMessageBox.RejectRole)
         if extra_text:  # add an extra button
             popup.addButton(extra_text, QMessageBox.ApplyRole)
-
         if check_text:  # hide check_box if no text for it
             popup.check_box.setText(check_text)
         else:
@@ -1052,6 +1138,19 @@ class Base(QMainWindow, Ui_Base):
     def auto_check4update(self):
         """ Checks online for an updated version
         """
+        self.opened_times += 1
+        if self.opened_times == 20:
+            text = _("Since you are using {} for some time now, perhaps you find it "
+                     "useful enough to consider a donation.\nWould you like to visit "
+                     "the PayPal donation page?\n\nThis is a one-time message. "
+                     "It will never appear again!").format(APP_NAME)
+            popup = self.popup(_("A reminder..."), text,
+                               icon=":/stuff/paypal76.png", buttons=3)
+
+            if popup.buttonRole(popup.clickedButton()) == QMessageBox.AcceptRole:
+                webbrowser.open("https://www.paypal.com/cgi-bin/webscr?"
+                                "cmd=_s-xclick%20&hosted_button_id=MYV4WLTD6PEVG")
+            return
         try:
             version_new = self.about.get_online_version()
         except urllib2.URLError:  # can not connect
@@ -1092,9 +1191,21 @@ class Base(QMainWindow, Ui_Base):
         except Exception:  # a problematic print that WE HAVE to ignore or we LOOP
             pass
 
+    @staticmethod
+    def delete_logs():
+        """ Keeps the number of log texts steady.
+        """
+        _, _, files = os.walk(SETTINGS_DIR).next()
+        files = sorted(i for i in files if i.startswith('error_log'))
+        if len(files) > 3:
+            for name in files[:-3]:
+                try:
+                    os.remove(join(SETTINGS_DIR, name))
+                except WindowsError:  # the file is locked
+                    pass
+
     def on_check_btn(self):
         QMessageBox.information(self, _('Info'), _('Tool button is pressed'))
-        # QMessageBox.aboutQt(self, title="")
 
 
 ########################################################
@@ -1111,6 +1222,12 @@ class About(QDialog, Ui_About):
         self.setWindowFlags(self.windowFlags() ^
                             Qt.WindowContextHelpButtonHint)
         self.base = parent
+
+    @Slot()
+    def on_about_qt_btn_clicked(self):
+        """ The `About Qt` button is pressed
+        """
+        QMessageBox.aboutQt(self, title=_("About Qt"))
 
     @Slot()
     def on_updates_btn_clicked(self):
@@ -1291,6 +1408,20 @@ class ToolBar(QWidget, Ui_ToolBar):
         self.base.close()
 
 
+class EditHighlight(QDialog, Ui_EditHighlight):
+
+    def __init__(self, parent=None):
+        super(EditHighlight, self).__init__(parent)
+        self.setupUi(self)
+        self.base = parent
+
+    @Slot()
+    def on_ok_btn_clicked(self):
+        """ The OK button is pressed
+        """
+        self.base.edit_highlight_ok()
+
+
 class Status(QWidget, Ui_Status):
 
     def __init__(self, parent=None):
@@ -1303,7 +1434,7 @@ class Status(QWidget, Ui_Status):
         self.anim_lbl.hide()
 
         self.show_menu = QMenu(self)
-        for i in [self.act_page, self.act_date, self.act_text]:
+        for i in [self.act_page, self.act_date, self.act_text, self.act_comment]:
             self.show_menu.addAction(i)
             # noinspection PyUnresolvedReferences
             i.triggered.connect(self.on_show_items)
@@ -1432,27 +1563,6 @@ class XMessageBox(QMessageBox):
         """
         return (QMessageBox.exec_(self, *args, **kwargs),
                 self.check_box.isChecked())
-
-
-def print_error():
-    with open("err_log.txt", "a") as log:
-        log.write('\nCrash@{}\n'.format(time.strftime("%Y-%m-%d %H:%M:%S")))
-    traceback.print_exc(file=open("err_log.txt", "a"))
-    traceback.print_exc()
-
-
-def except_hook(class_type, value, trace_back):
-    """ Print the error to a log file
-    """
-    # log the exception here
-    with open(join(PROFILE_DIR, "error_log.txt"), "a") as log:
-        log.write('\nCrash@{}\n'.format(time.strftime("%Y-%m-%d %H:%M:%S")))
-    traceback.print_exception(class_type, value, trace_back, limit=2,
-                              file=open(join(PROFILE_DIR, "error_log.txt"), "a"))
-    # then call the default handler
-    sys.__excepthook__(class_type, value, trace_back)
-
-sys.excepthook = except_hook
 
 
 class KoHighlights(QApplication):
