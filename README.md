@@ -6,7 +6,8 @@ This is a totally re-written application using the Qt framework (PySide).
 The original KoHighlights (using the wxPython) can be found [here](https://github.com/noonkey/KoHighlights), but is considered deprecated..
 
 
-![HighLights ScreenShot 02](screen2.png)
+![HighLights ScreenShot](screen1.png)
+![HighLights ScreenShot](screen2.png)
 
 # Usage
 * Load items by:
