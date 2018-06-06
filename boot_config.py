@@ -16,9 +16,9 @@ os.makedirs(SETTINGS_DIR) if not isdir(SETTINGS_DIR) else None
 def except_hook(class_type, value, trace_back):
     """ Print the error to a log file
     """
-    name = join(SETTINGS_DIR, "error_log_{}.txt".format(time.strftime("%Y-%m-%d")))
+    name = join(SETTINGS_DIR, "error_log_{}.txt".format(time.strftime(str("%Y-%m-%d"))))
     with open(name, "a") as log:
-        log.write('\nCrash@{}\n'.format(time.strftime("%Y-%m-%d %H:%M:%S")))
+        log.write(str('\nCrash@{}\n').format(time.strftime(str("%Y-%m-%d %H:%M:%S"))))
     traceback.print_exception(class_type, value, trace_back, file=open(name, "a"))
     sys.__excepthook__(class_type, value, trace_back)
 
@@ -36,3 +36,4 @@ except IOError:  # first run
 FIRST_RUN = not bool(app_config)
 TITLE, AUTHOR, TYPE, PERCENT, MODIFIED, PATH = range(6)
 PAGE, HIGHLIGHT_TEXT, DATE, PAGE_ID, COMMENT = range(5)
+HIGHLIGHT_H, COMMENT_H, DATE_H, TITLE_H, PAGE_H, AUTHOR_H = range(6)
