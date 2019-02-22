@@ -57,6 +57,7 @@ class Base(QMainWindow, Ui_Base):
         self.sel_indexes = []
         self.highlights_selection = None
         self.sel_highlights = []
+        self.sel_book_data = {}
         self.high_view_selection = None
         self.sel_high_view = []
         self.col_sort = MODIFIED
@@ -84,6 +85,20 @@ class Base(QMainWindow, Ui_Base):
         self.header_high_view.setDefaultAlignment(Qt.AlignLeft)
         # self.header_high_view.setResizeMode(HIGHLIGHT_H, QHeaderView.Stretch)
 
+        self.info_fields = [self.title_txt, self.author_txt, self.series_txt,
+                            self.lang_txt, self.pages_txt, self.tags_txt]
+        self.info_keys = ["title", "authors", "series", "language", "pages", "keywords"]
+
+        self.ico_file_save = QIcon(":/stuff/file_save.png")
+        self.ico_files_delete = QIcon(":/stuff/files_delete.png")
+        self.ico_file_exists = QIcon(":/stuff/file_exists.png")
+        self.ico_file_missing = QIcon(":/stuff/file_missing.png")
+        self.ico_file_edit = QIcon(":/stuff/file_edit.png")
+        self.ico_copy = QIcon(":/stuff/copy.png")
+        self.ico_delete = QIcon(":/stuff/delete.png")
+        self.ico_label_green = QIcon(":/stuff/label_green.png")
+        self.ico_empty = QIcon(":/stuff/trans32.png")
+
         self.about = About(self)
         self.auto_info = AutoInfo(self)
 
@@ -94,6 +109,13 @@ class Base(QMainWindow, Ui_Base):
         self.statusbar.addPermanentWidget(self.status)
 
         self.edit_high = EditHighlight(self)
+        self.edit_high.on_ok = self.edit_highlight_ok
+        self.edit_high.setWindowTitle(_("Comments"))
+
+        self.description = EditHighlight(self)
+        self.description.setWindowTitle(_("Description"))
+        self.description.btn_box.hide()
+        self.description_btn.setEnabled(False)
 
         self.splitter.setCollapsible(0, False)
         self.splitter.setCollapsible(1, False)
@@ -211,6 +233,7 @@ class Base(QMainWindow, Ui_Base):
         """
         self.settings_save()
         self.delete_logs()
+
     # ___ ___________________ FILE TABLE STUFF ______________________
 
     @Slot(list)
@@ -227,7 +250,7 @@ class Base(QMainWindow, Ui_Base):
         for folder in folders:
             self.scan_files_thread(folder)
 
-    @Slot(QTableWidgetItem)
+    # @Slot(QTableWidgetItem)  # its called indirectly from self.file_selection_update
     def on_file_table_itemClicked(self, item):
         """ When an item of the FileTable is clicked
 
@@ -236,6 +259,7 @@ class Base(QMainWindow, Ui_Base):
         """
         row = item.row()
         data = self.file_table.item(row, TITLE).data(Qt.UserRole)
+        self.sel_book_data = data
 
         if self.file_table.item(row, TYPE).data(Qt.UserRole)[1]:
             self.toolbar.open_btn.setEnabled(True)
@@ -283,10 +307,16 @@ class Base(QMainWindow, Ui_Base):
 
                 highlight_item = QListWidgetItem(highlight, self.highlights_list)
                 highlight_item.setData(Qt.UserRole, (page, text, date, page_id, comment))
+
+        description_state = False
+        if "doc_props" in self.sel_book_data and "description" in data["doc_props"]:
+            description_state = bool(data["doc_props"]["description"])
+        self.description_btn.setEnabled(description_state)
+
         self.populate_book_info(data, row)
         self.highlights_list.setCurrentRow(0)
 
-    def populate_book_info(self, data, row):
+    def populate_book_info(self, data, row):  # 2fix: missing keywords
         """ Fill in the `Book Info` fields
 
         :type data: dict
@@ -294,25 +324,20 @@ class Base(QMainWindow, Ui_Base):
         :type row: int
         :param row: The items row number
         """
-        items = ["title", "authors", "series", "language",
-                 "pages", "total_time_in_sec", "status"]
-        fields = [self.title_txt, self.author_txt, self.series_txt, self.lang_txt,
-                  self.pages_txt, self.time_txt, self.status_txt]
-        for item, field in zip(items, fields):
+        for key, field in zip(self.info_keys, self.info_fields):
             try:
-                if item == "title" and not data["stats"][item]:
+                if key == "title" and not data["stats"][key]:
                     path = self.file_table.item(row, PATH).data(0)
                     try:
                         name = path.split("#] ")[1]
                         value = splitext(name)[0]
                     except IndexError:  # no "#] " in filename
                         value = ""
-                elif item == "total_time_in_sec":
-                    value = self.get_time_str(data["stats"][item])
-                elif item == "status":
-                    value = data["summary"]["status"].title()
+                elif key == "keywords":
+                    keywords = data["doc_props"][key].split("\n")
+                    value = ", ".join([i.rstrip("\\") for i in keywords])
                 else:
-                    value = data["stats"][item]
+                    value = data["stats"][key]
                 try:
                     field.setText(value)
                 except TypeError:  # Needs string only
@@ -320,12 +345,18 @@ class Base(QMainWindow, Ui_Base):
             except KeyError:  # older type file or other problems
                 path = self.file_table.item(row, PATH).data(0)
                 stats = self.get_item_stats(path, data)
-                if item == "title":
+                if key == "title":
                     field.setText(stats[1])
-                elif item == "authors":
+                elif key == "authors":
                     field.setText(stats[2])
                 else:
                     field.setText("")
+
+    @Slot()
+    def on_description_btn_clicked(self):
+        description = self.sel_book_data["doc_props"]["description"]
+        self.description.high_edit_txt.setHtml(description)
+        self.description.show()
 
     # noinspection PyUnusedLocal
     def on_item_right_clicked(self, point):
@@ -346,18 +377,18 @@ class Base(QMainWindow, Ui_Base):
 
         if len(self.file_selection.selectedRows()) > 1:  # many items selected
             save_menu = self.save_menu()
-            save_menu.setIcon(QIcon(":/stuff/file_save.png"))
+            save_menu.setIcon(self.ico_file_save)
             save_menu.setTitle(_("Save selected"))
             menu.addMenu(save_menu)
         else:  # only one item selected
             action = QAction(_("Save to text file"), menu)
             action.triggered.connect(self.on_save_actions)
             action.setData(0)
-            action.setIcon(QIcon(":/stuff/file_save.png"))
+            action.setIcon(self.ico_file_save)
             menu.addAction(action)
 
         delete_menu = self.delete_menu()
-        delete_menu.setIcon(QIcon(":/stuff/files_delete.png"))
+        delete_menu.setIcon(self.ico_files_delete)
         delete_menu.setTitle(_("Delete\tDel"))
         menu.addMenu(delete_menu)
 
@@ -420,9 +451,8 @@ class Base(QMainWindow, Ui_Base):
             self.on_file_table_itemClicked(item)
         else:
             self.highlights_list.clear()
-            fields = [self.title_txt, self.author_txt, self.series_txt, self.lang_txt,
-                      self.pages_txt, self.time_txt, self.status_txt]
-            for field in fields:
+            self.description_btn.setEnabled(False)
+            for field in self.info_fields:
                 field.setText("")
 
     def on_column_clicked(self, column):
@@ -501,20 +531,7 @@ class Base(QMainWindow, Ui_Base):
             if not data:
                 print("No data here!", filename)
                 return
-            icon, title, authors, status, percent = self.get_item_stats(filename, data)
-
-            ext = splitext(splitext(filename)[0])[1][1:]
-            book_path = splitext(self.get_book_path(filename))[0] + "." + ext
-            book_exists = isfile(book_path)
-
-            img = ":/stuff/file_exists.png" if book_exists else ":/stuff/file_missing.png"
-            book_icon = QIcon(img)
-            normal = None if book_exists else "#666666"
-            green = "#005500" if book_exists else "#559955"
-            red = "#660000" if book_exists else "#996666"
-
-            color = (green if status == "complete" else red
-                     if status == "abandoned" else None) if status else normal
+            icon, title, authors, percent = self.get_item_stats(filename, data)
 
             title_item = QTableWidgetItem(icon, title)
             title_item.setToolTip(title)
@@ -525,6 +542,10 @@ class Base(QMainWindow, Ui_Base):
             author_item.setToolTip(authors)
             self.file_table.setItem(0, AUTHOR, author_item)
 
+            ext = splitext(splitext(filename)[0])[1][1:]
+            book_path = splitext(self.get_book_path(filename))[0] + "." + ext
+            book_exists = isfile(book_path)
+            book_icon = self.ico_file_exists if book_exists else self.ico_file_missing
             type_item = QTableWidgetItem(book_icon, ext)
             type_item.setToolTip("The {} file {}".format(ext, (_("exists") if book_exists
                                                          else _("is missing"))))
@@ -545,12 +566,7 @@ class Base(QMainWindow, Ui_Base):
             path_item.setToolTip(filename)
             self.file_table.setItem(0, PATH, path_item)
 
-            for i in range(6):  # colorize row
-                item = self.file_table.item(0, i)
-                item.setForeground(QBrush(QColor(color)))
-
-    @staticmethod
-    def get_item_stats(filename, data):
+    def get_item_stats(self, filename, data):
         """ Returns the title and authors of a history file
 
         :type filename: str|unicode
@@ -558,11 +574,6 @@ class Base(QMainWindow, Ui_Base):
         :type data: dict
         :param data: The dict converted lua file
         """
-        if data["highlight"]:
-            icon = QIcon(":/stuff/label_green.png")
-        else:
-            icon = QIcon(":/stuff/trans32.png")
-
         try:
             title = data["stats"]["title"]
             authors = data["stats"]["authors"]
@@ -582,16 +593,14 @@ class Base(QMainWindow, Ui_Base):
                 title = _("NO TITLE FOUND")
         authors = authors if authors else _("NO AUTHOR FOUND")
         try:
-            status = data["summary"]["status"]
-        except KeyError:
-            status = None
-        try:
             percent = data["percent_finished"]
             percent = str(int(percent * 100)) + "%"
             percent = "Complete" if percent == "100%" else percent
         except KeyError:
             percent = None
-        return icon, title, authors, status, percent
+
+        icon = self.ico_label_green if data["highlight"] else self.ico_empty
+        return icon, title, authors, percent
 
     def add_to_empty(self, filename):
         """ Adds empty .sdr folders to a list
@@ -662,22 +671,22 @@ class Base(QMainWindow, Ui_Base):
 
         action = QAction(high_text, menu)
         action.triggered.connect(partial(self.copy_text_2clip, highlights))
-        action.setIcon(QIcon(":/stuff/copy.png"))
+        action.setIcon(self.ico_copy)
         menu.addAction(action)
 
         action = QAction(com_text, menu)
         action.triggered.connect(partial(self.copy_text_2clip, comments))
-        action.setIcon(QIcon(":/stuff/copy.png"))
+        action.setIcon(self.ico_copy)
         menu.addAction(action)
 
         action = QAction(_("Save to text file"), menu)
         action.triggered.connect(self.on_save_actions)
         action.setData(2)
-        action.setIcon(QIcon(":/stuff/file_save.png"))
+        action.setIcon(self.ico_file_save)
         menu.addAction(action)
 
         # delete_menu = self.delete_menu()
-        # delete_menu.setIcon(QIcon(":/stuff/files_delete.png"))
+        # delete_menu.setIcon(self.ico_files_delete)
         # delete_menu.setTitle(_('Delete\tDel'))
         # menu.addMenu(delete_menu)
 
@@ -800,19 +809,19 @@ class Base(QMainWindow, Ui_Base):
         if self.sel_highlights:
             menu = QMenu(self.highlights_list)
 
-            action = QAction(_("Comment"), menu)
+            action = QAction(_("Comments"), menu)
             action.triggered.connect(self.on_edit_highlight)
-            action.setIcon(QIcon(":/stuff/file_edit.png"))
+            action.setIcon(self.ico_file_edit)
             menu.addAction(action)
 
             action = QAction(_("Copy"), menu)
             action.triggered.connect(self.on_copy_highlights)
-            action.setIcon(QIcon(":/stuff/copy.png"))
+            action.setIcon(self.ico_copy)
             menu.addAction(action)
 
             action = QAction(_("Delete"), menu)
             action.triggered.connect(self.on_delete_highlights)
-            action.setIcon(QIcon(":/stuff/delete.png"))
+            action.setIcon(self.ico_delete)
             menu.addAction(action)
 
             # noinspection PyArgumentList
@@ -922,7 +931,7 @@ class Base(QMainWindow, Ui_Base):
                 data["bookmarks"][content + 1] = contents[content]
         if not data["highlight"]:  # change icon if no highlights
             item = self.file_table.item(0, 0)
-            item.setIcon(QIcon(":/stuff/trans32.png"))
+            item.setIcon(self.ico_empty)
         self.save_book_data(row, data)
 
     def save_book_data(self, row, data):
@@ -957,11 +966,10 @@ class Base(QMainWindow, Ui_Base):
         """ Creates the `Delete` button menu
         """
         menu = QMenu(self)
-        icon = QIcon(":/stuff/files_delete.png")
         for idx, title in enumerate([_("selected books' info"),
                                     _("selected books"),
                                     _("all missing books' info")]):
-            action = QAction(icon, title, menu)
+            action = QAction(self.ico_files_delete, title, menu)
             action.triggered.connect(self.on_delete_actions)
             action.setData(idx)
             menu.addAction(action)
@@ -1041,13 +1049,12 @@ class Base(QMainWindow, Ui_Base):
         """ Creates the `Save Files` button menu
         """
         menu = QMenu(self)
-        icon = QIcon(":/stuff/file_save.png")
         for idx, item in enumerate([_("to individual text files"),
                                     _("combined to one text file")]):
             action = QAction(item, menu)
             action.triggered.connect(self.on_save_actions)
             action.setData(idx)
-            action.setIcon(icon)
+            action.setIcon(self.ico_file_save)
             menu.addAction(action)
         return menu
 
@@ -1113,13 +1120,6 @@ class Base(QMainWindow, Ui_Base):
                             self.analyze_high(data, page, page_id)
                         highlights.append(page_text + extra + date_text +
                                           line_break + high_text + high_comment)
-                        # try:
-                        #     date_text, high_comment, high_text, page_text = \
-                        #         self.analyze_high(data, page, page_id)
-                        #     highlights.append(page_text + extra + date_text +
-                        #                       line_break + high_text + high_comment)
-                        # except KeyError:  # blank highlight
-                        #     continue
                 if not highlights:  # no highlights
                     continue
                 title = self.file_table.item(row, 0).data(0)
@@ -1159,13 +1159,6 @@ class Base(QMainWindow, Ui_Base):
                             self.analyze_high(data, page, page_id)
                         highlights.append(page_text + extra + date_text +
                                           line_break + high_text + high_comment)
-                        # try:
-                        #     date_text, high_comment, high_text, page_text = \
-                        #         self.analyze_high(data, page, page_id)
-                        #     highlights.append(page_text + extra + date_text +
-                        #                       line_break + high_text + high_comment)
-                        # except KeyError:  # blank highlight
-                        #     continue
                 if not highlights:  # no highlights
                     continue
                 title = self.file_table.item(row, 0).data(0)
@@ -1326,7 +1319,7 @@ class Base(QMainWindow, Ui_Base):
             pass
 
     def popup(self, title, text, icon=QMessageBox.Warning, buttons=1,
-              extra_text='', check_text=''):
+              extra_text="", check_text=""):
         """ Creates and returns a Popup dialog
 
         :type title: str|unicode
@@ -1338,9 +1331,9 @@ class Base(QMainWindow, Ui_Base):
         :type buttons: int
         :parameter buttons: The number of the Popup's buttons
         :type extra_text: str|unicode
-        :parameter extra_text: The extra button's text (button is omitted if '')
+        :parameter extra_text: The extra button's text (button is omitted if "")
         :type check_text: str|unicode
-        :parameter check_text: The checkbox's text (checkbox is omitted if '')
+        :parameter check_text: The checkbox's text (checkbox is omitted if "")
         """
         popup = XMessageBox(self)
         popup.setWindowIcon(QIcon(":/stuff/icon.png"))
@@ -1743,14 +1736,18 @@ class EditHighlight(QDialog, Ui_EditHighlight):
 
     def __init__(self, parent=None):
         super(EditHighlight, self).__init__(parent)
+        # Remove the question mark widget from dialog
+        self.setWindowFlags(self.windowFlags() ^ Qt.WindowContextHelpButtonHint)
         self.setupUi(self)
+
         self.base = parent
+        self.on_ok = None
 
     @Slot()
     def on_ok_btn_clicked(self):
         """ The OK button is pressed
         """
-        self.base.edit_highlight_ok()
+        self.on_ok()
 
 
 class Status(QWidget, Ui_Status):

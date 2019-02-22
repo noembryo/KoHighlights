@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_edit.ui'
 #
-# Created: Fri Feb 22 13:15:09 2019
+# Created: Fri Feb 22 23:39:41 2019
 #      by: pyside-uic 0.2.15 running on PySide 1.2.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -13,7 +13,7 @@ class Ui_EditHighlight(object):
     def setupUi(self, EditHighlight):
         EditHighlight.setObjectName("EditHighlight")
         EditHighlight.setWindowModality(QtCore.Qt.ApplicationModal)
-        EditHighlight.resize(320, 180)
+        EditHighlight.resize(360, 180)
         EditHighlight.setLocale(QtCore.QLocale(QtCore.QLocale.English, QtCore.QLocale.UnitedStates))
         EditHighlight.setModal(False)
         self.verticalLayout = QtGui.QVBoxLayout(EditHighlight)
@@ -51,7 +51,6 @@ class Ui_EditHighlight(object):
         QtCore.QMetaObject.connectSlotsByName(EditHighlight)
 
     def retranslateUi(self, EditHighlight):
-        EditHighlight.setWindowTitle(QtGui.QApplication.translate("EditHighlight", "Comment", None, QtGui.QApplication.UnicodeUTF8))
         self.ok_btn.setToolTip(QtGui.QApplication.translate("EditHighlight", "Check online for an updated version", None, QtGui.QApplication.UnicodeUTF8))
         self.ok_btn.setText(QtGui.QApplication.translate("EditHighlight", "OK", None, QtGui.QApplication.UnicodeUTF8))
         self.cancel_btn.setText(QtGui.QApplication.translate("EditHighlight", "Cancel", None, QtGui.QApplication.UnicodeUTF8))
