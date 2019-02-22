@@ -180,14 +180,11 @@ class Base(QMainWindow, Ui_Base):
                 return True
             if key == Qt.Key_Q:  # ctrl+Q
                 self.close()
+
         if key == Qt.Key_Escape:
             self.close()
-
         if key == Qt.Key_Delete:  # Delete
             self.delete_actions(0)
-            # for idx in sorted(self.file_table.selectionModel().selectedRows(),
-            #                   reverse=True):
-            #     self.file_table.removeRow(idx.row())
             return True
 
     def closeEvent(self, event):
@@ -608,6 +605,189 @@ class Base(QMainWindow, Ui_Base):
         path_item.setToolTip(filename)
         self.file_table.setItem(0, PATH, path_item)
 
+    # ___ ___________________ HIGHLIGHT TABLE STUFF _________________
+
+    @Slot(QTableWidgetItem)
+    def on_highlight_table_itemClicked(self, item):
+        """ When an item of the highlight_table is clicked
+
+        :type item: QTableWidgetItem
+        :param item: The item (cell) that is clicked
+        """
+        row = item.row()
+        data = self.highlight_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)
+
+        if isfile(data["path"]):
+            self.toolbar.open_btn.setEnabled(True)
+        else:
+            self.toolbar.open_btn.setEnabled(False)
+
+    # noinspection PyUnusedLocal
+    def on_high_view_right_clicked(self, point):
+        """ When an item of the highlight_table is right-clicked
+
+        :type point: QPoint
+        :param point: The point where the right-click happened
+        """
+        if not len(self.sel_high_view):  # no items selected
+            return
+
+        menu = QMenu(self.highlight_table)
+
+        row = self.highlight_table.itemAt(point).row()
+        self.act_view_book.setData(row)
+        self.act_view_book.setEnabled(self.toolbar.open_btn.isEnabled())
+        menu.addAction(self.act_view_book)
+
+        highlights = ""
+        comments = ""
+        for idx in self.sel_high_view:
+            item_row = idx.row()
+            data = self.highlight_table.item(item_row, HIGHLIGHT_H).data(Qt.UserRole)
+            highlight = data["text"]
+            if highlight:
+                highlights += highlight + "\n\n"
+            comment = data["comment"]
+            if comment:
+                comments += comment + "\n\n"
+
+        highlights = highlights.rstrip("\n").replace("\n", os.linesep)
+        comments = comments.rstrip("\n").replace("\n", os.linesep)
+
+        high_text = _("Copy Highlights")
+        com_text = _("Copy Comments")
+        if len(self.sel_high_view) == 1:
+            high_text = _("Copy Highlight")
+            com_text = _("Copy Comment")
+
+        action = QAction(high_text, menu)
+        action.triggered.connect(partial(self.copy_text_2clip, highlights))
+        action.setIcon(QIcon(":/stuff/copy.png"))
+        menu.addAction(action)
+
+        action = QAction(com_text, menu)
+        action.triggered.connect(partial(self.copy_text_2clip, comments))
+        action.setIcon(QIcon(":/stuff/copy.png"))
+        menu.addAction(action)
+
+        action = QAction(_("Save to text file"), menu)
+        action.triggered.connect(self.on_save_actions)
+        action.setData(2)
+        action.setIcon(QIcon(":/stuff/file_save.png"))
+        menu.addAction(action)
+
+        # delete_menu = self.delete_menu()
+        # delete_menu.setIcon(QIcon(":/stuff/files_delete.png"))
+        # delete_menu.setTitle(_('Delete\tDel'))
+        # menu.addMenu(delete_menu)
+
+        # noinspection PyArgumentList
+        menu.exec_(QCursor.pos())
+
+    def scan_highlights_thread(self):
+        """ Gets all the loaded highlights
+        """
+        self.highlight_table.model().removeRows(0, self.highlight_table.rowCount())
+        self.highlight_table.setSortingEnabled(False)  # need this before populating table
+
+        scanner = HighlightScanner()
+        scanner.moveToThread(self.highlight_scan_thread)
+        scanner.found.connect(self.create_highlight_row)
+        scanner.finished.connect(self.scan_highlights_finished)
+        scanner.finished.connect(self.highlight_scan_thread.quit)
+        self.highlight_scan_thread.scanner = scanner
+        self.highlight_scan_thread.started.connect(scanner.process)
+        self.highlight_scan_thread.start(QThread.IdlePriority)
+
+    def create_highlight_row(self, data):
+        """ Creates a table row from the given file
+
+        :type data: dict
+        :param data: The highlight data
+        """
+        self.highlight_table.insertRow(0)
+
+        item = QTableWidgetItem(data["text"])
+        item.setToolTip("<p>{}</p>".format(data["text"]))
+        item.setData(Qt.UserRole, data)
+        self.highlight_table.setItem(0, HIGHLIGHT_H, item)
+
+        comment = data["comment"]
+        item = QTableWidgetItem(comment)
+        if comment:
+            item.setToolTip("<p>{}</p>".format(comment))
+        self.highlight_table.setItem(0, COMMENT_H, item)
+
+        item = QTableWidgetItem(data["date"])
+        item.setToolTip(data["date"])
+        item.setTextAlignment(Qt.AlignRight)
+        self.highlight_table.setItem(0, DATE_H, item)
+
+        item = QTableWidgetItem(data["title"])
+        item.setToolTip(data["title"])
+        self.highlight_table.setItem(0, TITLE_H, item)
+
+        page = data["page"]
+        item = XTableWidgetItem(page)
+        item.setToolTip(page)
+        item.setTextAlignment(Qt.AlignRight)
+        item.setData(Qt.UserRole, int(page))
+        self.highlight_table.setItem(0, PAGE_H, item)
+
+        item = QTableWidgetItem(data["authors"])
+        item.setToolTip(data["authors"])
+        self.highlight_table.setItem(0, PATH, item)
+
+    def scan_highlights_finished(self):
+        """ What will happen after the scanning for history files ends
+        """
+        for col in [PAGE_H, DATE_H, AUTHOR_H, TITLE_H]:
+            self.highlight_table.resizeColumnToContents(col)
+
+        self.highlight_table.setSortingEnabled(True)  # re-enable, after populating table
+        order = Qt.AscendingOrder if self.col_sort_asc_h else Qt.DescendingOrder
+        self.highlight_table.sortByColumn(self.col_sort_h, order)
+
+    # noinspection PyUnusedLocal
+    def high_view_selection_update(self, selected, deselected):
+        """ When a row in highlight_table gets selected
+
+        :type selected: QModelIndex
+        :parameter selected: The selected row
+        :type deselected: QModelIndex
+        :parameter deselected: The deselected row
+        """
+        try:
+            self.sel_high_view = self.high_view_selection.selectedRows()
+        except IndexError:  # empty table
+            pass
+
+    def on_highlight_column_clicked(self, column):
+        """ Sets the current sorting column
+
+        :type column: int
+        :parameter column: The column where the filtering is applied
+        """
+        if column == self.col_sort_h:
+            self.col_sort_asc_h = not self.col_sort_asc_h
+        self.col_sort_h = column
+
+    # noinspection PyUnusedLocal
+    def on_highlight_column_resized(self, column, oldSize, newSize):
+        """ Gets the column size
+
+        :type column: int
+        :parameter column: The resized column
+        :type oldSize: int
+        :parameter oldSize: The old size
+        :type newSize: int
+        :parameter newSize: The new size
+        """
+        if column == HIGHLIGHT_H:
+            self.highlight_width = newSize
+        elif column == COMMENT_H:
+            self.comment_width = newSize
+
     # ___ ___________________ HIGHLIGHTS STUFF ______________________
 
     # noinspection PyUnusedLocal
@@ -620,7 +800,7 @@ class Base(QMainWindow, Ui_Base):
         if self.sel_highlights:
             menu = QMenu(self.highlights_list)
 
-            action = QAction(_("Edit"), menu)
+            action = QAction(_("Comment"), menu)
             action.triggered.connect(self.on_edit_highlight)
             action.setIcon(QIcon(":/stuff/file_edit.png"))
             menu.addAction(action)
@@ -1029,12 +1209,10 @@ class Base(QMainWindow, Ui_Base):
         pos_0 = data["highlight"][page][page_id]["pos0"]
         pos_1 = data["highlight"][page][page_id]["pos1"]
         comment = ""
-        # err = False
         for bookmark_idx in data["bookmarks"]:
             try:
                 book_pos0 = data["bookmarks"][bookmark_idx]["pos0"]
             except KeyError:  # no [bookmark_idx]["pos0"] exists (blank highlight)
-                # err = True
                 continue
             book_pos1 = data["bookmarks"][bookmark_idx]["pos1"]
             if (pos_0 == book_pos0) and (pos_1 == book_pos1):
@@ -1043,8 +1221,6 @@ class Base(QMainWindow, Ui_Base):
                     break
                 book_text = re.sub(r"Page \d+ (.+?) @ \d+-\d+-\d+ \d+:\d+:\d+",
                                    r"\1", book_text, 1, re.DOTALL | re.MULTILINE)
-                # if err:  # 2check remove this...
-                #     print("{}\n{}".format(text, book_text))
                 if text != book_text:
                     comment = book_text
                 break
@@ -1057,189 +1233,6 @@ class Base(QMainWindow, Ui_Base):
         high_comment = (line_break2 + "● " + comment
                         if self.status.act_comment.isChecked() and comment else "")
         return date_text, high_comment, high_text, page_text
-
-    # ___ ___________________ HIGHLIGHT TABLE STUFF _________________
-
-    @Slot(QTableWidgetItem)
-    def on_highlight_table_itemClicked(self, item):
-        """ When an item of the highlight_table is clicked
-
-        :type item: QTableWidgetItem
-        :param item: The item (cell) that is clicked
-        """
-        row = item.row()
-        data = self.highlight_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)
-
-        if isfile(data["path"]):
-            self.toolbar.open_btn.setEnabled(True)
-        else:
-            self.toolbar.open_btn.setEnabled(False)
-
-    # noinspection PyUnusedLocal
-    def on_high_view_right_clicked(self, point):
-        """ When an item of the highlight_table is right-clicked
-
-        :type point: QPoint
-        :param point: The point where the right-click happened
-        """
-        if not len(self.sel_high_view):  # no items selected
-            return
-
-        menu = QMenu(self.highlight_table)
-
-        row = self.highlight_table.itemAt(point).row()
-        self.act_view_book.setData(row)
-        self.act_view_book.setEnabled(self.toolbar.open_btn.isEnabled())
-        menu.addAction(self.act_view_book)
-
-        highlights = ""
-        comments = ""
-        for idx in self.sel_high_view:
-            item_row = idx.row()
-            data = self.highlight_table.item(item_row, HIGHLIGHT_H).data(Qt.UserRole)
-            highlight = data["text"]
-            if highlight:
-                highlights += highlight + "\n\n"
-            comment = data["comment"]
-            if comment:
-                comments += comment + "\n\n"
-
-        highlights = highlights.rstrip("\n").replace("\n", os.linesep)
-        comments = comments.rstrip("\n").replace("\n", os.linesep)
-
-        high_text = _("Copy Highlights")
-        com_text = _("Copy Comments")
-        if len(self.sel_high_view) == 1:
-            high_text = _("Copy Highlight")
-            com_text = _("Copy Comment")
-
-        action = QAction(high_text, menu)
-        action.triggered.connect(partial(self.copy_text_2clip, highlights))
-        action.setIcon(QIcon(":/stuff/copy.png"))
-        menu.addAction(action)
-
-        action = QAction(com_text, menu)
-        action.triggered.connect(partial(self.copy_text_2clip, comments))
-        action.setIcon(QIcon(":/stuff/copy.png"))
-        menu.addAction(action)
-
-        action = QAction(_("Save to text file"), menu)
-        action.triggered.connect(self.on_save_actions)
-        action.setData(2)
-        action.setIcon(QIcon(":/stuff/file_save.png"))
-        menu.addAction(action)
-
-        # delete_menu = self.delete_menu()
-        # delete_menu.setIcon(QIcon(":/stuff/files_delete.png"))
-        # delete_menu.setTitle(_('Delete\tDel'))
-        # menu.addMenu(delete_menu)
-
-        # noinspection PyArgumentList
-        menu.exec_(QCursor.pos())
-
-    def scan_highlights_thread(self):
-        """ Gets all the loaded highlights
-        """
-        self.highlight_table.model().removeRows(0, self.highlight_table.rowCount())
-        self.highlight_table.setSortingEnabled(False)  # need this before populating table
-
-        scanner = HighlightScanner()
-        scanner.moveToThread(self.highlight_scan_thread)
-        scanner.found.connect(self.create_highlight_row)
-        scanner.finished.connect(self.scan_highlights_finished)
-        scanner.finished.connect(self.highlight_scan_thread.quit)
-        self.highlight_scan_thread.scanner = scanner
-        self.highlight_scan_thread.started.connect(scanner.process)
-        self.highlight_scan_thread.start(QThread.IdlePriority)
-
-    def create_highlight_row(self, data):
-        """ Creates a table row from the given file
-
-        :type data: dict
-        :param data: The highlight data
-        """
-        self.highlight_table.insertRow(0)
-
-        item = QTableWidgetItem(data["text"])
-        item.setToolTip("<p>{}</p>".format(data["text"]))
-        item.setData(Qt.UserRole, data)
-        self.highlight_table.setItem(0, HIGHLIGHT_H, item)
-
-        comment = data["comment"]
-        item = QTableWidgetItem(comment)
-        if comment:
-            item.setToolTip("<p>{}</p>".format(comment))
-        self.highlight_table.setItem(0, COMMENT_H, item)
-
-        item = QTableWidgetItem(data["date"])
-        item.setToolTip(data["date"])
-        item.setTextAlignment(Qt.AlignRight)
-        self.highlight_table.setItem(0, DATE_H, item)
-
-        item = QTableWidgetItem(data["title"])
-        item.setToolTip(data["title"])
-        self.highlight_table.setItem(0, TITLE_H, item)
-
-        page = data["page"]
-        item = XTableWidgetItem(page)
-        item.setToolTip(page)
-        item.setTextAlignment(Qt.AlignRight)
-        item.setData(Qt.UserRole, int(page))
-        self.highlight_table.setItem(0, PAGE_H, item)
-
-        item = QTableWidgetItem(data["authors"])
-        item.setToolTip(data["authors"])
-        self.highlight_table.setItem(0, PATH, item)
-
-    def scan_highlights_finished(self):
-        """ What will happen after the scanning for history files ends
-        """
-        for col in [PAGE_H, DATE_H, AUTHOR_H, TITLE_H]:
-            self.highlight_table.resizeColumnToContents(col)
-
-        self.highlight_table.setSortingEnabled(True)  # re-enable, after populating table
-        order = Qt.AscendingOrder if self.col_sort_asc_h else Qt.DescendingOrder
-        self.highlight_table.sortByColumn(self.col_sort_h, order)
-
-    # noinspection PyUnusedLocal
-    def high_view_selection_update(self, selected, deselected):
-        """ When a row in highlight_table gets selected
-
-        :type selected: QModelIndex
-        :parameter selected: The selected row
-        :type deselected: QModelIndex
-        :parameter deselected: The deselected row
-        """
-        try:
-            self.sel_high_view = self.high_view_selection.selectedRows()
-        except IndexError:  # empty table
-            pass
-
-    def on_highlight_column_clicked(self, column):
-        """ Sets the current sorting column
-
-        :type column: int
-        :parameter column: The column where the filtering is applied
-        """
-        if column == self.col_sort_h:
-            self.col_sort_asc_h = not self.col_sort_asc_h
-        self.col_sort_h = column
-
-    # noinspection PyUnusedLocal
-    def on_highlight_column_resized(self, column, oldSize, newSize):
-        """ Gets the column size
-
-        :type column: int
-        :parameter column: The resized column
-        :type oldSize: int
-        :parameter oldSize: The old size
-        :type newSize: int
-        :parameter newSize: The new size
-        """
-        if column == HIGHLIGHT_H:
-            self.highlight_width = newSize
-        elif column == COMMENT_H:
-            self.comment_width = newSize
 
     # ___ ___________________ SETTINGS STUFF ________________________
 
@@ -1595,20 +1588,20 @@ class About(QDialog, Ui_About):
           <table width="100%" border="0">
             <tr>
                 <p align="center"><img src="{0}" width="256" height ="212"></p>
-                <p align="center">&nbsp;&nbsp;<b>KoHighlights</b> is a utility for
-                viewing and converting<br/>the Koreader's history files to simple
-                 text&nbsp;&nbsp;</p>
+                <p align="center"><b>KoHighlights</b> is a utility for viewing
+                    <a href="https://github.com/koreader/koreader">Koreader</a>'s
+                    highlights<br/>and/or export them to simple text</p>
                 <p align="center">Version {1}</p>
                 <p align="center">Visit
-                <a href="https://github.com/noEmbryo/KoHighlights">
-                 KoHighlights page at GitHub</a>, or</p>
+                    <a href="https://github.com/noEmbryo/KoHighlights">
+                    KoHighlights page at GitHub</a>, or</p>
                 <p align="center"><a href="http://www.noEmbryo.com"> noEmbryo's page</a>
-                 with more Apps and stuff...</p>
+                    with more Apps and stuff...</p>
                 <p align="center">Use it and if you like it, consider to
                 <p align="center"><a href="https://www.paypal.com/cgi-bin/webscr?
-                cmd=_s-xclick &hosted_button_id=RBYLVRYG9RU2S">
+                    cmd=_s-xclick &hosted_button_id=RBYLVRYG9RU2S">
                 <img src="{2}" alt="PayPal Button"
-                width="142" height="27" border="0"></a></p>
+                    width="142" height="27" border="0"></a></p>
                 <p align="center">&nbsp;</p></td>
             </tr>
           </table>
