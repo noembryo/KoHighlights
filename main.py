@@ -1,26 +1,20 @@
 # coding=utf-8
-from __future__ import (absolute_import, division, print_function, unicode_literals)
-
-from functools import partial
-
+from __future__ import absolute_import, division, print_function, unicode_literals
 from boot_config import *
-
 import os, sys, re
 import codecs
 import gzip
 import json
-import cPickle
 import shutil
-# import urllib2
 import webbrowser
-from future.moves.urllib.request import Request, URLError
 from datetime import datetime
+from functools import partial
 from distutils.version import LooseVersion
 from os.path import (isdir, isfile, join, basename, splitext, dirname, split)
-from slppu import slppu as lua
 from pprint import pprint
 
-import mechanize  # __ ####################   DEPENDENCIES   ############
+import mechanize  # ___ _______________ DEPENDENCIES ________________
+from slppu import slppu as lua  # https://github.com/noembryo/slppu
 from bs4 import BeautifulSoup
 from PySide.QtCore import (Qt, QTimer, Slot, QObject, Signal, QThread, QMimeData)
 from PySide.QtGui import (QMainWindow, QApplication, QMessageBox, QIcon, QFileDialog,
@@ -28,16 +22,22 @@ from PySide.QtGui import (QMainWindow, QApplication, QMessageBox, QIcon, QFileDi
                           QMenu, QAction, QTableWidget, QCheckBox, QHeaderView, QBrush,
                           QColor, QCursor, QListWidgetItem, QPixmap, QToolButton)
 
-from gui_main import Ui_Base  # __ ###########   GUI STUFF   ############
+from gui_main import Ui_Base  # ___ ______ GUI STUFF ________________
 from gui_about import Ui_About
 from gui_auto_info import Ui_AutoInfo
 from gui_toolbar import Ui_ToolBar
 from gui_status import Ui_Status
 from gui_edit import Ui_EditHighlight
 
+try:  # __ vvvvvvvvv PYTHON 2/3 COMPATIBILITY vvvvvvvvvv
+    import cPickle as pickle
+except ImportError:  # python 3.x
+    import pickle
+from future.moves.urllib.request import Request, URLError
 
-__author__ = 'noEmbryo'
-__version__ = '0.4.0.0'
+
+__author__ = "noEmbryo"
+__version__ = "0.5.0.0"
 
 
 def _(text):
@@ -66,7 +66,7 @@ class Base(QMainWindow, Ui_Base):
         self.highlight_width = None
         self.comment_width = None
 
-        self.skip_version = '0.0.0.0'
+        self.skip_version = "0.0.0.0"
         self.opened_times = 0
         self.last_dir = os.getcwd()
         self.edit_lua_file_warning = True
@@ -124,7 +124,7 @@ class Base(QMainWindow, Ui_Base):
         self.show()
         self.passed_files()
 
-    # __ ____________________ EVENTS STUFF __________________________
+    # ___ ___________________ EVENTS STUFF __________________________
 
     # noinspection PyUnresolvedReferences
     def connect_gui(self):
@@ -148,14 +148,15 @@ class Base(QMainWindow, Ui_Base):
             self.on_high_view_right_clicked)
 
         sys.stdout = LogStream()
-        sys.stdout.setObjectName('out')
+        sys.stdout.setObjectName("out")
         sys.stdout.append_to_log.connect(self.write_to_log)
         sys.stderr = LogStream()
-        sys.stderr.setObjectName('err')
+        sys.stderr.setObjectName("err")
         sys.stderr.append_to_log.connect(self.write_to_log)
 
     def keyPressEvent(self, event):
         """ Handles the key press events
+
         :type event: QKeyEvent
         :param event: The key press event
         """
@@ -163,7 +164,7 @@ class Base(QMainWindow, Ui_Base):
         # print(key, mod, QKeySequence(key).toString())
         if mod == Qt.ControlModifier:  # if control is pressed
             if key == Qt.Key_D:
-                print('control + D')
+                print("control + D")
                 return True
             if key == Qt.Key_Backspace:  # ctrl+Backspace
                 self.toolbar.on_clear_btn_clicked()
@@ -191,6 +192,7 @@ class Base(QMainWindow, Ui_Base):
 
     def closeEvent(self, event):
         """ Accepts or rejects the `exit` command
+
         :type event: QCloseEvent
         :param event: The `exit` event
         """
@@ -198,9 +200,9 @@ class Base(QMainWindow, Ui_Base):
             self.bye_bye_stuff()
             event.accept()
             return
-        popup = self.popup(_('Confirmation'), _("Exit KoHighlights?"),
+        popup = self.popup(_("Confirmation"), _("Exit KoHighlights?"),
                            buttons=2)
-        # if popup.clickedButton().text() == _('OK'):
+        # if popup.clickedButton().text() == _("OK"):
         if popup.buttonRole(popup.clickedButton()) == QMessageBox.AcceptRole:
             self.bye_bye_stuff()
             event.accept()  # let the window close
@@ -212,94 +214,17 @@ class Base(QMainWindow, Ui_Base):
         """
         self.settings_save()
         self.delete_logs()
-
-    # __ ____________________ SETTINGS STUFF ________________________
-
-    def settings_load(self):
-        """ Loads the jason based configuration settings
-        """
-        if app_config:
-            self.restoreGeometry(self.unpickle("geometry"))
-            self.restoreState(self.unpickle("state"))
-            self.splitter.restoreState(self.unpickle("splitter"))
-            self.about.restoreGeometry(self.unpickle("about_geometry"))
-            self.col_sort = app_config.get("col_sort", MODIFIED)
-            self.col_sort_asc = app_config.get("col_sort_asc", False)
-            self.col_sort_h = app_config.get("col_sort_h", DATE_H)
-            self.col_sort_asc_h = app_config.get("col_sort_asc_h", False)
-            self.highlight_width = app_config.get("highlight_width", None)
-            self.comment_width = app_config.get("comment_width", None)
-            self.last_dir = app_config.get("last_dir", os.getcwd())
-            self.current_view = app_config.get("current_view", 0)
-            self.fold_btn.setChecked(app_config.get("show_info", True))
-            self.opened_times = app_config.get("opened_times", 0)
-            self.skip_version = app_config.get("skip_version", None)
-            self.edit_lua_file_warning = app_config.get("edit_lua_file_warning", True)
-
-            checked = app_config.get("show_items", (True, True, True, True))
-            # noinspection PyTypeChecker
-            checked = checked if len(checked) == 4 else checked + [True]  # 4compatibility
-            self.toolbar.view_frame.children()[self.current_view + 1].click()
-            self.status.act_page.setChecked(checked[0])
-            self.status.act_date.setChecked(checked[1])
-            self.status.act_text.setChecked(checked[2])
-            self.status.act_comment.setChecked(checked[3])
-        else:
-            self.resize(800, 600)
-        if self.highlight_width:
-            self.header_high_view.resizeSection(HIGHLIGHT_H, self.highlight_width)
-        if self.comment_width:
-            self.header_high_view.resizeSection(COMMENT_H, self.comment_width)
-
-    def settings_save(self):
-        """ Saves the jason based configuration settings
-        """
-        config = {"geometry": cPickle.dumps(self.saveGeometry()),
-                  "state": cPickle.dumps(self.saveState()),
-                  "splitter": cPickle.dumps(self.splitter.saveState()),
-                  "about_geometry": cPickle.dumps(self.about.saveGeometry()),
-                  "col_sort_asc": self.col_sort_asc, "col_sort": self.col_sort,
-                  "col_sort_asc_h": self.col_sort_asc_h, "col_sort_h": self.col_sort_h,
-                  "highlight_width": self.highlight_width,
-                  "comment_width": self.comment_width,
-                  "last_dir": self.last_dir,
-                  "current_view": self.current_view,
-                  "show_info": self.fold_btn.isChecked(),
-                  "show_items": (self.status.act_page.isChecked(),
-                                 self.status.act_date.isChecked(),
-                                 self.status.act_text.isChecked(),
-                                 self.status.act_comment.isChecked()),
-                  "skip_version": self.skip_version, "opened_times": self.opened_times,
-                  "edit_lua_file_warning": self.edit_lua_file_warning,
-                  }
-        try:
-            with gzip.GzipFile(join(SETTINGS_DIR, "settings.json.gz"), "w+") as gz_file:
-                gz_file.write(json.dumps(config, sort_keys=True, indent=4))
-        except IOError as error:
-            print("On saving settings:", error)
-
-    @staticmethod
-    def unpickle(key):
-        """ Un-serialize some binary settings
-        :type key: str|unicode
-        :param key: The dict key to be un-pickled
-        """
-        try:
-            value = cPickle.loads(str(app_config.get(key)))
-        except cPickle.UnpicklingError:
-            return
-        return value
-
-    # __ ____________________ FILE TABLE STUFF ______________________
+    # ___ ___________________ FILE TABLE STUFF ______________________
 
     @Slot(list)
     def on_file_table_fileDropped(self, dropped):
         """ When some items are dropped to the TableWidget
+
         :type dropped: list
         :param dropped: The items dropped
         """
         for i in dropped:
-            if splitext(i)[1] == '.lua':
+            if splitext(i)[1] == ".lua":
                 self.create_row(i)
         folders = [j for j in dropped if isdir(j)]
         for folder in folders:
@@ -308,6 +233,7 @@ class Base(QMainWindow, Ui_Base):
     @Slot(QTableWidgetItem)
     def on_file_table_itemClicked(self, item):
         """ When an item of the FileTable is clicked
+
         :type item: QTableWidgetItem
         :param item: The item (cell) that is clicked
         """
@@ -321,89 +247,93 @@ class Base(QMainWindow, Ui_Base):
 
         self.highlights_list.clear()
 
-        extra = (' ' if self.status.act_page.isChecked() and
-                 self.status.act_date.isChecked() else '')
-        line_break = (':\n' if self.status.act_page.isChecked() or
-                      self.status.act_date.isChecked() else '')
-        for page in sorted(data['highlight']):
-            for page_id in data['highlight'][page]:
-                highlight = ''
+        extra = (" " if self.status.act_page.isChecked() and
+                 self.status.act_date.isChecked() else "")
+        line_break = (":\n" if self.status.act_page.isChecked() or
+                      self.status.act_date.isChecked() else "")
+        for page in sorted(data["highlight"]):
+            for page_id in data["highlight"][page]:
+                highlight = ""
                 try:
-                    date = data['highlight'][page][page_id]['datetime']
-                    text = data['highlight'][page][page_id]['text'].replace("\\\n", "\n")
-                    comment = ''
-                    for idx in data['bookmarks']:
-                        if text == data['bookmarks'][idx]["notes"]:
-                            book_text = data['bookmarks'][idx].get("text", '')
+                    date = data["highlight"][page][page_id]["datetime"]
+                    text = data["highlight"][page][page_id]["text"].replace("\\\n", "\n")
+                    comment = ""
+                    for idx in data["bookmarks"]:
+                        if text == data["bookmarks"][idx]["notes"]:
+                            book_text = data["bookmarks"][idx].get("text", "")
                             if not book_text:
                                 break
-                            book_text = re.sub(r"Page \d+ (.+) @ \d+-\d+-\d+ \d+:\d+:\d+",
-                                               r"\1", book_text)
+                            book_text = re.sub(r"Page \d+ "
+                                               r"(.+?) @ \d+-\d+-\d+ \d+:\d+:\d+", r"\1",
+                                               book_text, 1, re.DOTALL | re.MULTILINE)
                             if text != book_text:
                                 comment = book_text.replace("\\\n", "\n")
                             break
-                    page_text = ('Page ' + str(page)
-                                 if self.status.act_page.isChecked() else '')
-                    date_text = ('[' + date + ']'
-                                 if self.status.act_date.isChecked() else '')
-                    high_text = text if self.status.act_text.isChecked() else ''
-                    line_break2 = ('\n' if self.status.act_text.isChecked() and
-                                   comment else '')
+                    page_text = ("Page " + str(page)
+                                 if self.status.act_page.isChecked() else "")
+                    date_text = ("[" + date + "]"
+                                 if self.status.act_date.isChecked() else "")
+                    high_text = text if self.status.act_text.isChecked() else ""
+                    line_break2 = ("\n" if self.status.act_text.isChecked() and
+                                   comment else "")
                     high_comment = (line_break2 + "● " + comment
                                     if self.status.act_comment.isChecked() and comment
-                                    else '')
+                                    else "")
                     highlight += (page_text + extra + date_text + line_break +
-                                  high_text + high_comment + '\n')
+                                  high_text + high_comment + "\n")
                 except KeyError:  # blank highlight
                     continue
 
                 highlight_item = QListWidgetItem(highlight, self.highlights_list)
                 highlight_item.setData(Qt.UserRole, (page, text, date, page_id, comment))
         self.populate_book_info(data, row)
+        self.highlights_list.setCurrentRow(0)
 
     def populate_book_info(self, data, row):
-        """ When an item of the FileTable is double-clicked
+        """ Fill in the `Book Info` fields
+
         :type data: dict
         :param data: The items data
         :type row: int
         :param row: The items row number
         """
-        items = ['title', 'authors', 'series', 'language',
-                 'pages', 'total_time_in_sec', 'status']
+        items = ["title", "authors", "series", "language",
+                 "pages", "total_time_in_sec", "status"]
         fields = [self.title_txt, self.author_txt, self.series_txt, self.lang_txt,
                   self.pages_txt, self.time_txt, self.status_txt]
         for item, field in zip(items, fields):
             try:
-                if item == 'title' and not data['stats'][item]:
+                if item == "title" and not data["stats"][item]:
                     path = self.file_table.item(row, PATH).data(0)
                     try:
-                        name = path.split('#] ')[1]
+                        name = path.split("#] ")[1]
                         value = splitext(name)[0]
-                    except IndexError:  # no '#] ' in filename
-                        value = ''
-                elif item == 'total_time_in_sec':
-                    value = self.get_time_str(data['stats'][item])
-                elif item == 'status':
-                    value = data['summary']['status'].title()
+                    except IndexError:  # no "#] " in filename
+                        value = ""
+                elif item == "total_time_in_sec":
+                    value = self.get_time_str(data["stats"][item])
+                elif item == "status":
+                    value = data["summary"]["status"].title()
                 else:
-                    value = data['stats'][item]
+                    value = data["stats"][item]
                 try:
                     field.setText(value)
                 except TypeError:  # Needs string only
-                    field.setText(str(value) if value else '')  # '' if 0
+                    field.setText(str(value) if value else "")  # "" if 0
             except KeyError:  # older type file or other problems
                 path = self.file_table.item(row, PATH).data(0)
                 stats = self.get_item_stats(path, data)
-                if item == 'title':
+                if item == "title":
                     field.setText(stats[1])
-                elif item == 'authors':
+                elif item == "authors":
                     field.setText(stats[2])
                 else:
-                    field.setText('')
+                    field.setText("")
 
     # noinspection PyUnusedLocal
     def on_item_right_clicked(self, point):
         """ When an item of the FileTable is right-clicked
+
         :type point: QPoint
         :param point: The point where the right-click happened
         """
@@ -419,19 +349,19 @@ class Base(QMainWindow, Ui_Base):
 
         if len(self.file_selection.selectedRows()) > 1:  # many items selected
             save_menu = self.save_menu()
-            save_menu.setIcon(QIcon(':/stuff/file_save.png'))
-            save_menu.setTitle(_('Save selected'))
+            save_menu.setIcon(QIcon(":/stuff/file_save.png"))
+            save_menu.setTitle(_("Save selected"))
             menu.addMenu(save_menu)
         else:  # only one item selected
             action = QAction(_("Save to text file"), menu)
             action.triggered.connect(self.on_save_actions)
             action.setData(0)
-            action.setIcon(QIcon(':/stuff/file_save.png'))
+            action.setIcon(QIcon(":/stuff/file_save.png"))
             menu.addAction(action)
 
         delete_menu = self.delete_menu()
-        delete_menu.setIcon(QIcon(':/stuff/files_delete.png'))
-        delete_menu.setTitle(_('Delete\tDel'))
+        delete_menu.setIcon(QIcon(":/stuff/files_delete.png"))
+        delete_menu.setTitle(_("Delete\tDel"))
         menu.addMenu(delete_menu)
 
         # noinspection PyArgumentList
@@ -440,6 +370,7 @@ class Base(QMainWindow, Ui_Base):
     @Slot(QTableWidgetItem)
     def on_file_table_itemDoubleClicked(self, item):
         """ When an item of the FileTable is double-clicked
+
         :type item: QTableWidgetItem
         :param item: The item (cell) that is double-clicked
         """
@@ -447,11 +378,12 @@ class Base(QMainWindow, Ui_Base):
         path = splitext(self.file_table.item(row, PATH).data(0))[0]
         path = self.get_book_path(path)
         (os.startfile(path) if isfile(path) else
-         self.popup(_('Error opening file!'), _('{} does not exists!').format(path)))
+         self.popup(_("Error opening file!"), _("{} does not exists!").format(path)))
 
     @staticmethod
     def get_book_path(path):
         """ Returns the filename of the book that the metadata refers to
+
         :type path: str|unicode
         :param path: The path of the metadata file
         """
@@ -474,6 +406,7 @@ class Base(QMainWindow, Ui_Base):
     # noinspection PyUnusedLocal
     def file_selection_update(self, selected, deselected):
         """ When a row in FileTable gets selected
+
         :type selected: QModelIndex
         :parameter selected: The selected row
         :type deselected: QModelIndex
@@ -493,10 +426,11 @@ class Base(QMainWindow, Ui_Base):
             fields = [self.title_txt, self.author_txt, self.series_txt, self.lang_txt,
                       self.pages_txt, self.time_txt, self.status_txt]
             for field in fields:
-                field.setText('')
+                field.setText("")
 
     def on_column_clicked(self, column):
         """ Sets the current sorting column
+
         :type column: int
         :parameter column: The column where the filtering is applied
         """
@@ -507,20 +441,22 @@ class Base(QMainWindow, Ui_Base):
     @Slot(bool)
     def on_fold_btn_toggled(self, pressed):
         """ Open/closes the Book info panel
+
         :type pressed: bool
-        :param pressed: The arrow button's status
+        :param pressed: The arrow button"s status
         """
         if pressed:  # Closed
-            self.fold_btn.setText(_('Show Book Info'))
+            self.fold_btn.setText(_("Show Book Info"))
             self.fold_btn.setArrowType(Qt.RightArrow)
         else:  # Opened
-            self.fold_btn.setText(_('Hide Book Info'))
+            self.fold_btn.setText(_("Hide Book Info"))
             self.fold_btn.setArrowType(Qt.DownArrow)
         self.book_info.setHidden(pressed)
 
     def scan_files_thread(self, path):
         """ Gets all the history files that are inside
         this path and its sub-directories
+
         :type path: str|unicode
         :param path: The root path
         """
@@ -536,7 +472,7 @@ class Base(QMainWindow, Ui_Base):
         self.scan_thread.started.connect(scanner.process)
         self.scan_thread.start(QThread.IdlePriority)
 
-        self.status.animation('start')
+        self.status.animation("start")
 
         self.auto_info.set_text(_("Scanning for KoReader metadata files.\n"
                                   "Please Wait..."))
@@ -545,7 +481,7 @@ class Base(QMainWindow, Ui_Base):
     def scan_finished(self):
         """ What will happen after the scanning for history files ends
         """
-        self.status.animation('stop')
+        self.status.animation("stop")
         self.auto_info.hide()
         self.file_table.resizeColumnsToContents()
 
@@ -558,6 +494,7 @@ class Base(QMainWindow, Ui_Base):
 
     def create_row(self, filename):
         """ Creates a table row from the given file
+
         :type filename: str|unicode
         :param filename: The file to be read
         """
@@ -565,22 +502,22 @@ class Base(QMainWindow, Ui_Base):
             self.file_table.insertRow(0)
             data = self.decode_data(filename)
             if not data:
-                print('No data here!', filename)
+                print("No data here!", filename)
                 return
             icon, title, authors, status, percent = self.get_item_stats(filename, data)
 
             ext = splitext(splitext(filename)[0])[1][1:]
-            book_path = splitext(self.get_book_path(filename))[0] + '.' + ext
+            book_path = splitext(self.get_book_path(filename))[0] + "." + ext
             book_exists = isfile(book_path)
 
-            img = ':/stuff/file_exists.png' if book_exists else ':/stuff/file_missing.png'
+            img = ":/stuff/file_exists.png" if book_exists else ":/stuff/file_missing.png"
             book_icon = QIcon(img)
-            normal = None if book_exists else '#666666'
-            green = '#005500' if book_exists else '#559955'
-            red = '#660000' if book_exists else '#996666'
+            normal = None if book_exists else "#666666"
+            green = "#005500" if book_exists else "#559955"
+            red = "#660000" if book_exists else "#996666"
 
-            color = (green if status == 'complete' else red
-                     if status == 'abandoned' else None) if status else normal
+            color = (green if status == "complete" else red
+                     if status == "abandoned" else None) if status else normal
 
             title_item = QTableWidgetItem(icon, title)
             title_item.setToolTip(title)
@@ -592,8 +529,8 @@ class Base(QMainWindow, Ui_Base):
             self.file_table.setItem(0, AUTHOR, author_item)
 
             type_item = QTableWidgetItem(book_icon, ext)
-            type_item.setToolTip('The {} file {}'.format(ext, (_('exists') if book_exists
-                                                         else _('is missing'))))
+            type_item.setToolTip("The {} file {}".format(ext, (_("exists") if book_exists
+                                                         else _("is missing"))))
             type_item.setData(Qt.UserRole, (book_path, book_exists))
             self.file_table.setItem(0, TYPE, type_item)
 
@@ -618,48 +555,50 @@ class Base(QMainWindow, Ui_Base):
     @staticmethod
     def get_item_stats(filename, data):
         """ Returns the title and authors of a history file
+
         :type filename: str|unicode
         :param filename: The filename to get the stats for
         :type data: dict
         :param data: The dict converted lua file
         """
-        if data['highlight']:
-            icon = QIcon(':/stuff/label_green.png')
+        if data["highlight"]:
+            icon = QIcon(":/stuff/label_green.png")
         else:
-            icon = QIcon(':/stuff/trans32.png')
+            icon = QIcon(":/stuff/trans32.png")
 
         try:
-            title = data['stats']['title']
-            authors = data['stats']['authors']
+            title = data["stats"]["title"]
+            authors = data["stats"]["authors"]
         except KeyError:  # older type file
             title = splitext(basename(filename))[0]
             try:
-                name = title.split('#] ')[1]
+                name = title.split("#] ")[1]
                 title = splitext(name)[0]
-            except IndexError:  # no '#] ' in filename
+            except IndexError:  # no "#] " in filename
                 pass
-            authors = _('OLD TYPE FILE')
+            authors = _("OLD TYPE FILE")
         if not title:
             try:
-                name = filename.split('#] ')[1]
+                name = filename.split("#] ")[1]
                 title = splitext(name)[0]
-            except IndexError:  # no '#] ' in filename
-                title = _('NO TITLE FOUND')
-        authors = authors if authors else _('NO AUTHOR FOUND')
+            except IndexError:  # no "#] " in filename
+                title = _("NO TITLE FOUND")
+        authors = authors if authors else _("NO AUTHOR FOUND")
         try:
-            status = data['summary']['status']
+            status = data["summary"]["status"]
         except KeyError:
             status = None
         try:
-            percent = data['percent_finished']
-            percent = str(int(percent * 100)) + '%'
-            percent = 'Complete' if percent == '100%' else percent
+            percent = data["percent_finished"]
+            percent = str(int(percent * 100)) + "%"
+            percent = "Complete" if percent == "100%" else percent
         except KeyError:
             percent = None
         return icon, title, authors, status, percent
 
     def add_to_empty(self, filename):
         """ Adds empty .sdr folders to a list
+
         :type filename: str|unicode
         :param filename: The folder to be added
         """
@@ -669,11 +608,12 @@ class Base(QMainWindow, Ui_Base):
         path_item.setToolTip(filename)
         self.file_table.setItem(0, PATH, path_item)
 
-    # __ ____________________ HIGHLIGHTS STUFF ______________________
+    # ___ ___________________ HIGHLIGHTS STUFF ______________________
 
     # noinspection PyUnusedLocal
     def on_highlight_right_clicked(self, point):
         """ When a highlight is right-clicked
+
         :type point: QPoint
         :param point: The point where the right-click happened
         """
@@ -682,17 +622,17 @@ class Base(QMainWindow, Ui_Base):
 
             action = QAction(_("Edit"), menu)
             action.triggered.connect(self.on_edit_highlight)
-            action.setIcon(QIcon(':/stuff/file_edit.png'))
+            action.setIcon(QIcon(":/stuff/file_edit.png"))
             menu.addAction(action)
 
             action = QAction(_("Copy"), menu)
             action.triggered.connect(self.on_copy_highlights)
-            action.setIcon(QIcon(':/stuff/copy.png'))
+            action.setIcon(QIcon(":/stuff/copy.png"))
             menu.addAction(action)
 
             action = QAction(_("Delete"), menu)
             action.triggered.connect(self.on_delete_highlights)
-            action.setIcon(QIcon(':/stuff/delete.png'))
+            action.setIcon(QIcon(":/stuff/delete.png"))
             menu.addAction(action)
 
             # noinspection PyArgumentList
@@ -727,9 +667,9 @@ class Base(QMainWindow, Ui_Base):
 
         row = self.sel_idx.row()
         data = self.file_table.item(row, TITLE).data(Qt.UserRole)
-        for bookmark in data['bookmarks'].keys():
-            if high_text == data['bookmarks'][bookmark]['notes']:
-                data['bookmarks'][bookmark]['text'] = text.replace("\n", "\\\n")
+        for bookmark in data["bookmarks"].keys():
+            if high_text == data["bookmarks"][bookmark]["notes"]:
+                data["bookmarks"][bookmark]["text"] = text.replace("\n", "\\\n")
                 break
         self.file_table.item(row, TITLE).setData(Qt.UserRole, data)
         self.save_book_data(row, data)
@@ -737,11 +677,11 @@ class Base(QMainWindow, Ui_Base):
     def on_copy_highlights(self):
         """ Copy the selected highlights to clipboard
         """
-        clipboard_text = ''
+        clipboard_text = ""
         for highlight in sorted(self.sel_highlights):
             row = highlight.row()
             text = self.highlights_list.item(row).text()
-            clipboard_text += text + '\n'
+            clipboard_text += text + "\n"
 
         data = QMimeData()
         data.setText(clipboard_text)
@@ -751,17 +691,17 @@ class Base(QMainWindow, Ui_Base):
         """ The delete highlights action was invoked
         """
         if self.edit_lua_file_warning:
-            text = _('This is an one-time warning!\n\nIn order to delete highlights '
-                     'from a book, its "metadata" file must be edited. This contains '
-                     'a small risk of corrupting that file and lose all the settings '
-                     'and info of that book.\n\nDo you still want to do it?')
-            popup = self.popup(_('Warning!'), text, buttons=3)
+            text = _("This is an one-time warning!\n\nIn order to delete highlights "
+                     "from a book, its \"metadata\" file must be edited. This contains "
+                     "a small risk of corrupting that file and lose all the settings "
+                     "and info of that book.\n\nDo you still want to do it?")
+            popup = self.popup(_("Warning!"), text, buttons=3)
             if popup.buttonRole(popup.clickedButton()) == QMessageBox.RejectRole:
                 return
             else:
                 self.edit_lua_file_warning = False
-        text = _('This will delete the selected highlights!\nAre you sure?')
-        popup = self.popup(_('Warning!'), text, buttons=3)
+        text = _("This will delete the selected highlights!\nAre you sure?")
+        popup = self.popup(_("Warning!"), text, buttons=3)
         if popup.buttonRole(popup.clickedButton()) == QMessageBox.RejectRole:
             return
         self.delete_highlights()
@@ -775,38 +715,39 @@ class Base(QMainWindow, Ui_Base):
             high_row = highlight.row()
             page = self.highlights_list.item(high_row).data(Qt.UserRole)[PAGE]
             page_id = self.highlights_list.item(high_row).data(Qt.UserRole)[PAGE_ID]
-            del data['highlight'][page][page_id]  # delete the highlight
+            del data["highlight"][page][page_id]  # delete the highlight
 
             # delete the associated bookmark
             text = self.highlights_list.item(high_row).data(Qt.UserRole)[HIGHLIGHT_TEXT]
-            for bookmark in data['bookmarks'].keys():
-                if text == data['bookmarks'][bookmark]['notes']:
-                    del data['bookmarks'][bookmark]
+            for bookmark in data["bookmarks"].keys():
+                if text == data["bookmarks"][bookmark]["notes"]:
+                    del data["bookmarks"][bookmark]
 
-        for i in data['highlight'].keys():
-            if not data['highlight'][i]:  # delete page dicts with no highlights
-                del data['highlight'][i]
+        for i in data["highlight"].keys():
+            if not data["highlight"][i]:  # delete page dicts with no highlights
+                del data["highlight"][i]
             else:  # renumbering the highlight keys
-                contents = [data['highlight'][i][j] for j in sorted(data['highlight'][i])]
+                contents = [data["highlight"][i][j] for j in sorted(data["highlight"][i])]
                 if contents:
-                    for l in data['highlight'][i].keys():  # delete all the items and
-                        del data['highlight'][i][l]
+                    for l in data["highlight"][i].keys():  # delete all the items and
+                        del data["highlight"][i][l]
                     for k in range(len(contents)):      # rewrite them with the new keys
-                        data['highlight'][i][k + 1] = contents[k]
+                        data["highlight"][i][k + 1] = contents[k]
 
-        contents = [data['bookmarks'][bookmark] for bookmark in sorted(data['bookmarks'])]
+        contents = [data["bookmarks"][bookmark] for bookmark in sorted(data["bookmarks"])]
         if contents:  # renumbering the bookmarks keys
-            for bookmark in data['bookmarks'].keys():  # delete all the items and
-                del data['bookmarks'][bookmark]
+            for bookmark in data["bookmarks"].keys():  # delete all the items and
+                del data["bookmarks"][bookmark]
             for content in range(len(contents)):  # rewrite them with the new keys
-                data['bookmarks'][content + 1] = contents[content]
-        if not data['highlight']:  # change icon if no highlights
+                data["bookmarks"][content + 1] = contents[content]
+        if not data["highlight"]:  # change icon if no highlights
             item = self.file_table.item(0, 0)
-            item.setIcon(QIcon(':/stuff/trans32.png'))
+            item.setIcon(QIcon(":/stuff/trans32.png"))
         self.save_book_data(row, data)
 
     def save_book_data(self, row, data):
         """ Saves the data of a book to its lua file
+
         :type row: int
         :param row: The book;s row
         :type data: dict
@@ -822,6 +763,7 @@ class Base(QMainWindow, Ui_Base):
     # noinspection PyUnusedLocal
     def highlights_selection_update(self, selected, deselected):
         """ When a highlight in gets selected
+
         :type selected: QModelIndex
         :parameter selected: The selected highlight
         :type deselected: QModelIndex
@@ -829,13 +771,13 @@ class Base(QMainWindow, Ui_Base):
         """
         self.sel_highlights = self.highlights_selection.selectedRows()
 
-    # __ ____________________ DELETING STUFF ________________________
+    # ___ ___________________ DELETING STUFF ________________________
 
     def delete_menu(self):
         """ Creates the `Delete` button menu
         """
         menu = QMenu(self)
-        icon = QIcon(':/stuff/files_delete.png')
+        icon = QIcon(":/stuff/files_delete.png")
         for idx, title in enumerate([_("selected books' info"),
                                     _("selected books"),
                                     _("all missing books' info")]):
@@ -853,6 +795,7 @@ class Base(QMainWindow, Ui_Base):
 
     def delete_actions(self, idx):
         """ Execute the selected `Delete action`
+
         :type idx: int
         :param idx: The action type
         """
@@ -868,8 +811,8 @@ class Base(QMainWindow, Ui_Base):
             text = _("This will delete all the books' information "
                      "that refers to missing books.")
         else:
-            text = ''
-        popup = self.popup(_('Warning!'), text, buttons=2)
+            text = ""
+        popup = self.popup(_("Warning!"), text, buttons=2)
         if popup.buttonRole(popup.clickedButton()) == QMessageBox.RejectRole:
             return
 
@@ -903,21 +846,22 @@ class Base(QMainWindow, Ui_Base):
 
     def get_sdr_folder(self, row):
         """ Get the .sdr folder path for an entry
+
         :type row: int
-        :param row: The entry's row
+        :param row: The entry"s row
         """
         path = split(self.file_table.item(row, PATH).data(0))[0]
-        if not path.lower().endswith('.sdr'):
+        if not path.lower().endswith(".sdr"):
             path = self.file_table.item(row, PATH).data(0)
         return path
 
-    # __ ____________________ SAVING STUFF __________________________
+    # ___ ___________________ SAVING STUFF __________________________
 
     def save_menu(self):
         """ Creates the `Save Files` button menu
         """
         menu = QMenu(self)
-        icon = QIcon(':/stuff/file_save.png')
+        icon = QIcon(":/stuff/file_save.png")
         for idx, item in enumerate([_("to individual text files"),
                                     _("combined to one text file")]):
             action = QAction(item, menu)
@@ -935,6 +879,7 @@ class Base(QMainWindow, Ui_Base):
 
     def save_actions(self, idx):
         """ Execute the selected `Save action`
+
         :type idx: int
         :param idx: The action type
         """
@@ -955,7 +900,7 @@ class Base(QMainWindow, Ui_Base):
                        .format(data["title"], data["authors"], data["page"],
                                data["date"], data["text"], comment))
                 text += txt + "\n\n"
-            with codecs.open(filename, 'w+', encoding='utf-8') as text_file:
+            with codecs.open(filename, "w+", encoding="utf-8") as text_file:
                     text_file.write(text.replace("\n", os.linesep))
             return
 
@@ -963,10 +908,10 @@ class Base(QMainWindow, Ui_Base):
         saved = 0
         if not self.sel_indexes:
             return
-        extra = (' ' if self.status.act_page.isChecked() and
-                 self.status.act_date.isChecked() else '')
-        line_break = (':' + os.linesep if self.status.act_page.isChecked() or
-                      self.status.act_date.isChecked() else '')
+        extra = (" " if self.status.act_page.isChecked() and
+                 self.status.act_date.isChecked() else "")
+        line_break = (":" + os.linesep if self.status.act_page.isChecked() or
+                      self.status.act_date.isChecked() else "")
 
         if idx == 0:  # save to different text files
             path = QFileDialog.getExistingDirectory(self,
@@ -975,36 +920,40 @@ class Base(QMainWindow, Ui_Base):
                                                     QFileDialog.ShowDirsOnly)
             if path:
                 self.last_dir = path
-                self.status.animation('start')
+                self.status.animation("start")
             else:
                 return
             for i in self.sel_indexes:
                 row = i.row()
                 data = self.file_table.item(row, 0).data(Qt.UserRole)
                 highlights = []
-                for page in sorted(data['highlight']):
-                    for page_id in data['highlight'][page]:
-                        try:
-                            date_text, high_comment, high_text, page_text = \
-                                self.analyze_high(data, page, page_id)
-                            highlights.append(page_text + extra + date_text + line_break +
-                                              high_text + high_comment)
-                        except KeyError:  # blank highlight
-                            continue
+                for page in sorted(data["highlight"]):
+                    for page_id in data["highlight"][page]:
+                        date_text, high_comment, high_text, page_text = \
+                            self.analyze_high(data, page, page_id)
+                        highlights.append(page_text + extra + date_text +
+                                          line_break + high_text + high_comment)
+                        # try:
+                        #     date_text, high_comment, high_text, page_text = \
+                        #         self.analyze_high(data, page, page_id)
+                        #     highlights.append(page_text + extra + date_text +
+                        #                       line_break + high_text + high_comment)
+                        # except KeyError:  # blank highlight
+                        #     continue
                 if not highlights:  # no highlights
                     continue
                 title = self.file_table.item(row, 0).data(0)
-                if title == _('NO TITLE FOUND'):
+                if title == _("NO TITLE FOUND"):
                     title += str(title_counter)
                     title_counter += 1
                 authors = self.file_table.item(row, 1).data(0)
-                if authors in ['OLD TYPE FILE', 'NO AUTHOR FOUND']:
-                    authors = ''
+                if authors in ["OLD TYPE FILE", "NO AUTHOR FOUND"]:
+                    authors = ""
                 name = title
                 if authors:
-                    name = '{} - {}'.format(authors, title)
-                filename = join(path, self.sanitize_filename(name) + '.txt')
-                with codecs.open(filename, 'w+', encoding='utf-8') as text_file:
+                    name = "{} - {}".format(authors, title)
+                filename = join(path, self.sanitize_filename(name) + ".txt")
+                with codecs.open(filename, "w+", encoding="utf-8") as text_file:
                     for highlight in highlights:
                         highlight = highlight + 2 * os.linesep
                         text_file.write(highlight)
@@ -1024,76 +973,97 @@ class Base(QMainWindow, Ui_Base):
                 row = i.row()
                 data = self.file_table.item(row, 0).data(Qt.UserRole)
                 highlights = []
-                for page in sorted(data['highlight']):
-                    for page_id in data['highlight'][page]:
-                        try:
-                            date_text, high_comment, high_text, page_text = \
-                                self.analyze_high(data, page, page_id)
-                            highlights.append(page_text + extra + date_text + line_break +
-                                              high_text + high_comment)
-                        except KeyError:  # blank highlight
-                            continue
+                for page in sorted(data["highlight"]):
+                    for page_id in data["highlight"][page]:
+                        date_text, high_comment, high_text, page_text = \
+                            self.analyze_high(data, page, page_id)
+                        highlights.append(page_text + extra + date_text +
+                                          line_break + high_text + high_comment)
+                        # try:
+                        #     date_text, high_comment, high_text, page_text = \
+                        #         self.analyze_high(data, page, page_id)
+                        #     highlights.append(page_text + extra + date_text +
+                        #                       line_break + high_text + high_comment)
+                        # except KeyError:  # blank highlight
+                        #     continue
                 if not highlights:  # no highlights
                     continue
                 title = self.file_table.item(row, 0).data(0)
-                if title == _('NO TITLE FOUND'):
+                if title == _("NO TITLE FOUND"):
                     title += str(title_counter)
                     title_counter += 1
                 authors = self.file_table.item(row, 1).data(0)
-                if authors in ['OLD TYPE FILE', 'NO AUTHOR FOUND']:
-                    authors = ''
+                if authors in ["OLD TYPE FILE", "NO AUTHOR FOUND"]:
+                    authors = ""
                 name = title
                 if authors:
-                    name = '{} - {}'.format(authors, title)
+                    name = "{} - {}".format(authors, title)
                 # noinspection PyUnresolvedReferences
                 blocks.append((name, (2 * os.linesep).join(highlights)))
                 saved += 1
-            line = '-' * 80
-            with codecs.open(filename, 'w+', encoding='utf-8') as text_file:
+            line = "-" * 80
+            with codecs.open(filename, "w+", encoding="utf-8") as text_file:
                 for block in blocks:
-                    text_file.write('{0}{3}{1}{3}{0}{3}{2}{3}{3}'
+                    text_file.write("{0}{3}{1}{3}{0}{3}{2}{3}{3}"
                                     .format(line, block[0], block[1], os.linesep))
 
-        self.status.animation('stop')
+        self.status.animation("stop")
         all_files = len(self.file_table.selectionModel().selectedRows())
-        self.popup(_('Finished!'), _('{} texts were saved from the {} processed.\n'
-                                     '{} files with no highlights.')
+        self.popup(_("Finished!"), _("{} texts were saved from the {} processed.\n"
+                                     "{} files with no highlights.")
                    .format(saved, all_files, all_files - saved),
                    icon=QMessageBox.Information)
 
     def analyze_high(self, data, page, page_id):
-        date = data['highlight'][page][page_id]['datetime']
-        text = data['highlight'][page][page_id]['text']
-        pos_0 = data['highlight'][page][page_id]['pos0']
-        pos_1 = data['highlight'][page][page_id]['pos1']
-        comment = ''
-        for b in data['bookmarks']:
-            book_pos0 = data['bookmarks'][b]["pos0"]
-            book_pos1 = data['bookmarks'][b]["pos1"]
+        """ Get the highlight's info (text, comment, date and page)
+
+        :type data: dict
+        :param data: The highlight's data
+        :type page: int
+        :param page The page where the highlight starts
+        :type page_id: int
+        :param page_id The count of this page's highlight
+        """
+        date = data["highlight"][page][page_id]["datetime"]
+        text = data["highlight"][page][page_id]["text"]
+        pos_0 = data["highlight"][page][page_id]["pos0"]
+        pos_1 = data["highlight"][page][page_id]["pos1"]
+        comment = ""
+        # err = False
+        for bookmark_idx in data["bookmarks"]:
+            try:
+                book_pos0 = data["bookmarks"][bookmark_idx]["pos0"]
+            except KeyError:  # no [bookmark_idx]["pos0"] exists (blank highlight)
+                # err = True
+                continue
+            book_pos1 = data["bookmarks"][bookmark_idx]["pos1"]
             if (pos_0 == book_pos0) and (pos_1 == book_pos1):
-                book_text = data['bookmarks'][b].get("text", '')
+                book_text = data["bookmarks"][bookmark_idx].get("text", "")
                 if not book_text:
                     break
-                book_text = re.sub(r"Page \d+ (.+) @ \d+-\d+-\d+ "
-                                   r"\d+:\d+:\d+", r"\1", book_text)
+                book_text = re.sub(r"Page \d+ (.+?) @ \d+-\d+-\d+ \d+:\d+:\d+",
+                                   r"\1", book_text, 1, re.DOTALL | re.MULTILINE)
+                # if err:  # 2check remove this...
+                #     print("{}\n{}".format(text, book_text))
                 if text != book_text:
                     comment = book_text
                 break
-        page_text = 'Page ' + str(page) if self.status.act_page.isChecked() else ''
-        date_text = '[' + date + ']' if self.status.act_date.isChecked() else ''
+        page_text = "Page " + str(page) if self.status.act_page.isChecked() else ""
+        date_text = "[" + date + "]" if self.status.act_date.isChecked() else ""
         high_text = (text.replace("\n", os.linesep)
-                     if self.status.act_text.isChecked() else '')
+                     if self.status.act_text.isChecked() else "")
         comment = comment.replace("\n", os.linesep)
-        line_break2 = (os.linesep if self.status.act_text.isChecked() and comment else '')
+        line_break2 = (os.linesep if self.status.act_text.isChecked() and comment else "")
         high_comment = (line_break2 + "● " + comment
-                        if self.status.act_comment.isChecked() and comment else '')
+                        if self.status.act_comment.isChecked() and comment else "")
         return date_text, high_comment, high_text, page_text
 
-    # __ ____________________ HIGHLIGHT TABLE STUFF _________________
+    # ___ ___________________ HIGHLIGHT TABLE STUFF _________________
 
     @Slot(QTableWidgetItem)
     def on_highlight_table_itemClicked(self, item):
         """ When an item of the highlight_table is clicked
+
         :type item: QTableWidgetItem
         :param item: The item (cell) that is clicked
         """
@@ -1108,28 +1078,59 @@ class Base(QMainWindow, Ui_Base):
     # noinspection PyUnusedLocal
     def on_high_view_right_clicked(self, point):
         """ When an item of the highlight_table is right-clicked
+
         :type point: QPoint
         :param point: The point where the right-click happened
         """
-        if not len(self.high_view_selection.selectedRows()):  # no items selected
+        if not len(self.sel_high_view):  # no items selected
             return
 
         menu = QMenu(self.highlight_table)
 
-        # if self.toolbar.open_btn.isEnabled():  # there is a book for the item
         row = self.highlight_table.itemAt(point).row()
         self.act_view_book.setData(row)
         self.act_view_book.setEnabled(self.toolbar.open_btn.isEnabled())
         menu.addAction(self.act_view_book)
 
+        highlights = ""
+        comments = ""
+        for idx in self.sel_high_view:
+            item_row = idx.row()
+            data = self.highlight_table.item(item_row, HIGHLIGHT_H).data(Qt.UserRole)
+            highlight = data["text"]
+            if highlight:
+                highlights += highlight + "\n\n"
+            comment = data["comment"]
+            if comment:
+                comments += comment + "\n\n"
+
+        highlights = highlights.rstrip("\n").replace("\n", os.linesep)
+        comments = comments.rstrip("\n").replace("\n", os.linesep)
+
+        high_text = _("Copy Highlights")
+        com_text = _("Copy Comments")
+        if len(self.sel_high_view) == 1:
+            high_text = _("Copy Highlight")
+            com_text = _("Copy Comment")
+
+        action = QAction(high_text, menu)
+        action.triggered.connect(partial(self.copy_text_2clip, highlights))
+        action.setIcon(QIcon(":/stuff/copy.png"))
+        menu.addAction(action)
+
+        action = QAction(com_text, menu)
+        action.triggered.connect(partial(self.copy_text_2clip, comments))
+        action.setIcon(QIcon(":/stuff/copy.png"))
+        menu.addAction(action)
+
         action = QAction(_("Save to text file"), menu)
         action.triggered.connect(self.on_save_actions)
         action.setData(2)
-        action.setIcon(QIcon(':/stuff/file_save.png'))
+        action.setIcon(QIcon(":/stuff/file_save.png"))
         menu.addAction(action)
 
         # delete_menu = self.delete_menu()
-        # delete_menu.setIcon(QIcon(':/stuff/files_delete.png'))
+        # delete_menu.setIcon(QIcon(":/stuff/files_delete.png"))
         # delete_menu.setTitle(_('Delete\tDel'))
         # menu.addMenu(delete_menu)
 
@@ -1153,6 +1154,7 @@ class Base(QMainWindow, Ui_Base):
 
     def create_highlight_row(self, data):
         """ Creates a table row from the given file
+
         :type data: dict
         :param data: The highlight data
         """
@@ -1202,6 +1204,7 @@ class Base(QMainWindow, Ui_Base):
     # noinspection PyUnusedLocal
     def high_view_selection_update(self, selected, deselected):
         """ When a row in highlight_table gets selected
+
         :type selected: QModelIndex
         :parameter selected: The selected row
         :type deselected: QModelIndex
@@ -1214,6 +1217,7 @@ class Base(QMainWindow, Ui_Base):
 
     def on_highlight_column_clicked(self, column):
         """ Sets the current sorting column
+
         :type column: int
         :parameter column: The column where the filtering is applied
         """
@@ -1224,6 +1228,7 @@ class Base(QMainWindow, Ui_Base):
     # noinspection PyUnusedLocal
     def on_highlight_column_resized(self, column, oldSize, newSize):
         """ Gets the column size
+
         :type column: int
         :parameter column: The resized column
         :type oldSize: int
@@ -1236,7 +1241,85 @@ class Base(QMainWindow, Ui_Base):
         elif column == COMMENT_H:
             self.comment_width = newSize
 
-    # __ ____________________ UTILITY STUFF _________________________
+    # ___ ___________________ SETTINGS STUFF ________________________
+
+    def settings_load(self):
+        """ Loads the jason based configuration settings
+        """
+        if app_config:
+            self.restoreGeometry(self.unpickle("geometry"))
+            self.restoreState(self.unpickle("state"))
+            self.splitter.restoreState(self.unpickle("splitter"))
+            self.about.restoreGeometry(self.unpickle("about_geometry"))
+            self.col_sort = app_config.get("col_sort", MODIFIED)
+            self.col_sort_asc = app_config.get("col_sort_asc", False)
+            self.col_sort_h = app_config.get("col_sort_h", DATE_H)
+            self.col_sort_asc_h = app_config.get("col_sort_asc_h", False)
+            self.highlight_width = app_config.get("highlight_width", None)
+            self.comment_width = app_config.get("comment_width", None)
+            self.last_dir = app_config.get("last_dir", os.getcwd())
+            self.current_view = app_config.get("current_view", 0)
+            self.fold_btn.setChecked(app_config.get("show_info", True))
+            self.opened_times = app_config.get("opened_times", 0)
+            self.skip_version = app_config.get("skip_version", None)
+            self.edit_lua_file_warning = app_config.get("edit_lua_file_warning", True)
+
+            checked = app_config.get("show_items", (True, True, True, True))
+            # noinspection PyTypeChecker
+            checked = checked if len(checked) == 4 else checked + [True]  # 4compatibility
+            self.toolbar.view_frame.children()[self.current_view + 1].click()
+            self.status.act_page.setChecked(checked[0])
+            self.status.act_date.setChecked(checked[1])
+            self.status.act_text.setChecked(checked[2])
+            self.status.act_comment.setChecked(checked[3])
+        else:
+            self.resize(800, 600)
+        if self.highlight_width:
+            self.header_high_view.resizeSection(HIGHLIGHT_H, self.highlight_width)
+        if self.comment_width:
+            self.header_high_view.resizeSection(COMMENT_H, self.comment_width)
+
+    def settings_save(self):
+        """ Saves the jason based configuration settings
+        """
+        config = {"geometry": pickle.dumps(self.saveGeometry()),
+                  "state": pickle.dumps(self.saveState()),
+                  "splitter": pickle.dumps(self.splitter.saveState()),
+                  "about_geometry": pickle.dumps(self.about.saveGeometry()),
+                  "col_sort_asc": self.col_sort_asc, "col_sort": self.col_sort,
+                  "col_sort_asc_h": self.col_sort_asc_h, "col_sort_h": self.col_sort_h,
+                  "highlight_width": self.highlight_width,
+                  "comment_width": self.comment_width,
+                  "last_dir": self.last_dir,
+                  "current_view": self.current_view,
+                  "show_info": self.fold_btn.isChecked(),
+                  "show_items": (self.status.act_page.isChecked(),
+                                 self.status.act_date.isChecked(),
+                                 self.status.act_text.isChecked(),
+                                 self.status.act_comment.isChecked()),
+                  "skip_version": self.skip_version, "opened_times": self.opened_times,
+                  "edit_lua_file_warning": self.edit_lua_file_warning,
+                  }
+        try:
+            with gzip.GzipFile(join(SETTINGS_DIR, "settings.json.gz"), "w+") as gz_file:
+                gz_file.write(json.dumps(config, sort_keys=True, indent=4))
+        except IOError as error:
+            print("On saving settings:", error)
+
+    @staticmethod
+    def unpickle(key):
+        """ Un-serialize some binary settings
+
+        :type key: str|unicode
+        :param key: The dict key to be un-pickled
+        """
+        try:
+            value = pickle.loads(str(app_config.get(key)))
+        except pickle.UnpicklingError:
+            return
+        return value
+
+    # ___ ___________________ UTILITY STUFF _________________________
 
     def passed_files(self):
         """ Command line parameters that are passed to the program.
@@ -1244,7 +1327,7 @@ class Base(QMainWindow, Ui_Base):
         # args = QApplication.instance().arguments()
         try:
             if sys.argv[1]:
-                dropped = [i.decode('mbcs') for i in sys.argv[1:]]
+                dropped = [i.decode("mbcs") for i in sys.argv[1:]]
                 self.on_file_table_fileDropped(dropped)
         except IndexError:
             pass
@@ -1252,6 +1335,7 @@ class Base(QMainWindow, Ui_Base):
     def popup(self, title, text, icon=QMessageBox.Warning, buttons=1,
               extra_text='', check_text=''):
         """ Creates and returns a Popup dialog
+
         :type title: str|unicode
         :parameter title: The Popup's title
         :type text: str|unicode
@@ -1276,15 +1360,15 @@ class Base(QMainWindow, Ui_Base):
         else:
             raise TypeError("Wrong icon type!")
         popup.setWindowTitle(title)
-        popup.setText(text + '\n' if check_text else text)
+        popup.setText(text + "\n" if check_text else text)
         if buttons == 1:
-            popup.addButton(_('Close'), QMessageBox.RejectRole)
+            popup.addButton(_("Close"), QMessageBox.RejectRole)
         elif buttons == 2:
-            popup.addButton(_('OK'), QMessageBox.AcceptRole)
-            popup.addButton(_('Cancel'), QMessageBox.RejectRole)
+            popup.addButton(_("OK"), QMessageBox.AcceptRole)
+            popup.addButton(_("Cancel"), QMessageBox.RejectRole)
         elif buttons == 3:
-            popup.addButton(_('Yes'), QMessageBox.AcceptRole)
-            popup.addButton(_('No'), QMessageBox.RejectRole)
+            popup.addButton(_("Yes"), QMessageBox.AcceptRole)
+            popup.addButton(_("No"), QMessageBox.RejectRole)
         if extra_text:  # add an extra button
             popup.addButton(extra_text, QMessageBox.ApplyRole)
         if check_text:  # hide check_box if no text for it
@@ -1298,40 +1382,54 @@ class Base(QMainWindow, Ui_Base):
     @staticmethod
     def decode_data(path):
         """ Converts a lua table to a Python dict
+
         :type path: str|unicode
         :param path: The path to the lua file
         """
-        with codecs.open(path, 'r', encoding='utf8') as txt_file:
-            txt = txt_file.read()
-            data = lua.decode(txt[39:])  # offset the first words of the file
+        with codecs.open(path, "r", encoding="utf8") as txt_file:
+            txt = txt_file.read()[39:]  # offset the first words of the file
+            data = lua.decode(txt.replace("--", "—"))
             if type(data) == dict:
                 return data
 
     @staticmethod
     def encode_data(path, dict_data):
         """ Converts a Python dict to a lua table
+
         :type path: str|unicode
         :param path: The path to the lua file
         :type dict_data: dict
         :param dict_data: The dictionary to be encoded as lua table
         """
-        with codecs.open(path, 'w+', encoding='utf8') as txt_file:
-            lua_text = '-- we can read Lua syntax here!\nreturn '
+        with codecs.open(path, "w+", encoding="utf8") as txt_file:
+            lua_text = "-- we can read Lua syntax here!\nreturn "
             lua_text += lua.encode(dict_data)
             txt_file.write(lua_text)
 
     @staticmethod
     def sanitize_filename(filename):
         """ Creates a safe filename.
+
         :type filename: str|unicode
         :param filename: The filename to be sanitized
         """
         filename = re.sub(r'[/:*?"<>|\\]', "_", filename)
         return filename
 
+    def copy_text_2clip(self, text):
+        """ Copy a text to clipboard
+
+        :type text: str|unicode
+        """
+        if text:
+            data = QMimeData()
+            data.setText(text)
+            self.clip.setMimeData(data)
+
     @staticmethod
     def get_time_str(sec):
         """ Takes seconds and returns the formatted time value
+
         :type sec: int
         :param sec: The seconds
         """
@@ -1364,16 +1462,16 @@ class Base(QMainWindow, Ui_Base):
         version = LooseVersion(self.version)
         skip_version = LooseVersion(self.skip_version)
         if version_new > version and version_new != skip_version:
-            popup = self.popup(_('Newer version exists!'),
-                               _('There is a newer version (v.{}) online.\n'
-                                 'Open the site to download it now?')
+            popup = self.popup(_("Newer version exists!"),
+                               _("There is a newer version (v.{}) online.\n"
+                                 "Open the site to download it now?")
                                .format(version_new),
                                icon=QMessageBox.Information, buttons=2,
-                               check_text=_('Don\'t alert me for this version again'))
+                               check_text=_("Don\"t alert me for this version again"))
             if popup.checked:
                 self.skip_version = version_new
-            if popup.clickedButton().text() == 'OK':
-                webbrowser.open('http://www.noembryo.com/apps.php?kohighlights')
+            if popup.clickedButton().text() == "OK":
+                webbrowser.open("http://www.noembryo.com/apps.php?kohighlights")
 
     def write_to_log(self, text):
         """ Append text to the QTextEdit.
@@ -1386,8 +1484,8 @@ class Base(QMainWindow, Ui_Base):
         self.about.log_txt.setTextCursor(cursor)
         self.about.log_txt.ensureCursorVisible()
 
-        if self.sender().objectName() == 'err':
-            text = '\033[91m' + text + '\033[0m'
+        if self.sender().objectName() == "err":
+            text = "\033[91m" + text + "\033[0m"
 
         # noinspection PyBroadException
         try:
@@ -1400,7 +1498,7 @@ class Base(QMainWindow, Ui_Base):
         """ Keeps the number of log texts steady.
         """
         _, _, files = os.walk(SETTINGS_DIR).next()
-        files = sorted(i for i in files if i.startswith('error_log'))
+        files = sorted(i for i in files if i.startswith("error_log"))
         if len(files) > 3:
             for name in files[:-3]:
                 try:
@@ -1409,10 +1507,10 @@ class Base(QMainWindow, Ui_Base):
                     pass
 
     def on_check_btn(self):
-        QMessageBox.information(self, _('Info'), _('Tool button is pressed'))
+        QMessageBox.information(self, _("Info"), _("Tool button is pressed"))
 
 
-# __ ________________________ EXTRA CLASSES _________________________
+# ___ _______________________ EXTRA CLASSES _________________________
 
 
 class About(QDialog, Ui_About):
@@ -1443,27 +1541,27 @@ class About(QDialog, Ui_About):
         """
         version_new = self.get_online_version()
         if not version_new:
-            self.base.popup(_('No response!'), _('Version info is unreachable!\n'
-                                                 'Please, try again later...'), buttons=1)
+            self.base.popup(_("No response!"), _("Version info is unreachable!\n"
+                                                 "Please, try again later..."), buttons=1)
             return
         version = LooseVersion(self.base.version)
         if version_new > version:
-            popup = self.base.popup(_('Newer version exists!'),
-                                    _('There is a newer version (v.{}) online.\n'
-                                      'Open the site to download it now?')
+            popup = self.base.popup(_("Newer version exists!"),
+                                    _("There is a newer version (v.{}) online.\n"
+                                      "Open the site to download it now?")
                                     .format(version_new),
                                     icon=QMessageBox.Information, buttons=2)
-            if popup.clickedButton().text() == 'OK':
-                webbrowser.open('http://www.noembryo.com/apps.php?katalib')
+            if popup.clickedButton().text() == "OK":
+                webbrowser.open("http://www.noembryo.com/apps.php?katalib")
                 self.close()
         elif version_new == version:
-            self.base.popup(_('No newer version exists!'),
-                            _('{} is up to date (v.{})').format(APP_NAME, version),
+            self.base.popup(_("No newer version exists!"),
+                            _("{} is up to date (v.{})").format(APP_NAME, version),
                             icon=QMessageBox.Information, buttons=1)
         elif version_new < version:
-            self.base.popup(_('No newer version exists!'),
-                            _('It seems that you are using a newer version ({0})\n'
-                              'than the one online ({1})!').format(version, version_new),
+            self.base.popup(_("No newer version exists!"),
+                            _("It seems that you are using a newer version ({0})\n"
+                              "than the one online ({1})!").format(version, version_new),
                             icon=QMessageBox.Question, buttons=1)
 
     @staticmethod
@@ -1471,16 +1569,16 @@ class About(QDialog, Ui_About):
         browser = mechanize.Browser()
         browser.set_handle_robots(False)
 
-        header = {'User-Agent': 'Mozilla/5.0 (Windows NT 5.1; rv:14.0) '
-                                'Gecko/20100101 Firefox/24.0.1',
-                  'Referer': 'http://whateveritis.com'}
+        header = {"User-Agent": "Mozilla/5.0 (Windows NT 5.1; rv:14.0) "
+                                "Gecko/20100101 Firefox/24.0.1",
+                  "Referer": "http://whateveritis.com"}
         url = "http://www.noembryo.com/apps.php?kohighlights"
 
         request = Request(url, None, header)
         html_text = browser.open(request)
         soup_text = BeautifulSoup(html_text, "html5lib")
-        results = soup_text.findAll(name='p')
-        results = ''.join([str(i) for i in results])
+        results = soup_text.findAll(name="p")
+        results = "".join([str(i) for i in results])
         match = re.search(r"\d+\.\d+\.\d+\.\d+", results, re.DOTALL)
         try:
             version_new = match.group(0)
@@ -1669,7 +1767,7 @@ class Status(QWidget, Ui_Status):
         self.setupUi(self)
         self.base = parent
 
-        self.wait_anim = QMovie(':/stuff/wait.gif')
+        self.wait_anim = QMovie(":/stuff/wait.gif")
         self.anim_lbl.setMovie(self.wait_anim)
         self.anim_lbl.hide()
 
@@ -1693,13 +1791,14 @@ class Status(QWidget, Ui_Status):
 
     def animation(self, action):
         """ Creates or deletes temporary files and folders
+
         :type action: str|unicode
         :param action: The action that must be done
         """
-        if action == 'start':
+        if action == "start":
             self.anim_lbl.show()
             self.wait_anim.start()
-        elif action == 'stop':
+        elif action == "stop":
             self.anim_lbl.hide()
             self.wait_anim.stop()
 
@@ -1738,17 +1837,17 @@ class Scanner(QObject):
     def start_scan(self):
         for i in os.walk(self.path):
             dir_path = i[0]
-            if dir_path.lower().endswith('koreader\\history'):
+            if dir_path.lower().endswith("koreader\\history"):
                 for j in i[2]:
-                    if splitext(j)[1].lower() == '.lua':
+                    if splitext(j)[1].lower() == ".lua":
                         filename = join(dir_path, j)
                         self.found.emit(filename)
                 continue
-            elif dir_path.lower().endswith('.sdr'):
-                if dir_path.lower().endswith('evernote.sdr'):
+            elif dir_path.lower().endswith(".sdr"):
+                if dir_path.lower().endswith("evernote.sdr"):
                     continue
                 for j in i[2]:  # get the .lua file not the .old (backup)
-                    if splitext(j)[1].lower() == '.lua':
+                    if splitext(j)[1].lower() == ".lua":
                         filename = join(dir_path, j)
                         self.found.emit(filename)
                         break
@@ -1764,47 +1863,46 @@ class HighlightScanner(QObject):
         self.base = QApplication.instance().base
 
     def process(self):
-        self.start_scan()
-        self.finished.emit()
-
-    def start_scan(self):
         for row in range(self.base.file_table.rowCount()):
             data = self.base.file_table.item(row, TITLE).data(Qt.UserRole)
             path = self.base.file_table.item(row, TYPE).data(Qt.UserRole)[0]
             self.get_book_highlights(data, path)
+        self.finished.emit()
 
     def get_book_highlights(self, data, path):
         """ Finds all the highlights from a book
+
         :type data: dict
         :param data: The book data (converted from the lua file)
         :type path: str|unicode
         :param path: The book path
         """
         try:
-            authors = data['stats']['authors']
+            authors = data["stats"]["authors"]
         except KeyError:  # older type file
             authors = ""
-        authors = authors if authors else _('NO AUTHOR FOUND')
+        authors = authors if authors else _("NO AUTHOR FOUND")
         try:
-            title = data['stats']['title']
+            title = data["stats"]["title"]
         except KeyError:  # older type file
             title = ""
-        title = title if title else _('NO TITLE FOUND')
+        title = title if title else _("NO TITLE FOUND")
 
-        for page in sorted(data['highlight']):
-            for page_id in data['highlight'][page]:
+        for page in sorted(data["highlight"]):
+            for page_id in data["highlight"][page]:
                 highlight = {"authors": authors, "title": title, "path": path}
                 try:
-                    highlight["date"] = data['highlight'][page][page_id]['datetime']
-                    text = data['highlight'][page][page_id]['text'].replace("\\\n", "\n")
-                    comment = ''
-                    for idx in data['bookmarks']:
-                        if text == data['bookmarks'][idx]["notes"]:
-                            book_text = data['bookmarks'][idx].get("text", '')
+                    highlight["date"] = data["highlight"][page][page_id]["datetime"]
+                    text = data["highlight"][page][page_id]["text"].replace("\\\n", "\n")
+                    comment = ""
+                    for idx in data["bookmarks"]:
+                        if text == data["bookmarks"][idx]["notes"]:
+                            book_text = data["bookmarks"][idx].get("text", "")
                             if not book_text:
                                 break
-                            book_text = re.sub(r"Page \d+ (.+) @ \d+-\d+-\d+ \d+:\d+:\d+",
-                                               r"\1", book_text)
+                            book_text = re.sub(r"Page \d+ "
+                                               r"(.+?) @ \d+-\d+-\d+ \d+:\d+:\d+", r"\1",
+                                               book_text, 1, re.DOTALL | re.MULTILINE)
                             if text != book_text:
                                 comment = book_text.replace("\\\n", "\n")
                             break
