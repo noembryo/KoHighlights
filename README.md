@@ -8,6 +8,7 @@ The original KoHighlights (using the wxPython) can be found [here](https://githu
 
 ![HighLights ScreenShot](screen1.png)
 ![HighLights ScreenShot](screen2.png)
+![HighLights ScreenShot](screen3.png)
 
 # Usage
 * Load items by:

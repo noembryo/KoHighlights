@@ -34,6 +34,6 @@ except IOError:  # first run
     app_config = {}
 
 FIRST_RUN = not bool(app_config)
-TITLE, AUTHOR, TYPE, PERCENT, MODIFIED, PATH = range(6)
-PAGE, HIGHLIGHT_TEXT, DATE, PAGE_ID, COMMENT = range(5)
-HIGHLIGHT_H, COMMENT_H, DATE_H, TITLE_H, PAGE_H, AUTHOR_H = range(6)
+PAGE, HIGHLIGHT_TEXT, DATE, PAGE_ID, COMMENT = range(5)  # highlights_list item data
+TITLE, AUTHOR, TYPE, PERCENT, MODIFIED, PATH = range(6)  # highlight_table columns
+HIGHLIGHT_H, COMMENT_H, DATE_H, TITLE_H, PAGE_H, AUTHOR_H = range(6)  # -//- item data

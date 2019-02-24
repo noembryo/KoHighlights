@@ -16,7 +16,8 @@ from pprint import pprint
 import mechanize  # ___ _______________ DEPENDENCIES ________________
 from slppu import slppu as lua  # https://github.com/noembryo/slppu
 from bs4 import BeautifulSoup
-from PySide.QtCore import (Qt, QTimer, Slot, QObject, Signal, QThread, QMimeData)
+from PySide.QtCore import (Qt, QTimer, Slot, QObject, Signal, QThread, QMimeData,
+                           QModelIndex)
 from PySide.QtGui import (QMainWindow, QApplication, QMessageBox, QIcon, QFileDialog,
                           QTableWidgetItem, QTextCursor, QDialog, QWidget, QMovie, QFont,
                           QMenu, QAction, QTableWidget, QCheckBox, QHeaderView, QBrush,
@@ -27,7 +28,7 @@ from gui_about import Ui_About
 from gui_auto_info import Ui_AutoInfo
 from gui_toolbar import Ui_ToolBar
 from gui_status import Ui_Status
-from gui_edit import Ui_EditHighlight
+from gui_edit import Ui_TextDialog
 
 try:  # __ vvvvvvvvv PYTHON 2/3 COMPATIBILITY vvvvvvvvvv
     import cPickle as pickle
@@ -37,7 +38,7 @@ from future.moves.urllib.request import Request, URLError
 
 
 __author__ = "noEmbryo"
-__version__ = "0.5.0.0"
+__version__ = "0.6.0.0"
 
 
 def _(text):
@@ -97,6 +98,7 @@ class Base(QMainWindow, Ui_Base):
         self.ico_copy = QIcon(":/stuff/copy.png")
         self.ico_delete = QIcon(":/stuff/delete.png")
         self.ico_label_green = QIcon(":/stuff/label_green.png")
+        self.ico_view_books = QIcon(":/stuff/view_books.png")
         self.ico_empty = QIcon(":/stuff/trans32.png")
 
         self.about = About(self)
@@ -108,12 +110,13 @@ class Base(QMainWindow, Ui_Base):
         self.status = Status(self)
         self.statusbar.addPermanentWidget(self.status)
 
-        self.edit_high = EditHighlight(self)
+        self.edit_high = TextDialog(self)
         self.edit_high.on_ok = self.edit_highlight_ok
         self.edit_high.setWindowTitle(_("Comments"))
 
-        self.description = EditHighlight(self)
+        self.description = TextDialog(self)
         self.description.setWindowTitle(_("Description"))
+        self.description.high_edit_txt.setReadOnly(True)
         self.description.btn_box.hide()
         self.description_btn.setEnabled(False)
 
@@ -251,11 +254,13 @@ class Base(QMainWindow, Ui_Base):
             self.scan_files_thread(folder)
 
     # @Slot(QTableWidgetItem)  # its called indirectly from self.file_selection_update
-    def on_file_table_itemClicked(self, item):
+    def on_file_table_itemClicked(self, item, reset=True):
         """ When an item of the FileTable is clicked
 
         :type item: QTableWidgetItem
         :param item: The item (cell) that is clicked
+        :type reset: bool
+        :param reset: Select the first highlight in the list
         """
         row = item.row()
         data = self.file_table.item(row, TITLE).data(Qt.UserRole)
@@ -314,9 +319,9 @@ class Base(QMainWindow, Ui_Base):
         self.description_btn.setEnabled(description_state)
 
         self.populate_book_info(data, row)
-        self.highlights_list.setCurrentRow(0)
+        self.highlights_list.setCurrentRow(0) if reset else None
 
-    def populate_book_info(self, data, row):  # 2fix: missing keywords
+    def populate_book_info(self, data, row):
         """ Fill in the `Book Info` fields
 
         :type data: dict
@@ -335,7 +340,7 @@ class Base(QMainWindow, Ui_Base):
                         value = ""
                 elif key == "keywords":
                     keywords = data["doc_props"][key].split("\n")
-                    value = ", ".join([i.rstrip("\\") for i in keywords])
+                    value = "; ".join([i.rstrip("\\") for i in keywords])
                 else:
                     value = data["stats"][key]
                 try:
@@ -631,6 +636,23 @@ class Base(QMainWindow, Ui_Base):
         else:
             self.toolbar.open_btn.setEnabled(False)
 
+        # needed for edit comments in Highlight View or "Find highlight in Books"
+        for row in range(self.file_table.rowCount()):  # 2check: need to optimize?
+            if data["path"] == self.file_table.item(row, TYPE).data(Qt.UserRole)[0]:
+                self.sel_book_data = self.file_table.item(row, TITLE).data(Qt.UserRole)
+                break
+
+    @Slot(QModelIndex)
+    def on_highlight_table_doubleClicked(self, index):
+        """ When an item of the highlight_table is double-clicked
+
+        :type index: QTableWidgetItem
+        :param index: The item (cell) that is clicked
+        """
+        column = index.column()
+        if column == COMMENT_H:
+            self.on_edit_highlight()
+
     # noinspection PyUnusedLocal
     def on_high_view_right_clicked(self, point):
         """ When an item of the highlight_table is right-clicked
@@ -665,9 +687,19 @@ class Base(QMainWindow, Ui_Base):
 
         high_text = _("Copy Highlights")
         com_text = _("Copy Comments")
-        if len(self.sel_high_view) == 1:
+        if len(self.sel_high_view) == 1:  # single selection
             high_text = _("Copy Highlight")
             com_text = _("Copy Comment")
+
+            action = QAction(_("Find in Books"), menu)
+            action.triggered.connect(partial(self.find_in_books, highlights))
+            action.setIcon(self.ico_view_books)
+            menu.addAction(action)
+
+            action = QAction(_("Comments"), menu)
+            action.triggered.connect(self.on_edit_highlight)
+            action.setIcon(self.ico_file_edit)
+            menu.addAction(action)
 
         action = QAction(high_text, menu)
         action.triggered.connect(partial(self.copy_text_2clip, highlights))
@@ -709,7 +741,7 @@ class Base(QMainWindow, Ui_Base):
         self.highlight_scan_thread.start(QThread.IdlePriority)
 
     def create_highlight_row(self, data):
-        """ Creates a table row from the given file
+        """ Creates a highlight table row from the given data
 
         :type data: dict
         :param data: The highlight data
@@ -797,6 +829,27 @@ class Base(QMainWindow, Ui_Base):
         elif column == COMMENT_H:
             self.comment_width = newSize
 
+    def find_in_books(self, highlight):
+        """ Finds the current highlight in the "Books View"
+
+        :type highlight: str|unicode
+        :parameter highlight: The highlight we searching for
+        """
+        data = self.sel_book_data
+        for row in range(self.file_table.rowCount()):
+            item = self.file_table.item(row, TITLE)
+            row_data = item.data(Qt.UserRole)
+            if data["stats"]["title"] == row_data["stats"]["title"]:  # find the book row
+                self.on_file_table_itemClicked(item)
+                self.toolbar.books_btn.click()
+                self.file_table.selectRow(row)
+                for hi_row in range(self.highlights_list.count()):  # find the highlight
+                    if (self.highlights_list.item(hi_row)
+                            .data(Qt.UserRole)[HIGHLIGHT_TEXT] == highlight):
+                        self.highlights_list.setCurrentRow(hi_row)
+                        break
+                break
+
     # ___ ___________________ HIGHLIGHTS STUFF ______________________
 
     # noinspection PyUnusedLocal
@@ -836,32 +889,55 @@ class Base(QMainWindow, Ui_Base):
     def on_edit_highlight(self):
         """ Opens a window to edit the selected highlight's comment
         """
-        highlight = self.sel_highlights[-1]
-        row = highlight.row()
-        comment = self.highlights_list.item(row).data(Qt.UserRole)[COMMENT]
+        if self.file_table.isVisible():  # edit comments from Book View
+            row = self.sel_highlights[-1].row()
+            comment = self.highlights_list.item(row).data(Qt.UserRole)[COMMENT]
+        elif self.highlight_table.isVisible():  # edit comments from Highlights View
+            row = self.sel_high_view[-1].row()
+            high_data = self.highlight_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)
+            comment = high_data["comment"]
+        else:
+            return
         self.edit_high.high_edit_txt.setText(comment)
         # self.edit_high.high_edit_txt.setFocus()
-        self.edit_high.show()
+        self.edit_high.exec_()
 
     def edit_highlight_ok(self):
         """ Change the selected highlight's comment
         """
         text = self.edit_high.high_edit_txt.toPlainText()
-        highlight = self.sel_highlights[-1]
-        high_row = highlight.row()
-        high_data = self.highlights_list.item(high_row).data(Qt.UserRole)
-        high_text = high_data[HIGHLIGHT_TEXT]
-        high_data[HIGHLIGHT_TEXT] = text
-        self.highlights_list.item(high_row).data(Qt.UserRole)
+        if self.file_table.isVisible():
+            high_index = self.sel_highlights[-1]
+            high_row = high_index.row()
+            high_data = self.highlights_list.item(high_row).data(Qt.UserRole)
+            high_text = high_data[HIGHLIGHT_TEXT]
 
-        row = self.sel_idx.row()
-        data = self.file_table.item(row, TITLE).data(Qt.UserRole)
-        for bookmark in data["bookmarks"].keys():
-            if high_text == data["bookmarks"][bookmark]["notes"]:
-                data["bookmarks"][bookmark]["text"] = text.replace("\n", "\\\n")
-                break
-        self.file_table.item(row, TITLE).setData(Qt.UserRole, data)
-        self.save_book_data(row, data)
+            row = self.sel_idx.row()
+            data = self.file_table.item(row, TITLE).data(Qt.UserRole)
+
+            for bookmark in data["bookmarks"].keys():
+                if high_text == data["bookmarks"][bookmark]["notes"]:
+                    data["bookmarks"][bookmark]["text"] = text.replace("\n", "\\\n")
+                    break
+            self.file_table.item(row, TITLE).setData(Qt.UserRole, data)
+            path = self.file_table.item(row, PATH).text()
+        elif self.highlight_table.isVisible():
+            data = self.sel_book_data
+            row = self.sel_high_view[-1].row()
+            high_data = self.highlight_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)
+            high_text = high_data["text"]
+
+            for bookmark in data["bookmarks"].keys():
+                if high_text == data["bookmarks"][bookmark]["notes"]:
+                    data["bookmarks"][bookmark]["text"] = text.replace("\n", "\\\n")
+                    break
+            self.highlight_table.item(row, HIGHLIGHT_H).setData(Qt.UserRole, high_data)
+            self.highlight_table.item(row, COMMENT_H).setText(text)
+            book_path, ext = splitext(high_data["path"])
+            path = join(book_path + ".sdr", "metadata{}.lua".format(ext))
+        else:
+            return
+        self.save_book_data(path, data)
 
     def on_copy_highlights(self):
         """ Copy the selected highlights to clipboard
@@ -932,22 +1008,25 @@ class Base(QMainWindow, Ui_Base):
         if not data["highlight"]:  # change icon if no highlights
             item = self.file_table.item(0, 0)
             item.setIcon(self.ico_empty)
-        self.save_book_data(row, data)
+        path = self.file_table.item(row, PATH).text()
+        self.save_book_data(path, data)
 
-    def save_book_data(self, row, data):
+    def save_book_data(self, path, data):
         """ Saves the data of a book to its lua file
 
-        :type row: int
-        :param row: The book;s row
+        :type path: str|unicode
+        :param path: The path to the book's data file
         :type data: dict
         :param data: The book's data
         """
-        path = self.file_table.item(row, PATH).text()
+        # path = self.file_table.item(row, PATH).text()
         times = os.stat(path)  # read the file's created/modified times
         self.encode_data(path, data)
         os.utime(path, (times.st_ctime, times.st_mtime))  # reapply original times
-        self.on_file_table_itemClicked(
-            self.file_table.item(self.sel_idx.row(), self.sel_idx.column()))
+        if self.file_table.isVisible():
+            self.on_file_table_itemClicked(self.file_table.item(self.sel_idx.row(),
+                                                                self.sel_idx.column()),
+                                           reset=False)
 
     # noinspection PyUnusedLocal
     def highlights_selection_update(self, selected, deselected):
@@ -1071,6 +1150,8 @@ class Base(QMainWindow, Ui_Base):
         :param idx: The action type
         """
         if idx == 2:  # save from the highlight_table
+            if not self.sel_high_view:
+                return
             filename = QFileDialog.getSaveFileName(self, "Save to Text file",
                                                    self.last_dir, "text files (*.txt);;"
                                                                   "all files (*.*)")[0]
@@ -1091,6 +1172,7 @@ class Base(QMainWindow, Ui_Base):
                     text_file.write(text.replace("\n", os.linesep))
             return
 
+        # save from file_table
         title_counter = 0
         saved = 0
         if not self.sel_indexes:
@@ -1709,8 +1791,12 @@ class ToolBar(QWidget, Ui_ToolBar):
             self.base.toolbar.save_btn.setPopupMode(QToolButton.MenuButtonPopup)
             # self.base.toolbar.delete_btn.setStyleSheet("")
             # self.base.toolbar.delete_btn.setPopupMode(QToolButton.MenuButtonPopup)
-            self.base.toolbar.delete_btn.show()
             # self.base.toolbar.open_btn.show()
+            self.base.toolbar.delete_btn.show()
+            sel_idx = self.base.sel_idx
+            if sel_idx:
+                item = self.base.file_table.item(sel_idx.row(), sel_idx.column())
+                self.base.on_file_table_itemClicked(item, reset=False)
         elif idx == 1:  # highlights view
             self.base.status.hide()
             no_arrow = "QToolButton::menu-indicator{width:0px;}"
@@ -1718,8 +1804,8 @@ class ToolBar(QWidget, Ui_ToolBar):
             self.base.toolbar.save_btn.setPopupMode(QToolButton.DelayedPopup)
             # self.base.toolbar.delete_btn.setStyleSheet(no_arrow)
             # self.base.toolbar.delete_btn.setPopupMode(QToolButton.DelayedPopup)
-            self.base.toolbar.delete_btn.hide()
             # self.base.toolbar.open_btn.hide()
+            self.base.toolbar.delete_btn.hide()
             self.base.scan_highlights_thread()
         self.base.current_view = idx
         self.base.views.setCurrentIndex(idx)
@@ -1732,10 +1818,10 @@ class ToolBar(QWidget, Ui_ToolBar):
         self.base.about.show()
 
 
-class EditHighlight(QDialog, Ui_EditHighlight):
+class TextDialog(QDialog, Ui_TextDialog):
 
     def __init__(self, parent=None):
-        super(EditHighlight, self).__init__(parent)
+        super(TextDialog, self).__init__(parent)
         # Remove the question mark widget from dialog
         self.setWindowFlags(self.windowFlags() ^ Qt.WindowContextHelpButtonHint)
         self.setupUi(self)
@@ -1825,22 +1911,20 @@ class Scanner(QObject):
         self.finished.emit()
 
     def start_scan(self):
-        for i in os.walk(self.path):
-            dir_path = i[0]
-            if dir_path.lower().endswith("koreader\\history"):
-                for j in i[2]:
-                    if splitext(j)[1].lower() == ".lua":
-                        filename = join(dir_path, j)
-                        self.found.emit(filename)
-                continue
-            elif dir_path.lower().endswith(".sdr"):
+        for dir_tuple in os.walk(self.path):
+            dir_path = dir_tuple[0]
+            if dir_path.lower().endswith(".sdr"):  # a book's metadata folder
                 if dir_path.lower().endswith("evernote.sdr"):
                     continue
-                for j in i[2]:  # get the .lua file not the .old (backup)
-                    if splitext(j)[1].lower() == ".lua":
-                        filename = join(dir_path, j)
-                        self.found.emit(filename)
+                for file_ in dir_tuple[2]:  # get the .lua file not the .old (backup)
+                    if splitext(file_)[1].lower() == ".lua":
+                        self.found.emit(join(dir_path, file_))
                         break
+            elif dir_path.lower().endswith("koreader\\history"):  # older metadata storage
+                for file_ in dir_tuple[2]:
+                    if splitext(file_)[1].lower() == ".lua":
+                        self.found.emit(join(dir_path, file_))
+                continue
 
 
 class HighlightScanner(QObject):
@@ -1885,7 +1969,7 @@ class HighlightScanner(QObject):
                     highlight["date"] = data["highlight"][page][page_id]["datetime"]
                     text = data["highlight"][page][page_id]["text"].replace("\\\n", "\n")
                     comment = ""
-                    for idx in data["bookmarks"]:
+                    for idx in data["bookmarks"]:  # check for comment text
                         if text == data["bookmarks"][idx]["notes"]:
                             book_text = data["bookmarks"][idx].get("text", "")
                             if not book_text:
@@ -1893,7 +1977,7 @@ class HighlightScanner(QObject):
                             book_text = re.sub(r"Page \d+ "
                                                r"(.+?) @ \d+-\d+-\d+ \d+:\d+:\d+", r"\1",
                                                book_text, 1, re.DOTALL | re.MULTILINE)
-                            if text != book_text:
+                            if text != book_text:  # there is a comment
                                 comment = book_text.replace("\\\n", "\n")
                             break
                     highlight["text"] = text
