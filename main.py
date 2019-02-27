@@ -1,5 +1,7 @@
 # coding=utf-8
 from __future__ import absolute_import, division, print_function, unicode_literals
+
+
 from boot_config import *
 import os, sys, re
 import codecs
@@ -7,6 +9,7 @@ import gzip
 import json
 import shutil
 import webbrowser
+import subprocess
 from datetime import datetime
 from functools import partial
 from distutils.version import LooseVersion
@@ -20,8 +23,8 @@ from PySide.QtCore import (Qt, QTimer, Slot, QObject, Signal, QThread, QMimeData
                            QModelIndex)
 from PySide.QtGui import (QMainWindow, QApplication, QMessageBox, QIcon, QFileDialog,
                           QTableWidgetItem, QTextCursor, QDialog, QWidget, QMovie, QFont,
-                          QMenu, QAction, QTableWidget, QCheckBox, QHeaderView, QBrush,
-                          QColor, QCursor, QListWidgetItem, QPixmap, QToolButton)
+                          QMenu, QAction, QTableWidget, QCheckBox, QHeaderView, QCursor,
+                          QListWidgetItem, QPixmap, QToolButton)
 
 from gui_main import Ui_Base  # ___ ______ GUI STUFF ________________
 from gui_about import Ui_About
@@ -30,7 +33,7 @@ from gui_toolbar import Ui_ToolBar
 from gui_status import Ui_Status
 from gui_edit import Ui_TextDialog
 
-try:  # __ vvvvvvvvv PYTHON 2/3 COMPATIBILITY vvvvvvvvvv
+try:  # ___ _______ PYTHON 2/3 COMPATIBILITY ________________________
     import cPickle as pickle
 except ImportError:  # python 3.x
     import pickle
@@ -38,7 +41,7 @@ from future.moves.urllib.request import Request, URLError
 
 
 __author__ = "noEmbryo"
-__version__ = "0.6.0.0"
+__version__ = "0.6.0.1"
 
 
 def _(text):
@@ -1476,13 +1479,26 @@ class Base(QMainWindow, Ui_Base):
 
     @staticmethod
     def sanitize_filename(filename):
-        """ Creates a safe filename.
+        """ Creates a safe filename
 
         :type filename: str|unicode
         :param filename: The filename to be sanitized
         """
         filename = re.sub(r'[/:*?"<>|\\]', "_", filename)
         return filename
+
+    @staticmethod
+    def open_file(filename):
+        """ Opens a file with its associated app
+
+        :type filename: str|unicode
+        :param filename: The path to the file to be opened
+        """
+        if sys.platform == "win32":
+            os.startfile(filename)
+        else:
+            opener = "open" if sys.platform == "darwin" else "xdg-open"
+            subprocess.call([opener, filename])
 
     def copy_text_2clip(self, text):
         """ Copy a text to clipboard
