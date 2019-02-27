@@ -13,7 +13,8 @@ import subprocess
 from datetime import datetime
 from functools import partial
 from distutils.version import LooseVersion
-from os.path import (isdir, isfile, join, basename, splitext, dirname, split)
+from os.path import (isdir, isfile, join, basename, splitext, dirname, split, exists,
+                     getmtime)
 from pprint import pprint
 
 import mechanize  # ___ _______________ DEPENDENCIES ________________
@@ -432,7 +433,7 @@ class Base(QMainWindow, Ui_Base):
         if self.current_view == 0:  # books view
             item = self.file_table.itemAt(row, 0)
             self.on_file_table_itemDoubleClicked(item)
-        if self.current_view == 1:  # highlights view
+        elif self.current_view == 1:  # highlights view
             data = self.highlight_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)
             self.open_file(data["path"])
 
@@ -530,7 +531,7 @@ class Base(QMainWindow, Ui_Base):
         :type filename: str|unicode
         :param filename: The file to be read
         """
-        if os.path.exists(filename) and splitext(filename)[1].lower() == '.lua':
+        if exists(filename) and splitext(filename)[1].lower() == '.lua':
             self.file_table.insertRow(0)
             data = self.decode_data(filename)
             if not data:
@@ -552,8 +553,8 @@ class Base(QMainWindow, Ui_Base):
             book_exists = isfile(book_path)
             book_icon = self.ico_file_exists if book_exists else self.ico_file_missing
             type_item = QTableWidgetItem(book_icon, ext)
-            type_item.setToolTip("The {} file {}".format(ext, (_("exists") if book_exists
-                                                         else _("is missing"))))
+            type_item.setToolTip(book_path if book_exists else
+                                 _("The {} file is missing!").format(ext))
             type_item.setData(Qt.UserRole, (book_path, book_exists))
             self.file_table.setItem(0, TYPE, type_item)
 
@@ -562,7 +563,7 @@ class Base(QMainWindow, Ui_Base):
             percent_item.setTextAlignment(Qt.AlignRight)
             self.file_table.setItem(0, PERCENT, percent_item)
 
-            date = str(datetime.fromtimestamp(os.path.getmtime(filename)))
+            date = str(datetime.fromtimestamp(getmtime(filename)))
             date_item = QTableWidgetItem(date)
             date_item.setToolTip(date)
             self.file_table.setItem(0, MODIFIED, date_item)
@@ -1935,7 +1936,8 @@ class Scanner(QObject):
                     if splitext(file_)[1].lower() == ".lua":
                         self.found.emit(join(dir_path, file_))
                         break
-            elif dir_path.lower().endswith("koreader\\history"):  # older metadata storage
+            # older metadata storage
+            elif dir_path.lower().endswith(join("koreader", "history")):
                 for file_ in dir_tuple[2]:
                     if splitext(file_)[1].lower() == ".lua":
                         self.found.emit(join(dir_path, file_))
