@@ -412,8 +412,6 @@ class Base(QMainWindow, Ui_Base):
         path = splitext(self.file_table.item(row, PATH).data(0))[0]
         path = self.get_book_path(path)
         self.open_file(path)
-        # (os.startfile(path) if isfile(path) else
-        #  self.popup(_("Error opening file!"), _("{} does not exists!").format(path)))
 
     @staticmethod
     def get_book_path(path):
@@ -436,7 +434,6 @@ class Base(QMainWindow, Ui_Base):
             self.on_file_table_itemDoubleClicked(item)
         if self.current_view == 1:  # highlights view
             data = self.highlight_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)
-            # os.startfile(data["path"])
             self.open_file(data["path"])
 
     # noinspection PyUnusedLocal
@@ -1500,7 +1497,7 @@ class Base(QMainWindow, Ui_Base):
                 opener = "open" if sys.platform == "darwin" else "xdg-open"
                 subprocess.call([opener, path])
         else:
-            self.popup(_("Error opening file!"), _("{} does not exists!").format(path))
+            self.popup(_("Error opening file!"), _('"{}" does not exists!').format(path))
 
     def copy_text_2clip(self, text):
         """ Copy a text to clipboard
@@ -2065,10 +2062,6 @@ class XMessageBox(QMessageBox):
 class KoHighlights(QApplication):
     def __init__(self, *args, **kwargs):
         super(KoHighlights, self).__init__(*args, **kwargs)
-
-        # Change the current working directory to the directory of the module
-        os.chdir(os.path.dirname(os.path.abspath(sys.argv[0])))
-
         self.base = Base()
         self.exec_()
 
