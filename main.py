@@ -1,5 +1,7 @@
 # coding=utf-8
 from __future__ import absolute_import, division, print_function, unicode_literals
+
+
 from boot_config import *
 import os, sys, re
 import codecs
@@ -7,6 +9,7 @@ import gzip
 import json
 import shutil
 import webbrowser
+import subprocess
 from datetime import datetime
 from functools import partial
 from distutils.version import LooseVersion
@@ -20,8 +23,8 @@ from PySide.QtCore import (Qt, QTimer, Slot, QObject, Signal, QThread, QMimeData
                            QModelIndex)
 from PySide.QtGui import (QMainWindow, QApplication, QMessageBox, QIcon, QFileDialog,
                           QTableWidgetItem, QTextCursor, QDialog, QWidget, QMovie, QFont,
-                          QMenu, QAction, QTableWidget, QCheckBox, QHeaderView, QBrush,
-                          QColor, QCursor, QListWidgetItem, QPixmap, QToolButton)
+                          QMenu, QAction, QTableWidget, QCheckBox, QHeaderView, QCursor,
+                          QListWidgetItem, QPixmap, QToolButton)
 
 from gui_main import Ui_Base  # ___ ______ GUI STUFF ________________
 from gui_about import Ui_About
@@ -30,7 +33,7 @@ from gui_toolbar import Ui_ToolBar
 from gui_status import Ui_Status
 from gui_edit import Ui_TextDialog
 
-try:  # __ vvvvvvvvv PYTHON 2/3 COMPATIBILITY vvvvvvvvvv
+try:  # ___ _______ PYTHON 2/3 COMPATIBILITY ________________________
     import cPickle as pickle
 except ImportError:  # python 3.x
     import pickle
@@ -38,7 +41,7 @@ from future.moves.urllib.request import Request, URLError
 
 
 __author__ = "noEmbryo"
-__version__ = "0.6.0.0"
+__version__ = "0.6.0.1"
 
 
 def _(text):
@@ -222,9 +225,7 @@ class Base(QMainWindow, Ui_Base):
             self.bye_bye_stuff()
             event.accept()
             return
-        popup = self.popup(_("Confirmation"), _("Exit KoHighlights?"),
-                           buttons=2)
-        # if popup.clickedButton().text() == _("OK"):
+        popup = self.popup(_("Confirmation"), _("Exit KoHighlights?"), buttons=2)
         if popup.buttonRole(popup.clickedButton()) == QMessageBox.AcceptRole:
             self.bye_bye_stuff()
             event.accept()  # let the window close
@@ -410,8 +411,9 @@ class Base(QMainWindow, Ui_Base):
         row = item.row()
         path = splitext(self.file_table.item(row, PATH).data(0))[0]
         path = self.get_book_path(path)
-        (os.startfile(path) if isfile(path) else
-         self.popup(_("Error opening file!"), _("{} does not exists!").format(path)))
+        self.open_file(path)
+        # (os.startfile(path) if isfile(path) else
+        #  self.popup(_("Error opening file!"), _("{} does not exists!").format(path)))
 
     @staticmethod
     def get_book_path(path):
@@ -434,7 +436,8 @@ class Base(QMainWindow, Ui_Base):
             self.on_file_table_itemDoubleClicked(item)
         if self.current_view == 1:  # highlights view
             data = self.highlight_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)
-            os.startfile(data["path"])
+            # os.startfile(data["path"])
+            self.open_file(data["path"])
 
     # noinspection PyUnusedLocal
     def file_selection_update(self, selected, deselected):
@@ -636,7 +639,7 @@ class Base(QMainWindow, Ui_Base):
         else:
             self.toolbar.open_btn.setEnabled(False)
 
-        # needed for edit comments in Highlight View or "Find highlight in Books"
+        # needed for edit "Comments" or "Find in Books" in Highlight View
         for row in range(self.file_table.rowCount()):  # 2check: need to optimize?
             if data["path"] == self.file_table.item(row, TYPE).data(Qt.UserRole)[0]:
                 self.sel_book_data = self.file_table.item(row, TITLE).data(Qt.UserRole)
@@ -1476,13 +1479,28 @@ class Base(QMainWindow, Ui_Base):
 
     @staticmethod
     def sanitize_filename(filename):
-        """ Creates a safe filename.
+        """ Creates a safe filename
 
         :type filename: str|unicode
         :param filename: The filename to be sanitized
         """
         filename = re.sub(r'[/:*?"<>|\\]', "_", filename)
         return filename
+
+    def open_file(self, path):
+        """ Opens a file with its associated app
+
+        :type path: str|unicode
+        :param path: The path to the file to be opened
+        """
+        if isfile(path):
+            if sys.platform == "win32":
+                os.startfile(path)
+            else:
+                opener = "open" if sys.platform == "darwin" else "xdg-open"
+                subprocess.call([opener, path])
+        else:
+            self.popup(_("Error opening file!"), _("{} does not exists!").format(path))
 
     def copy_text_2clip(self, text):
         """ Copy a text to clipboard
@@ -1765,7 +1783,7 @@ class ToolBar(QWidget, Ui_ToolBar):
                 return
             data = self.base.highlight_table.item(idx.row(),
                                                   HIGHLIGHT_H).data(Qt.UserRole)
-            os.startfile(data["path"])
+            self.base.open_file(data["path"])
 
     @Slot()
     def on_delete_btn_clicked(self):

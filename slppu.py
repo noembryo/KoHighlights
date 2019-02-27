@@ -1,15 +1,21 @@
+from __future__ import print_function
 import re
 import sys
+try:  # ___ _______ PYTHON 2/3 COMPATIBILITY ________________________
+    # noinspection PyCompatibility
+    basestring
+except NameError:  # python 3.x
+    # noinspection PyShadowingBuiltins
+    basestring = str
+from future.utils import iteritems
 
 # https://github.com/noembryo/slppu
 
-ERRORS = {
-    'unexp_end_string': u'Unexpected end of string while parsing Lua string.',
-    'unexp_end_table': u'Unexpected end of table while parsing Lua string.',
-    'mfnumber_minus': u'Malformed number (no digits after initial minus).',
-    'mfnumber_dec_point': u'Malformed number (no digits after decimal point).',
-    'mfnumber_sci': u'Malformed number (bad scientific format).',
-}
+ERRORS = {'unexp_end_string': u'Unexpected end of string while parsing Lua string.',
+          'unexp_end_table': u'Unexpected end of table while parsing Lua string.',
+          'mfnumber_minus': u'Malformed number (no digits after initial minus).',
+          'mfnumber_dec_point': u'Malformed number (no digits after decimal point).',
+          'mfnumber_sci': u'Malformed number (bad scientific format).'}
 
 
 class ParseError(Exception):
@@ -70,7 +76,7 @@ class SLPPU(object):
             s += "%s{%s" % (tab * (self.depth - 2), newline)
             if tp is dict:
                 contents = []
-                for k, v in obj.iteritems():
+                for k, v in iteritems(obj):
                     k = ('[{}]'.format(k) if type(k) in [int, float, long, complex]
                          else '["{}"]'.format(k))
                     contents.append(dp + '%s = %s' % (k, (self.__encode(v))))
@@ -128,7 +134,7 @@ class SLPPU(object):
                     if self.ch != end:
                         s += '\\'
                 s += self.ch
-        print ERRORS['unexp_end_string']
+        print(ERRORS['unexp_end_string'])
 
     def object(self):
         o = {}
@@ -182,7 +188,7 @@ class SLPPU(object):
                             o[idx] = k
                         idx += 1
                         k = None
-        print ERRORS['unexp_end_table']  # Bad exit here
+        print(ERRORS['unexp_end_table'])  # Bad exit here
 
     words = {'true': True, 'false': False, 'nil': None}
 
@@ -230,7 +236,7 @@ class SLPPU(object):
         # noinspection PyBroadException
         try:
             return int(n, 0)
-        except:
+        except Exception:
             pass
         return float(n)
 
