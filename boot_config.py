@@ -4,7 +4,7 @@ from __future__ import (absolute_import, division, print_function, unicode_liter
 import time
 import sys, os
 import traceback
-from os.path import dirname, join, isdir
+from os.path import dirname, join, isdir, expanduser
 
 APP_NAME = "KoHighlights"
 APP_DIR = dirname(os.path.abspath(sys.argv[0]))
@@ -12,10 +12,10 @@ os.chdir(APP_DIR)  # Set the current working directory to the app's directory
 if sys.platform == "win32":  # Windows
     SETTINGS_DIR = join(os.environ["APPDATA"], APP_NAME)
 elif sys.platform == "darwin":  # MacOS
-    SETTINGS_DIR = join(os.path.expanduser("~"), "Library",
+    SETTINGS_DIR = join(expanduser("~"), "Library",
                         "Application Support", APP_NAME)
 else:  # Linux+
-    SETTINGS_DIR = join(os.path.expanduser("~"), "." + APP_NAME)
+    SETTINGS_DIR = join(expanduser("~"), ".config", APP_NAME)
 os.makedirs(SETTINGS_DIR) if not isdir(SETTINGS_DIR) else None
 
 
