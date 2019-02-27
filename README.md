@@ -1,4 +1,4 @@
-# General
+## General
 ![kohighlights128w](https://cloud.githubusercontent.com/assets/14363074/9978678/22e01940-5f49-11e5-8112-bc58b8f0f56f.png)
 
 **KoHighlights** is a utility for viewing and converting the [Koreader](https://github.com/koreader/koreader)'s history files to simple text.  
@@ -10,7 +10,7 @@ The original KoHighlights (using the wxPython) can be found [here](https://githu
 ![HighLights ScreenShot](screen2.png)
 ![HighLights ScreenShot](screen3.png)
 
-# Usage
+## Usage
 * Load items by:
     * Selecting the reader's drive or any folder that contains books that where opened with Koreader. This will automatically load all the metadata files from all subdirectories.
     * Drag and drop files or folders. This will load the files and/or all the files inside the folders.
@@ -23,11 +23,11 @@ The original KoHighlights (using the wxPython) can be found [here](https://githu
 * Delete some or all the highlights of any book.
 * Clear the .sdr folders with the metadata or the books in the eReader.
 
-# Downloads
+## Downloads
 Check the latest release on the [Downloads Page](https://github.com/noembryo/KoHighlights/releases).  
 Read the version history at [App's Page](http://www.noembryo.com/apps.php?kohighlights).
 
-# Extra
+## Extra
 KoHighlights includes SLPPU (a converter between python and lua objects).  
 If you want it globally available, get it from its [GitHub's page](https://github.com/noembryo/slppu) or install it with:  
 `pip install git+https://github.com/noembryo/slppu`  
