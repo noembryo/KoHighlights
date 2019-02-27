@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_toolbar.ui'
 #
-# Created: Wed Feb 27 04:52:29 2019
+# Created: Wed Feb 27 14:47:01 2019
 #      by: pyside-uic 0.2.15 running on PySide 1.2.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -19,8 +19,6 @@ class Ui_ToolBar(object):
         self.horizontalLayout_2.setContentsMargins(0, 0, 0, 0)
         self.horizontalLayout_2.setObjectName("horizontalLayout_2")
         self.frame = QtGui.QFrame(ToolBar)
-        self.frame.setFrameShape(QtGui.QFrame.StyledPanel)
-        self.frame.setFrameShadow(QtGui.QFrame.Raised)
         self.frame.setObjectName("frame")
         self.horizontalLayout = QtGui.QHBoxLayout(self.frame)
         self.horizontalLayout.setContentsMargins(0, 0, 0, 0)
@@ -124,9 +122,7 @@ class Ui_ToolBar(object):
         self.horizontalLayout.addWidget(self.clear_btn)
         spacerItem = QtGui.QSpacerItem(86, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
         self.horizontalLayout.addItem(spacerItem)
-        self.view_frame = QtGui.QFrame(self.frame)
-        self.view_frame.setFrameShape(QtGui.QFrame.StyledPanel)
-        self.view_frame.setFrameShadow(QtGui.QFrame.Raised)
+        self.view_frame = QtGui.QGroupBox(self.frame)
         self.view_frame.setObjectName("view_frame")
         self.horizontalLayout_3 = QtGui.QHBoxLayout(self.view_frame)
         self.horizontalLayout_3.setContentsMargins(0, 0, 0, 0)

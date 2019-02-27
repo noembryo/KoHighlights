@@ -32,13 +32,14 @@ sys.excepthook = except_hook
 
 import gzip, json
 
+FIRST_RUN = False
 try:
     with gzip.GzipFile(join(SETTINGS_DIR, "settings.json.gz"), "rb") as settings:
         app_config = json.loads(settings.read())
-except IOError:  # first run
+except IOError:  # on first run
     app_config = {}
+    FIRST_RUN = True
 
-FIRST_RUN = not bool(app_config)
 PAGE, HIGHLIGHT_TEXT, DATE, PAGE_ID, COMMENT = range(5)  # highlights_list item data
 TITLE, AUTHOR, TYPE, PERCENT, MODIFIED, PATH = range(6)  # highlight_table columns
 HIGHLIGHT_H, COMMENT_H, DATE_H, TITLE_H, PAGE_H, AUTHOR_H = range(6)  # -//- item data
