@@ -12,8 +12,7 @@ os.chdir(APP_DIR)  # Set the current working directory to the app's directory
 if sys.platform == "win32":  # Windows
     SETTINGS_DIR = join(os.environ["APPDATA"], APP_NAME)
 elif sys.platform == "darwin":  # MacOS
-    SETTINGS_DIR = join(expanduser("~"), "Library",
-                        "Application Support", APP_NAME)
+    SETTINGS_DIR = join(expanduser("~"), "Library", "Application Support", APP_NAME)
 else:  # Linux+
     SETTINGS_DIR = join(expanduser("~"), ".config", APP_NAME)
 os.makedirs(SETTINGS_DIR) if not isdir(SETTINGS_DIR) else None
