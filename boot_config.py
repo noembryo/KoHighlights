@@ -9,7 +9,13 @@ from os.path import dirname, join, isdir
 APP_NAME = "KoHighlights"
 APP_DIR = dirname(os.path.abspath(sys.argv[0]))
 os.chdir(APP_DIR)  # Set the current working directory to the app's directory
-SETTINGS_DIR = join(os.environ["APPDATA"], APP_NAME)
+if sys.platform == "win32":  # Windows
+    SETTINGS_DIR = join(os.environ["APPDATA"], APP_NAME)
+elif sys.platform == "darwin":  # MacOS
+    SETTINGS_DIR = join(os.path.expanduser("~"), "Library",
+                        "Application Support", APP_NAME)
+else:  # Linux
+    SETTINGS_DIR = join(os.path.expanduser("~"), "." + APP_NAME)
 os.makedirs(SETTINGS_DIR) if not isdir(SETTINGS_DIR) else None
 
 
