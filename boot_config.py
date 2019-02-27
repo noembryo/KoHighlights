@@ -14,7 +14,7 @@ if sys.platform == "win32":  # Windows
 elif sys.platform == "darwin":  # MacOS
     SETTINGS_DIR = join(os.path.expanduser("~"), "Library",
                         "Application Support", APP_NAME)
-else:  # Linux
+else:  # Linux+
     SETTINGS_DIR = join(os.path.expanduser("~"), "." + APP_NAME)
 os.makedirs(SETTINGS_DIR) if not isdir(SETTINGS_DIR) else None
 
