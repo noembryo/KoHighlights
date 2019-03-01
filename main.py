@@ -712,9 +712,12 @@ class Base(QMainWindow, Ui_Base):
                 for page2 in high2:
                     for page_id2 in high2[page2]:
                         if text1 == high2[page2][page_id2]["text"]:
-                            break  # highlight already exists in book2
-                    else:  # text not in book2 highlights, add to unique
-                        unique_high1[page1][page_id1] = high1[page1][page_id1]
+                            break  # highlight found in book2
+                    else:  # highlight was not found yet in book2
+                        continue  # no break in the inner loop
+                    break  # highlight already exists in book2 (there was a break)
+                else:  # text not in book2 highlights, add to unique
+                    unique_high1[page1][page_id1] = high1[page1][page_id1]
         unique_bkm1 = {}
         for page1 in unique_high1:
             for page_id1 in unique_high1[page1]:
@@ -731,9 +734,12 @@ class Base(QMainWindow, Ui_Base):
                 for page1 in high1:
                     for page_id1 in high1[page1]:
                         if text2 == high1[page1][page_id1]["text"]:
-                            break  # highlight already exists in book1
-                    else:  # text not in book1 highlights, add to unique
-                        unique_high2[page2][page_id2] = high2[page2][page_id2]
+                            break  # highlight found in book1
+                    else:  # highlight was not found yet in book1
+                        continue  # no break in the inner loop
+                    break  # highlight already exists in book1 (there was a break)
+                else:  # text not in book1 highlights, add to unique
+                    unique_high2[page2][page_id2] = high2[page2][page_id2]
         unique_bkm2 = {}
         for page2 in unique_high2:
             for page_id2 in unique_high2[page2]:
@@ -1961,8 +1967,8 @@ class ToolBar(QWidget, Ui_ToolBar):
                 for idx in self.base.sel_indexes]
         if data[0]["cre_dom_version"] == data[1]["cre_dom_version"]:
             if self.base.high_merge_warning:
-                text = _("Merging highlights from different devices is experimental, "
-                         "so, always backup ;o)\n"
+                text = _("Merging highlights from different devices is experimental so, "
+                         "always do backups ;o)\n"
                          "Because of the different page formats and sizes, some page "
                          "numbers in KoHighlights might be inaccurate. "
                          "Do you want to continue?")
