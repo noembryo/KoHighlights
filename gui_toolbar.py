@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_toolbar.ui'
 #
-# Created: Fri Mar  1 03:16:23 2019
+# Created: Fri Mar  1 17:31:36 2019
 #      by: pyside-uic 0.2.15 running on PySide 1.2.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -91,6 +91,7 @@ class Ui_ToolBar(object):
         icon4.addPixmap(QtGui.QPixmap(":/stuff/files_merge.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         self.merge_btn.setIcon(icon4)
         self.merge_btn.setIconSize(QtCore.QSize(48, 48))
+        self.merge_btn.setPopupMode(QtGui.QToolButton.MenuButtonPopup)
         self.merge_btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextUnderIcon)
         self.merge_btn.setAutoRaise(True)
         self.merge_btn.setObjectName("merge_btn")
@@ -109,7 +110,6 @@ class Ui_ToolBar(object):
         self.delete_btn.setPopupMode(QtGui.QToolButton.MenuButtonPopup)
         self.delete_btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextUnderIcon)
         self.delete_btn.setAutoRaise(True)
-        self.delete_btn.setArrowType(QtCore.Qt.NoArrow)
         self.delete_btn.setObjectName("delete_btn")
         self.horizontalLayout.addWidget(self.delete_btn)
         self.clear_btn = QtGui.QToolButton(self.frame)
@@ -193,9 +193,9 @@ class Ui_ToolBar(object):
     def retranslateUi(self, ToolBar):
         ToolBar.setWindowTitle(QtGui.QApplication.translate("ToolBar", "Form", None, QtGui.QApplication.UnicodeUTF8))
         self.check_btn.setText(QtGui.QApplication.translate("ToolBar", "Testing Button", None, QtGui.QApplication.UnicodeUTF8))
-        self.select_btn.setToolTip(QtGui.QApplication.translate("ToolBar", "Scans a directory for Koreader history files\n"
+        self.select_btn.setToolTip(QtGui.QApplication.translate("ToolBar", "Scans a directory for Koreader metadata files\n"
 "Can also be the eReader\'s root directory (Ctrl+L)", None, QtGui.QApplication.UnicodeUTF8))
-        self.select_btn.setStatusTip(QtGui.QApplication.translate("ToolBar", "Scans a directory for Koreader history files. Can also be the eReader\'s root directory (Ctrl+L)", None, QtGui.QApplication.UnicodeUTF8))
+        self.select_btn.setStatusTip(QtGui.QApplication.translate("ToolBar", "Scans a directory for Koreader metadata files. Can also be the eReader\'s root directory (Ctrl+L)", None, QtGui.QApplication.UnicodeUTF8))
         self.select_btn.setText(QtGui.QApplication.translate("ToolBar", "Scan Directory", None, QtGui.QApplication.UnicodeUTF8))
         self.save_btn.setToolTip(QtGui.QApplication.translate("ToolBar", "Save selected highlights to text (Ctrl+S)", None, QtGui.QApplication.UnicodeUTF8))
         self.save_btn.setStatusTip(QtGui.QApplication.translate("ToolBar", "Save selected highlights to text (Ctrl+S)", None, QtGui.QApplication.UnicodeUTF8))
@@ -203,10 +203,11 @@ class Ui_ToolBar(object):
         self.open_btn.setToolTip(QtGui.QApplication.translate("ToolBar", "View the selected book (Ctrl+B)", None, QtGui.QApplication.UnicodeUTF8))
         self.open_btn.setStatusTip(QtGui.QApplication.translate("ToolBar", "View the selected book (Ctrl+B)", None, QtGui.QApplication.UnicodeUTF8))
         self.open_btn.setText(QtGui.QApplication.translate("ToolBar", "Open Book", None, QtGui.QApplication.UnicodeUTF8))
-        self.merge_btn.setToolTip(QtGui.QApplication.translate("ToolBar", "Merge the highlights from the same book in two different devices.\n"
-"It gets enabled by selecting two entries of the same book.", None, QtGui.QApplication.UnicodeUTF8))
-        self.merge_btn.setStatusTip(QtGui.QApplication.translate("ToolBar", "Merge the highlights from the same book in two different devices. It gets enabled by selecting two entries of the same book.", None, QtGui.QApplication.UnicodeUTF8))
-        self.merge_btn.setText(QtGui.QApplication.translate("ToolBar", "Merge", None, QtGui.QApplication.UnicodeUTF8))
+        self.merge_btn.setToolTip(QtGui.QApplication.translate("ToolBar", "Merge the highlights from the same book in two different\n"
+"devices, and/or sync their reading position.\n"
+"Active only if two entries of the same book are selected.", None, QtGui.QApplication.UnicodeUTF8))
+        self.merge_btn.setStatusTip(QtGui.QApplication.translate("ToolBar", "Merge the highlights from the same book in two different devices, and/or sync their reading position. Active only if two entries of the same book are selected.", None, QtGui.QApplication.UnicodeUTF8))
+        self.merge_btn.setText(QtGui.QApplication.translate("ToolBar", "Merge/Sync", None, QtGui.QApplication.UnicodeUTF8))
         self.delete_btn.setToolTip(QtGui.QApplication.translate("ToolBar", "Delete selected highlights (Del)", None, QtGui.QApplication.UnicodeUTF8))
         self.delete_btn.setStatusTip(QtGui.QApplication.translate("ToolBar", "Delete selected highlights (Del)", None, QtGui.QApplication.UnicodeUTF8))
         self.delete_btn.setText(QtGui.QApplication.translate("ToolBar", "Delete", None, QtGui.QApplication.UnicodeUTF8))

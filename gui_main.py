@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_main.ui'
 #
-# Created: Wed Feb 27 04:52:29 2019
+# Created: Fri Mar  1 17:31:35 2019
 #      by: pyside-uic 0.2.15 running on PySide 1.2.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -206,6 +206,7 @@ class Ui_Base(object):
         self.verticalLayout_2.addWidget(self.views)
         Base.setCentralWidget(self.centralwidget)
         self.statusbar = QtGui.QStatusBar(Base)
+        self.statusbar.setStyleSheet("QStatusBar{padding-left:8px;font-weight:bold;}")
         self.statusbar.setObjectName("statusbar")
         Base.setStatusBar(self.statusbar)
         self.tool_bar = QtGui.QToolBar(Base)

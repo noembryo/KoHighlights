@@ -70,6 +70,7 @@ class Base(QMainWindow, Ui_Base):
         self.col_sort_asc_h = False
         self.highlight_width = None
         self.comment_width = None
+        self.loaded_paths = set()
 
         self.skip_version = "0.0.0.0"
         self.opened_times = 0
@@ -95,6 +96,7 @@ class Base(QMainWindow, Ui_Base):
         self.info_keys = ["title", "authors", "series", "language", "pages", "keywords"]
 
         self.ico_file_save = QIcon(":/stuff/file_save.png")
+        self.ico_files_merge = QIcon(":/stuff/files_merge.png")
         self.ico_files_delete = QIcon(":/stuff/files_delete.png")
         self.ico_file_exists = QIcon(":/stuff/file_exists.png")
         self.ico_file_missing = QIcon(":/stuff/file_missing.png")
@@ -149,6 +151,7 @@ class Base(QMainWindow, Ui_Base):
         if FIRST_RUN:  # on first run
             self.splitter.setSizes((500, 250))
         self.toolbar.save_btn.setMenu(self.save_menu())  # assign/create menu
+        self.toolbar.merge_btn.setMenu(self.merge_menu())  # assign/create menu
         self.toolbar.delete_btn.setMenu(self.delete_menu())  # assign/create menu
         self.connect_gui()
         self.show()
@@ -227,7 +230,9 @@ class Base(QMainWindow, Ui_Base):
             self.bye_bye_stuff()
             event.accept()
             return
-        popup = self.popup(_("Confirmation"), _("Exit KoHighlights?"), buttons=2)
+        popup = self.popup(_("Confirmation"), _("Exit KoHighlights?"), buttons=2,
+                           check_text=_("Don't show this again"))
+        self.exit_msg = not popup.checked
         if popup.buttonRole(popup.clickedButton()) == QMessageBox.AcceptRole:
             self.bye_bye_stuff()
             event.accept()  # let the window close
@@ -462,7 +467,8 @@ class Base(QMainWindow, Ui_Base):
             self.description_btn.setEnabled(False)
             for field in self.info_fields:
                 field.setText("")
-        self.toolbar.merge_btn.setEnabled(self.check4merge())
+        if self.file_selection.selectedRows():
+            self.toolbar.merge_btn.setEnabled(self.check4merge())
 
     def on_column_clicked(self, column):
         """ Sets the current sorting column
@@ -534,6 +540,9 @@ class Base(QMainWindow, Ui_Base):
         :param filename: The file to be read
         """
         if exists(filename) and splitext(filename)[1].lower() == '.lua':
+            if filename in self.loaded_paths:
+                return  # already loaded file
+            self.loaded_paths.add(filename)
             self.file_table.setSortingEnabled(False)
             self.file_table.insertRow(0)
             data = self.decode_data(filename)
@@ -613,17 +622,37 @@ class Base(QMainWindow, Ui_Base):
         icon = self.ico_label_green if data["highlight"] else self.ico_empty
         return icon, title, authors, percent
 
+    # ___ ___________________ MERGING HIGHLIGHTS STUFF ______________
+
     def check4merge(self):
         """ Check if the selected books' highlights can be merged
         """
         if len(self.sel_indexes) == 2:
             data = [self.file_table.item(idx.row(), idx.column()).data(Qt.UserRole)
                     for idx in self.sel_indexes]
-            if data[0]["partial_md5_checksum"] == data[1]["partial_md5_checksum"]:
-                return True
+            try:
+                if data[0]["partial_md5_checksum"] == data[1]["partial_md5_checksum"]:
+                    return True
+            except KeyError:  # no "partial_md5_checksum" key (older metadata)
+                pass
         return False
 
-    def merge_highlights(self, sync):
+    def merge_menu(self):
+        """ Creates the `Merge/Sync` button menu
+        """
+        menu = QMenu(self)
+
+        action = QAction(self.ico_files_merge, _("Merge highlights"), menu)
+        action.triggered.connect(self.toolbar.on_merge_btn_clicked)
+        menu.addAction(action)
+
+        action = QAction(self.ico_files_merge, _("Sync position only"), menu)
+        action.triggered.connect(partial(self.merge_highlights, True, False))
+        menu.addAction(action)
+
+        return menu
+
+    def merge_highlights(self, sync, merge=True):
         """ Merge highlights from the same book in two different devices
 
         :type sync: bool
@@ -634,11 +663,13 @@ class Base(QMainWindow, Ui_Base):
                         for idx in [idx1, idx2]]
         path1, path2 = [self.file_table.item(idx.row(), PATH).text()
                         for idx in [idx1, idx2]]
-        (unique_high1, unique_high2, unique_bkm1,
-         unique_bkm2) = self.get_unique_highlights(data1["highlight"], data2["highlight"],
-                                                   data1["bookmarks"], data2["bookmarks"])
-        self.update_data(data1, unique_high2, unique_bkm2)
-        self.update_data(data2, unique_high1, unique_bkm1)
+
+        if merge:  # merge highlights
+            args = (data1["highlight"], data2["highlight"],
+                    data1["bookmarks"], data2["bookmarks"])
+            high1, high2, bkm1, bkm2 = self.get_unique_highlights(*args)
+            self.update_data(data1, high2, bkm2)
+            self.update_data(data2, high1, bkm1)
 
         if sync:  # sync position and percent
             if data1["percent_finished"] > data2["percent_finished"]:
@@ -659,6 +690,60 @@ class Base(QMainWindow, Ui_Base):
 
         self.save_book_data(path1, data1)
         self.save_book_data(path2, data2)
+
+    @staticmethod
+    def get_unique_highlights(high1, high2, bkm1, bkm2):
+        """ Get the highlights, bookmarks from the first book
+        that do not exist in the second book and vice versa
+
+        :type high1: dict
+        :param high1: The first book's highlights
+        :type high2: dict
+        :param high2: The second book's highlights
+        :type bkm1: dict
+        :param bkm1: The first book's bookmarks
+        :type bkm2: dict
+        :param bkm2: The second book's bookmarks
+        """
+        unique_high1 = defaultdict(dict)
+        for page1 in high1:
+            for page_id1 in high1[page1]:
+                text1 = high1[page1][page_id1]["text"]
+                for page2 in high2:
+                    for page_id2 in high2[page2]:
+                        if text1 == high2[page2][page_id2]["text"]:
+                            break  # highlight already exists in book2
+                    else:  # text not in book2 highlights, add to unique
+                        unique_high1[page1][page_id1] = high1[page1][page_id1]
+        unique_bkm1 = {}
+        for page1 in unique_high1:
+            for page_id1 in unique_high1[page1]:
+                text1 = unique_high1[page1][page_id1]["text"]
+                for idx in bkm1:
+                    if text1 == bkm1[idx]["notes"]:  # add highlight's bookmark to unique
+                        unique_bkm1[idx] = bkm1[idx]
+                        break
+
+        unique_high2 = defaultdict(dict)
+        for page2 in high2:
+            for page_id2 in high2[page2]:
+                text2 = high2[page2][page_id2]["text"]
+                for page1 in high1:
+                    for page_id1 in high1[page1]:
+                        if text2 == high1[page1][page_id1]["text"]:
+                            break  # highlight already exists in book1
+                    else:  # text not in book1 highlights, add to unique
+                        unique_high2[page2][page_id2] = high2[page2][page_id2]
+        unique_bkm2 = {}
+        for page2 in unique_high2:
+            for page_id2 in unique_high2[page2]:
+                text2 = unique_high2[page2][page_id2]["text"]
+                for idx in bkm2:
+                    if text2 == bkm2[idx]["notes"]:  # add highlight's bookmark to unique
+                        unique_bkm2[idx] = bkm2[idx]
+                        break
+
+        return unique_high1, unique_high2, unique_bkm1, unique_bkm2
 
     @staticmethod
     def update_data(data, extra_highlights, extra_bookmarks):
@@ -691,62 +776,6 @@ class Base(QMainWindow, Ui_Base):
         for key in extra_bookmarks.keys():
             bookmarks[counter] = extra_bookmarks[key]
             counter += 1
-
-    @staticmethod
-    def get_unique_highlights(high1, high2, bkm1, bkm2):
-        """ Get the highlights, bookmarks from the first book
-        that do not exist in the second book and vice versa
-
-        :type high1: dict
-        :param high1: The first book's highlights
-        :type high2: dict
-        :param high2: The second book's highlights
-        :type bkm1: dict
-        :param bkm1: The first book's bookmarks
-        :type bkm2: dict
-        :param bkm2: The second book's bookmarks
-        """
-        unique_high1 = defaultdict(dict)
-        for page1 in high1:
-            for page_id1 in high1[page1]:
-                text1 = high1[page1][page_id1]["text"]
-                for page2 in high2:
-                    for page_id2 in high2[page2]:
-                        if text1 == high2[page2][page_id2]["text"]:
-                            break  # highlight already exists in book2
-                    else:  # text not in book2 highlights, add to unique
-                        unique_high1[page1][page_id1] = high1[page1][page_id1]
-
-        unique_bkm1 = {}
-        for page1 in unique_high1:
-            for page_id1 in unique_high1[page1]:
-                text1 = unique_high1[page1][page_id1]["text"]
-                for idx in bkm1:
-                    if text1 == bkm1[idx]["notes"]:  # add highlight's bookmark to unique
-                        unique_bkm1[idx] = bkm1[idx]
-                        break
-
-        unique_high2 = defaultdict(dict)
-        for page2 in high2:
-            for page_id2 in high2[page2]:
-                text2 = high2[page2][page_id2]["text"]
-                for page1 in high1:
-                    for page_id1 in high1[page1]:
-                        if text2 == high1[page1][page_id1]["text"]:
-                            break  # highlight already exists in book1
-                    else:  # text not in book1 highlights, add to unique
-                        unique_high2[page2][page_id2] = high2[page2][page_id2]
-
-        unique_bkm2 = {}
-        for page2 in unique_high2:
-            for page_id2 in unique_high2[page2]:
-                text2 = unique_high2[page2][page_id2]["text"]
-                for idx in bkm2:
-                    if text2 == bkm2[idx]["notes"]:  # add highlight's bookmark to unique
-                        unique_bkm2[idx] = bkm2[idx]
-                        break
-
-        return unique_high1, unique_high2, unique_bkm1, unique_bkm2
 
     # ___ ___________________ HIGHLIGHT TABLE STUFF _________________
 
@@ -982,7 +1011,7 @@ class Base(QMainWindow, Ui_Base):
                         break
                 break
 
-    # ___ ___________________ HIGHLIGHTS STUFF ______________________
+    # ___ ___________________ HIGHLIGHTS LIST STUFF _________________
 
     # noinspection PyUnusedLocal
     def on_highlight_right_clicked(self, point):
@@ -1177,8 +1206,8 @@ class Base(QMainWindow, Ui_Base):
         """
         menu = QMenu(self)
         for idx, title in enumerate([_("selected books' info"),
-                                    _("selected books"),
-                                    _("all missing books' info")]):
+                                     _("selected books"),
+                                     _("all missing books' info")]):
             action = QAction(self.ico_files_delete, title, menu)
             action.triggered.connect(self.on_delete_actions)
             action.setData(idx)
@@ -1218,35 +1247,45 @@ class Base(QMainWindow, Ui_Base):
             for index in sorted(self.sel_indexes)[::-1]:
                 row = index.row()
                 path = self.get_sdr_folder(row)
-                shutil.rmtree(path)
-                self.file_table.removeRow(row)
+                shutil.rmtree(path) if isdir(path) else os.remove(path)
+                self.remove_book_row(row)
         elif idx == 1:  # selected books
             for index in sorted(self.sel_indexes)[::-1]:
                 row = index.row()
                 path = self.get_sdr_folder(row)
-                shutil.rmtree(path)
+                shutil.rmtree(path) if isdir(path) else os.remove(path)
                 try:
                     book_path = self.file_table.item(row, TYPE).data(Qt.UserRole)[0]
                     os.remove(book_path) if isfile(book_path) else None
-                    self.file_table.removeRow(row)
+                    self.remove_book_row(row)
                 except AttributeError:  # empty entry
-                    self.file_table.removeRow(row)
+                    self.remove_book_row(row)
                     continue
         elif idx == 2:  # all missing books info
-            for i in range(self.file_table.rowCount())[::-1]:
+            for row in range(self.file_table.rowCount())[::-1]:
                 try:
-                    book_exists = self.file_table.item(i, TYPE).data(Qt.UserRole)[1]
+                    book_exists = self.file_table.item(row, TYPE).data(Qt.UserRole)[1]
                 except AttributeError:  # empty entry
                     continue
                 if not book_exists:
-                    shutil.rmtree(self.get_sdr_folder(i))
-                    self.file_table.removeRow(i)
+                    path = self.get_sdr_folder(row)
+                    shutil.rmtree(path) if isdir(path) else os.remove(path)
+                    self.remove_book_row(row)
 
-    def get_sdr_folder(self, row):
-        """ Get the .sdr folder path for an entry
+    def remove_book_row(self, row):
+        """ Remove a book entry from the file table
 
         :type row: int
-        :param row: The entry"s row
+        :param row: The entry's row
+        """
+        self.loaded_paths.remove(self.file_table.item(row, PATH).data(0))
+        self.file_table.removeRow(row)
+
+    def get_sdr_folder(self, row):
+        """ Get the .sdr folder path for a book entry
+
+        :type row: int
+        :param row: The entry's row
         """
         path = split(self.file_table.item(row, PATH).data(0))[0]
         if not path.lower().endswith(".sdr"):
@@ -1461,6 +1500,7 @@ class Base(QMainWindow, Ui_Base):
             self.fold_btn.setChecked(app_config.get("show_info", True))
             self.opened_times = app_config.get("opened_times", 0)
             self.skip_version = app_config.get("skip_version", None)
+            self.exit_msg = app_config.get("exit_msg", True)
             self.high_merge_warning = app_config.get("high_merge_warning", True)
             self.edit_lua_file_warning = app_config.get("edit_lua_file_warning", True)
 
@@ -1490,7 +1530,7 @@ class Base(QMainWindow, Ui_Base):
                   "col_sort_asc_h": self.col_sort_asc_h, "col_sort_h": self.col_sort_h,
                   "highlight_width": self.highlight_width,
                   "comment_width": self.comment_width,
-                  "last_dir": self.last_dir,
+                  "last_dir": self.last_dir, "exit_msg": self.exit_msg,
                   "current_view": self.current_view,
                   "show_info": self.fold_btn.isChecked(),
                   "show_items": (self.status.act_page.isChecked(),
@@ -1880,9 +1920,7 @@ class ToolBar(QWidget, Ui_ToolBar):
                                                 QFileDialog.ShowDirsOnly)
         if path:
             self.base.last_dir = path
-            self.base.empty_folders = []
-            # self.base.file_table.setRowCount(0)
-            self.base.file_table.model().removeRows(0, self.base.file_table.rowCount())
+            # self.base.file_table.model().removeRows(0, self.base.file_table.rowCount())
             self.base.highlights_list.clear()
             self.base.scan_files_thread(path)
 
@@ -1923,12 +1961,11 @@ class ToolBar(QWidget, Ui_ToolBar):
                 for idx in self.base.sel_indexes]
         if data[0]["cre_dom_version"] == data[1]["cre_dom_version"]:
             if self.base.high_merge_warning:
-                text = _("Merging highlights from different devices is highly "
-                         "experimental.\n"
-                         "Because of the different page formats, the page numbering in "
-                         "KoHighlights can be inaccurate.\n"
-                         "Also, using different fonts, css and style tweaks might lead "
-                         "to unexpected behavior. Do you want to continue?")
+                text = _("Merging highlights from different devices is experimental, "
+                         "so, always backup ;o)\n"
+                         "Because of the different page formats and sizes, some page "
+                         "numbers in KoHighlights might be inaccurate. "
+                         "Do you want to continue?")
                 popup = self.base.popup(_("Warning!"), text, buttons=3,
                                         check_text=_("Don't show this again"))
                 self.base.high_merge_warning = not popup.checked
@@ -2093,22 +2130,25 @@ class Scanner(QObject):
         self.finished.emit()
 
     def start_scan(self):
-        for dir_tuple in os.walk(self.path):
-            dir_path = dir_tuple[0]
-            if dir_path.lower().endswith(".sdr"):  # a book's metadata folder
-                if dir_path.lower().endswith("evernote.sdr"):
+        try:
+            for dir_tuple in os.walk(self.path):
+                dir_path = dir_tuple[0]
+                if dir_path.lower().endswith(".sdr"):  # a book's metadata folder
+                    if dir_path.lower().endswith("evernote.sdr"):
+                        continue
+                    for file_ in dir_tuple[2]:  # get the .lua file not the .old (backup)
+                        if splitext(file_)[1].lower() == ".lua":
+                            self.found.emit(join(dir_path, file_))
+                            break
+                # older metadata storage or android history folder
+                elif (dir_path.lower().endswith(join("koreader", "history"))
+                      or basename(dir_path).lower() == "history"):
+                    for file_ in dir_tuple[2]:
+                        if splitext(file_)[1].lower() == ".lua":
+                            self.found.emit(join(dir_path, file_))
                     continue
-                for file_ in dir_tuple[2]:  # get the .lua file not the .old (backup)
-                    if splitext(file_)[1].lower() == ".lua":
-                        self.found.emit(join(dir_path, file_))
-                        break
-            # older metadata storage or android history folder
-            elif (dir_path.lower().endswith(join("koreader", "history"))
-                  or basename(dir_path).lower() == "history"):
-                for file_ in dir_tuple[2]:
-                    if splitext(file_)[1].lower() == ".lua":
-                        self.found.emit(join(dir_path, file_))
-                continue
+        except UnicodeDecodeError:  # os.walk error
+            pass
 
 
 class HighlightScanner(QObject):
