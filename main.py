@@ -1,7 +1,5 @@
 # coding=utf-8
 from __future__ import absolute_import, division, print_function, unicode_literals
-
-
 from boot_config import *
 import os, sys, re
 import codecs
@@ -12,6 +10,7 @@ import webbrowser
 import subprocess
 from datetime import datetime
 from functools import partial
+from collections import defaultdict
 from distutils.version import LooseVersion
 from os.path import (isdir, isfile, join, basename, splitext, dirname, split, exists,
                      getmtime)
@@ -42,7 +41,7 @@ from future.moves.urllib.request import Request, URLError
 
 
 __author__ = "noEmbryo"
-__version__ = "0.6.0.1"
+__version__ = "0.6.1.0"
 
 
 def _(text):
@@ -76,6 +75,7 @@ class Base(QMainWindow, Ui_Base):
         self.opened_times = 0
         self.last_dir = os.getcwd()
         self.edit_lua_file_warning = True
+        self.high_merge_warning = True
         self.current_view = 0
         self.exit_msg = True
 
@@ -110,6 +110,7 @@ class Base(QMainWindow, Ui_Base):
 
         self.toolbar = ToolBar(self)
         self.tool_bar.addWidget(self.toolbar)
+        self.toolbar.merge_btn.setEnabled(False)
 
         self.status = Status(self)
         self.statusbar.addPermanentWidget(self.status)
@@ -410,9 +411,9 @@ class Base(QMainWindow, Ui_Base):
         :param item: The item (cell) that is double-clicked
         """
         row = item.row()
-        path = splitext(self.file_table.item(row, PATH).data(0))[0]
-        path = self.get_book_path(path)
-        self.open_file(path)
+        meta_path = splitext(self.file_table.item(row, PATH).data(0))[0]
+        book_path = self.get_book_path(meta_path)
+        self.open_file(book_path)
 
     @staticmethod
     def get_book_path(path):
@@ -451,15 +452,17 @@ class Base(QMainWindow, Ui_Base):
             self.sel_idx = self.sel_indexes[-1]
         except IndexError:  # empty table
             pass
-        if self.file_selection.selectedRows():
-            idx = selected.indexes()[0]
-            item = self.file_table.item(idx.row(), idx.column())
+        # if self.file_selection.selectedRows():
+        #     idx = selected.indexes()[0]
+        if self.sel_indexes:
+            item = self.file_table.item(self.sel_idx.row(), self.sel_idx.column())
             self.on_file_table_itemClicked(item)
         else:
             self.highlights_list.clear()
             self.description_btn.setEnabled(False)
             for field in self.info_fields:
                 field.setText("")
+        self.toolbar.merge_btn.setEnabled(self.check4merge())
 
     def on_column_clicked(self, column):
         """ Sets the current sorting column
@@ -498,7 +501,6 @@ class Base(QMainWindow, Ui_Base):
         scanner = Scanner(path)
         scanner.moveToThread(self.scan_thread)
         scanner.found.connect(self.create_row)
-        scanner.found_empty_sdr.connect(self.add_to_empty)
         scanner.finished.connect(self.scan_finished)
         scanner.finished.connect(self.scan_thread.quit)
         self.scan_thread.downer = scanner
@@ -532,6 +534,7 @@ class Base(QMainWindow, Ui_Base):
         :param filename: The file to be read
         """
         if exists(filename) and splitext(filename)[1].lower() == '.lua':
+            self.file_table.setSortingEnabled(False)
             self.file_table.insertRow(0)
             data = self.decode_data(filename)
             if not data:
@@ -572,6 +575,8 @@ class Base(QMainWindow, Ui_Base):
             path_item.setToolTip(filename)
             self.file_table.setItem(0, PATH, path_item)
 
+            self.file_table.setSortingEnabled(True)
+
     def get_item_stats(self, filename, data):
         """ Returns the title and authors of a history file
 
@@ -608,17 +613,140 @@ class Base(QMainWindow, Ui_Base):
         icon = self.ico_label_green if data["highlight"] else self.ico_empty
         return icon, title, authors, percent
 
-    def add_to_empty(self, filename):
-        """ Adds empty .sdr folders to a list
-
-        :type filename: str|unicode
-        :param filename: The folder to be added
+    def check4merge(self):
+        """ Check if the selected books' highlights can be merged
         """
-        self.file_table.insertRow(0)
+        if len(self.sel_indexes) == 2:
+            data = [self.file_table.item(idx.row(), idx.column()).data(Qt.UserRole)
+                    for idx in self.sel_indexes]
+            if data[0]["partial_md5_checksum"] == data[1]["partial_md5_checksum"]:
+                return True
+        return False
 
-        path_item = QTableWidgetItem(filename)
-        path_item.setToolTip(filename)
-        self.file_table.setItem(0, PATH, path_item)
+    def merge_highlights(self, sync):
+        """ Merge highlights from the same book in two different devices
+
+        :type sync: bool
+        :param sync: Sync reading position too
+        """
+        idx1, idx2 = self.sel_indexes
+        data1, data2 = [self.file_table.item(idx.row(), TITLE).data(Qt.UserRole)
+                        for idx in [idx1, idx2]]
+        path1, path2 = [self.file_table.item(idx.row(), PATH).text()
+                        for idx in [idx1, idx2]]
+        (unique_high1, unique_high2, unique_bkm1,
+         unique_bkm2) = self.get_unique_highlights(data1["highlight"], data2["highlight"],
+                                                   data1["bookmarks"], data2["bookmarks"])
+        self.update_data(data1, unique_high2, unique_bkm2)
+        self.update_data(data2, unique_high1, unique_bkm1)
+
+        if sync:  # sync position and percent
+            if data1["percent_finished"] > data2["percent_finished"]:
+                data2["percent_finished"] = data1["percent_finished"]
+                data2["last_xpointer"] = data1["last_xpointer"]
+                percent = self.file_table.item(idx1.row(), PERCENT).text()
+                self.file_table.item(idx2.row(), PERCENT).setText(percent)
+                self.file_table.item(idx2.row(), PERCENT).setToolTip(percent)
+            else:
+                data1["percent_finished"] = data2["percent_finished"]
+                data1["last_xpointer"] = data2["last_xpointer"]
+                percent = self.file_table.item(idx2.row(), PERCENT).text()
+                self.file_table.item(idx1.row(), PERCENT).setText(percent)
+                self.file_table.item(idx1.row(), PERCENT).setToolTip(percent)
+
+        self.file_table.item(idx1.row(), TITLE).setData(Qt.UserRole, data1)
+        self.file_table.item(idx2.row(), TITLE).setData(Qt.UserRole, data2)
+
+        self.save_book_data(path1, data1)
+        self.save_book_data(path2, data2)
+
+    @staticmethod
+    def update_data(data, extra_highlights, extra_bookmarks):
+        """ Adds the new highlights to the book's data
+
+        :type data: dict
+        :param data: The book's data
+        :type extra_highlights: dict
+        :param extra_highlights: The other book's highlights
+        :type extra_bookmarks: dict
+        :param extra_bookmarks: The other book's bookmarks
+        """
+        highlights = data["highlight"]
+        for page in extra_highlights:
+            if page in highlights:
+                new_page = page
+                while new_page in highlights:
+                    new_page += 1
+                highlights[new_page] = extra_highlights[page]
+            else:
+                highlights[page] = extra_highlights[page]
+
+        bookmarks = data["bookmarks"]
+        original = bookmarks.copy()
+        bookmarks.clear()
+        counter = 1
+        for key in original.keys():
+            bookmarks[counter] = original[key]
+            counter += 1
+        for key in extra_bookmarks.keys():
+            bookmarks[counter] = extra_bookmarks[key]
+            counter += 1
+
+    @staticmethod
+    def get_unique_highlights(high1, high2, bkm1, bkm2):
+        """ Get the highlights, bookmarks from the first book
+        that do not exist in the second book and vice versa
+
+        :type high1: dict
+        :param high1: The first book's highlights
+        :type high2: dict
+        :param high2: The second book's highlights
+        :type bkm1: dict
+        :param bkm1: The first book's bookmarks
+        :type bkm2: dict
+        :param bkm2: The second book's bookmarks
+        """
+        unique_high1 = defaultdict(dict)
+        for page1 in high1:
+            for page_id1 in high1[page1]:
+                text1 = high1[page1][page_id1]["text"]
+                for page2 in high2:
+                    for page_id2 in high2[page2]:
+                        if text1 == high2[page2][page_id2]["text"]:
+                            break  # highlight already exists in book2
+                    else:  # text not in book2 highlights, add to unique
+                        unique_high1[page1][page_id1] = high1[page1][page_id1]
+
+        unique_bkm1 = {}
+        for page1 in unique_high1:
+            for page_id1 in unique_high1[page1]:
+                text1 = unique_high1[page1][page_id1]["text"]
+                for idx in bkm1:
+                    if text1 == bkm1[idx]["notes"]:  # add highlight's bookmark to unique
+                        unique_bkm1[idx] = bkm1[idx]
+                        break
+
+        unique_high2 = defaultdict(dict)
+        for page2 in high2:
+            for page_id2 in high2[page2]:
+                text2 = high2[page2][page_id2]["text"]
+                for page1 in high1:
+                    for page_id1 in high1[page1]:
+                        if text2 == high1[page1][page_id1]["text"]:
+                            break  # highlight already exists in book1
+                    else:  # text not in book1 highlights, add to unique
+                        unique_high2[page2][page_id2] = high2[page2][page_id2]
+
+        unique_bkm2 = {}
+        for page2 in unique_high2:
+            for page_id2 in unique_high2[page2]:
+                text2 = unique_high2[page2][page_id2]["text"]
+                for idx in bkm2:
+                    if text2 == bkm2[idx]["notes"]:  # add highlight's bookmark to unique
+                        unique_bkm2[idx] = bkm2[idx]
+                        break
+
+        return unique_high1, unique_high2, unique_bkm1, unique_bkm2
 
     # ___ ___________________ HIGHLIGHT TABLE STUFF _________________
 
@@ -747,6 +875,7 @@ class Base(QMainWindow, Ui_Base):
         :type data: dict
         :param data: The highlight data
         """
+        self.highlight_table.setSortingEnabled(False)
         self.highlight_table.insertRow(0)
 
         item = QTableWidgetItem(data["text"])
@@ -779,6 +908,8 @@ class Base(QMainWindow, Ui_Base):
         item = QTableWidgetItem(data["authors"])
         item.setToolTip(data["authors"])
         self.highlight_table.setItem(0, PATH, item)
+
+        self.highlight_table.setSortingEnabled(True)
 
     def scan_highlights_finished(self):
         """ What will happen after the scanning for history files ends
@@ -1025,8 +1156,7 @@ class Base(QMainWindow, Ui_Base):
         self.encode_data(path, data)
         os.utime(path, (times.st_ctime, times.st_mtime))  # reapply original times
         if self.file_table.isVisible():
-            self.on_file_table_itemClicked(self.file_table.item(self.sel_idx.row(),
-                                                                self.sel_idx.column()),
+            self.on_file_table_itemClicked(self.file_table.item(self.sel_idx.row(), 0),
                                            reset=False)
 
     # noinspection PyUnusedLocal
@@ -1331,6 +1461,7 @@ class Base(QMainWindow, Ui_Base):
             self.fold_btn.setChecked(app_config.get("show_info", True))
             self.opened_times = app_config.get("opened_times", 0)
             self.skip_version = app_config.get("skip_version", None)
+            self.high_merge_warning = app_config.get("high_merge_warning", True)
             self.edit_lua_file_warning = app_config.get("edit_lua_file_warning", True)
 
             checked = app_config.get("show_items", (True, True, True, True))
@@ -1368,6 +1499,7 @@ class Base(QMainWindow, Ui_Base):
                                  self.status.act_comment.isChecked()),
                   "skip_version": self.skip_version, "opened_times": self.opened_times,
                   "edit_lua_file_warning": self.edit_lua_file_warning,
+                  "high_merge_warning": self.high_merge_warning,
                   }
         try:
             with gzip.GzipFile(join(SETTINGS_DIR, "settings.json.gz"), "w+") as gz_file:
@@ -1784,6 +1916,46 @@ class ToolBar(QWidget, Ui_ToolBar):
             self.base.open_file(data["path"])
 
     @Slot()
+    def on_merge_btn_clicked(self):
+        """ The `Merge` button is pressed
+        """
+        data = [self.base.file_table.item(idx.row(), idx.column()).data(Qt.UserRole)
+                for idx in self.base.sel_indexes]
+        if data[0]["cre_dom_version"] == data[1]["cre_dom_version"]:
+            if self.base.high_merge_warning:
+                text = _("Merging highlights from different devices is highly "
+                         "experimental.\n"
+                         "Because of the different page formats, the page numbering in "
+                         "KoHighlights can be inaccurate.\n"
+                         "Also, using different fonts, css and style tweaks might lead "
+                         "to unexpected behavior. Do you want to continue?")
+                popup = self.base.popup(_("Warning!"), text, buttons=3,
+                                        check_text=_("Don't show this again"))
+                self.base.high_merge_warning = not popup.checked
+                if popup.buttonRole(popup.clickedButton()) == QMessageBox.RejectRole:
+                    return
+
+            popup = self.base.popup(_("Warning!"),
+                                    _("The highlights of the selected entries will be "
+                                      "merged.\nThis can not be undone! Continue?"),
+                                    buttons=3,
+                                    check_text=_("Try to sync the reading position too"))
+            if popup.buttonRole(popup.clickedButton()) == QMessageBox.AcceptRole:
+                self.base.merge_highlights(popup.checked)
+        else:
+            text = _("Can not merge these highlights, because they are produced with a "
+                     "different version of the reader engine!\n\n"
+                     "The reader engine and the way it renders the text is responsible "
+                     "for the positioning of highlights. Some times, code changes are "
+                     "made that change its behavior. Its version is written in the "
+                     "metadata of a book the first time is opened and can only change "
+                     "if the metadata are cleared (loosing all highlights) and open the "
+                     "book again as new.\n"
+                     "The reader's engine version is independent of the KoReader version "
+                     "and does not change that often.")
+            self.base.popup(_("Version mismatch!"), text, icon=QMessageBox.Critical)
+
+    @Slot()
     def on_delete_btn_clicked(self):
         """ The `Delete` button is pressed
         """
@@ -1805,9 +1977,7 @@ class ToolBar(QWidget, Ui_ToolBar):
             self.base.status.show()
             self.base.toolbar.save_btn.setStyleSheet("")
             self.base.toolbar.save_btn.setPopupMode(QToolButton.MenuButtonPopup)
-            # self.base.toolbar.delete_btn.setStyleSheet("")
-            # self.base.toolbar.delete_btn.setPopupMode(QToolButton.MenuButtonPopup)
-            # self.base.toolbar.open_btn.show()
+            self.base.toolbar.merge_btn.show()
             self.base.toolbar.delete_btn.show()
             sel_idx = self.base.sel_idx
             if sel_idx:
@@ -1818,9 +1988,7 @@ class ToolBar(QWidget, Ui_ToolBar):
             no_arrow = "QToolButton::menu-indicator{width:0px;}"
             self.base.toolbar.save_btn.setStyleSheet(no_arrow)
             self.base.toolbar.save_btn.setPopupMode(QToolButton.DelayedPopup)
-            # self.base.toolbar.delete_btn.setStyleSheet(no_arrow)
-            # self.base.toolbar.delete_btn.setPopupMode(QToolButton.DelayedPopup)
-            # self.base.toolbar.open_btn.hide()
+            self.base.toolbar.merge_btn.hide()
             self.base.toolbar.delete_btn.hide()
             self.base.scan_highlights_thread()
         self.base.current_view = idx
@@ -1914,13 +2082,11 @@ class LogStream(QObject):
 
 class Scanner(QObject):
     found = Signal(unicode)
-    found_empty_sdr = Signal(unicode)
     finished = Signal()
 
     def __init__(self, path):
         super(Scanner, self).__init__()
         self.path = path
-        # self.timer = QTimer(self)
 
     def process(self):
         self.start_scan()
@@ -1936,8 +2102,9 @@ class Scanner(QObject):
                     if splitext(file_)[1].lower() == ".lua":
                         self.found.emit(join(dir_path, file_))
                         break
-            # older metadata storage
-            elif dir_path.lower().endswith(join("koreader", "history")):
+            # older metadata storage or android history folder
+            elif (dir_path.lower().endswith(join("koreader", "history"))
+                  or basename(dir_path).lower() == "history"):
                 for file_ in dir_tuple[2]:
                     if splitext(file_)[1].lower() == ".lua":
                         self.found.emit(join(dir_path, file_))
