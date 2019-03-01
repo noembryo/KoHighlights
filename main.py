@@ -622,7 +622,7 @@ class Base(QMainWindow, Ui_Base):
         icon = self.ico_label_green if data["highlight"] else self.ico_empty
         return icon, title, authors, percent
 
-    # ___ ___________________ MERGING HIGHLIGHTS STUFF ______________
+    # ___ ___________________ MERGING - SYNCING STUFF _______________
 
     def check4merge(self):
         """ Check if the selected books' highlights can be merged
@@ -714,7 +714,7 @@ class Base(QMainWindow, Ui_Base):
                         if text1 == high2[page2][page_id2]["text"]:
                             break  # highlight found in book2
                     else:  # highlight was not found yet in book2
-                        continue  # no break in the inner loop
+                        continue  # no break in the inner loop, keep looping
                     break  # highlight already exists in book2 (there was a break)
                 else:  # text not in book2 highlights, add to unique
                     unique_high1[page1][page_id1] = high1[page1][page_id1]
@@ -736,7 +736,7 @@ class Base(QMainWindow, Ui_Base):
                         if text2 == high1[page1][page_id1]["text"]:
                             break  # highlight found in book1
                     else:  # highlight was not found yet in book1
-                        continue  # no break in the inner loop
+                        continue  # no break in the inner loop, keep looping
                     break  # highlight already exists in book1 (there was a break)
                 else:  # text not in book1 highlights, add to unique
                     unique_high2[page2][page_id2] = high2[page2][page_id2]
@@ -764,7 +764,7 @@ class Base(QMainWindow, Ui_Base):
         """
         highlights = data["highlight"]
         for page in extra_highlights:
-            if page in highlights:
+            if page in highlights:  # change page number if already exists
                 new_page = page
                 while new_page in highlights:
                     new_page += 1
@@ -1325,7 +1325,8 @@ class Base(QMainWindow, Ui_Base):
         :type idx: int
         :param idx: The action type
         """
-        if idx == 2:  # save from the highlight_table
+        # save from the highlight_table
+        if idx == 2:
             if not self.sel_high_view:
                 return
             filename = QFileDialog.getSaveFileName(self, "Save to Text file",
