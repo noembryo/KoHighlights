@@ -24,7 +24,7 @@ from PySide.QtCore import (Qt, QTimer, Slot, QObject, Signal, QThread, QMimeData
 from PySide.QtGui import (QMainWindow, QApplication, QMessageBox, QIcon, QFileDialog,
                           QTableWidgetItem, QTextCursor, QDialog, QWidget, QMovie, QFont,
                           QMenu, QAction, QTableWidget, QCheckBox, QHeaderView, QCursor,
-                          QListWidgetItem, QPixmap, QToolButton)
+                          QListWidgetItem, QPixmap, QToolButton, QActionGroup)
 
 from gui_main import Ui_Base  # ___ ______ GUI STUFF ________________
 from gui_about import Ui_About
@@ -41,7 +41,7 @@ from future.moves.urllib.request import Request, URLError
 
 
 __author__ = "noEmbryo"
-__version__ = "0.6.1.0"
+__version__ = "0.7.0.0"
 
 
 def _(text):
@@ -78,6 +78,7 @@ class Base(QMainWindow, Ui_Base):
         self.edit_lua_file_warning = True
         self.high_merge_warning = True
         self.current_view = 0
+        self.high_by_page = False
         self.exit_msg = True
 
         self.file_table.verticalHeader().setResizeMode(QHeaderView.Fixed)
@@ -285,9 +286,9 @@ class Base(QMainWindow, Ui_Base):
                  self.status.act_date.isChecked() else "")
         line_break = (":\n" if self.status.act_page.isChecked() or
                       self.status.act_date.isChecked() else "")
-        for page in sorted(data["highlight"]):
+        highlights = []
+        for page in data["highlight"]:
             for page_id in data["highlight"][page]:
-                highlight = ""
                 try:
                     date = data["highlight"][page][page_id]["datetime"]
                     text = data["highlight"][page][page_id]["text"].replace("\\\n", "\n")
@@ -303,23 +304,23 @@ class Base(QMainWindow, Ui_Base):
                             if text != book_text:
                                 comment = book_text.replace("\\\n", "\n")
                             break
-                    page_text = ("Page " + str(page)
-                                 if self.status.act_page.isChecked() else "")
-                    date_text = ("[" + date + "]"
-                                 if self.status.act_date.isChecked() else "")
-                    high_text = text if self.status.act_text.isChecked() else ""
-                    line_break2 = ("\n" if self.status.act_text.isChecked() and
-                                   comment else "")
-                    high_comment = (line_break2 + "● " + comment
-                                    if self.status.act_comment.isChecked() and comment
-                                    else "")
-                    highlight += (page_text + extra + date_text + line_break +
-                                  high_text + high_comment + "\n")
                 except KeyError:  # blank highlight
                     continue
+                highlights.append((page, text, date, page_id, comment))
 
-                highlight_item = QListWidgetItem(highlight, self.highlights_list)
-                highlight_item.setData(Qt.UserRole, (page, text, date, page_id, comment))
+        for item in sorted(highlights, key=self.sort_high4view):
+            page, text, date, page_id, comment = item
+            page_text = "Page " + str(page) if self.status.act_page.isChecked() else ""
+            date_text = "[" + date + "]" if self.status.act_date.isChecked() else ""
+            high_text = text if self.status.act_text.isChecked() else ""
+            line_break2 = "\n" if self.status.act_text.isChecked() and comment else ""
+            high_comment = (line_break2 + "● " + comment
+                            if self.status.act_comment.isChecked() and comment else "")
+            highlight = (page_text + extra + date_text + line_break +
+                         high_text + high_comment + "\n")
+
+            highlight_item = QListWidgetItem(highlight, self.highlights_list)
+            highlight_item.setData(Qt.UserRole, item)
 
         description_state = False
         if "doc_props" in self.sel_book_data and "description" in data["doc_props"]:
@@ -327,6 +328,7 @@ class Base(QMainWindow, Ui_Base):
         self.description_btn.setEnabled(description_state)
 
         self.populate_book_info(data, row)
+        # self.highlights_list.sortItems()  # using XListWidgetItem for custom sorting
         self.highlights_list.setCurrentRow(0) if reset else None
 
     def populate_book_info(self, data, row):
@@ -467,8 +469,7 @@ class Base(QMainWindow, Ui_Base):
             self.description_btn.setEnabled(False)
             for field in self.info_fields:
                 field.setText("")
-        if self.file_selection.selectedRows():
-            self.toolbar.merge_btn.setEnabled(self.check4merge())
+        self.toolbar.merge_btn.setEnabled(self.check4merge())
 
     def on_column_clicked(self, column):
         """ Sets the current sorting column
@@ -1205,6 +1206,32 @@ class Base(QMainWindow, Ui_Base):
         """
         self.sel_highlights = self.highlights_selection.selectedRows()
 
+    def set_highlight_sort(self):
+        """ Sets the sorting method of displayed highlights
+        """
+        self.high_by_page = bool(self.sender().data())
+        try:
+            row = self.sel_idx.row()
+            self.on_file_table_itemClicked(self.file_table.item(row, 0), False)
+        except AttributeError:  # no book selected
+            pass
+
+    def sort_high4view(self, data):
+        """ Sets the sorting method of displayed highlights
+
+        :type data: dict
+        param: data: The highlight's data
+        """
+        return data[DATE] if self.high_by_page else int(data[PAGE])
+
+    def sort_high4write(self, data):
+        """ Sets the sorting method of written highlights
+
+        :type data: dict
+        param: data: The highlight's data
+        """
+        return data[0] if self.high_by_page else int(data[3][5:])
+
     # ___ ___________________ DELETING STUFF ________________________
 
     def delete_menu(self):
@@ -1337,7 +1364,7 @@ class Base(QMainWindow, Ui_Base):
             else:
                 return
             text = ""
-            for i in self.sel_high_view:
+            for i in sorted(self.sel_high_view):
                 row = i.row()
                 data = self.highlight_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)
                 comment = "\n● " + data["comment"] if data["comment"] else ""
@@ -1349,7 +1376,7 @@ class Base(QMainWindow, Ui_Base):
                     text_file.write(text.replace("\n", os.linesep))
             return
 
-        # save from file_table
+        # save from the file_table
         title_counter = 0
         saved = 0
         if not self.sel_indexes:
@@ -1373,12 +1400,9 @@ class Base(QMainWindow, Ui_Base):
                 row = i.row()
                 data = self.file_table.item(row, 0).data(Qt.UserRole)
                 highlights = []
-                for page in sorted(data["highlight"]):
+                for page in data["highlight"]:
                     for page_id in data["highlight"][page]:
-                        date_text, high_comment, high_text, page_text = \
-                            self.analyze_high(data, page, page_id)
-                        highlights.append(page_text + extra + date_text +
-                                          line_break + high_text + high_comment)
+                        highlights.append(self.analyze_high(data, page, page_id))
                 if not highlights:  # no highlights
                     continue
                 title = self.file_table.item(row, 0).data(0)
@@ -1393,7 +1417,10 @@ class Base(QMainWindow, Ui_Base):
                     name = "{} - {}".format(authors, title)
                 filename = join(path, self.sanitize_filename(name) + ".txt")
                 with codecs.open(filename, "w+", encoding="utf-8") as text_file:
-                    for highlight in highlights:
+                    for highlight in sorted(highlights, key=self.sort_high4write):
+                        date_text, high_comment, high_text, page_text = highlight
+                        highlight = (page_text + extra + date_text + line_break +
+                                     high_text + high_comment)
                         highlight = highlight + 2 * os.linesep
                         text_file.write(highlight)
                     saved += 1
@@ -1412,12 +1439,11 @@ class Base(QMainWindow, Ui_Base):
                 row = i.row()
                 data = self.file_table.item(row, 0).data(Qt.UserRole)
                 highlights = []
-                for page in sorted(data["highlight"]):
+                for page in data["highlight"]:
                     for page_id in data["highlight"][page]:
-                        date_text, high_comment, high_text, page_text = \
-                            self.analyze_high(data, page, page_id)
-                        highlights.append(page_text + extra + date_text +
-                                          line_break + high_text + high_comment)
+                        highlights.append(self.analyze_high(data, page, page_id))
+                highlights = [i[3] + extra + i[0] + line_break + i[2] + i[1]
+                              for i in sorted(highlights, key=self.sort_high4write)]
                 if not highlights:  # no highlights
                     continue
                 title = self.file_table.item(row, 0).data(0)
@@ -1519,6 +1545,7 @@ class Base(QMainWindow, Ui_Base):
             self.status.act_date.setChecked(checked[1])
             self.status.act_text.setChecked(checked[2])
             self.status.act_comment.setChecked(checked[3])
+            self.high_by_page = app_config.get("high_by_page", False)
         else:
             self.resize(800, 600)
         if self.highlight_width:
@@ -1538,7 +1565,7 @@ class Base(QMainWindow, Ui_Base):
                   "highlight_width": self.highlight_width,
                   "comment_width": self.comment_width,
                   "last_dir": self.last_dir, "exit_msg": self.exit_msg,
-                  "current_view": self.current_view,
+                  "current_view": self.current_view, "high_by_page": self.high_by_page,
                   "show_info": self.fold_btn.isChecked(),
                   "show_items": (self.status.act_page.isChecked(),
                                  self.status.act_date.isChecked(),
@@ -2081,6 +2108,31 @@ class Status(QWidget, Ui_Status):
             # noinspection PyUnresolvedReferences
             i.triggered.connect(self.on_show_items)
             i.setChecked(True)
+
+        sort_menu = QMenu(self)
+        ico_sort = QIcon(":/stuff/sort.png")
+        group = QActionGroup(self)
+
+        action = QAction(_("Date"), sort_menu)
+        action.setCheckable(True)
+        action.setChecked(not self.base.high_by_page)
+        action.triggered.connect(self.base.set_highlight_sort)
+        action.setData(0)
+        group.addAction(action)
+        sort_menu.addAction(action)
+
+        action = QAction(_("Page"), sort_menu)
+        action.setCheckable(True)
+        action.setChecked(self.base.high_by_page)
+        action.triggered.connect(self.base.set_highlight_sort)
+        action.setData(1)
+        group.addAction(action)
+        sort_menu.addAction(action)
+
+        sort_menu.setIcon(ico_sort)
+        sort_menu.setTitle(_("Sort by"))
+        self.show_menu.addMenu(sort_menu)
+
         self.show_items_btn.setMenu(self.show_menu)
 
     def on_show_items(self):
