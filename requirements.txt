@@ -1,0 +1,4 @@
+beautifulsoup4==4.6.3
+future==0.16.0
+mechanize==0.3.7
+PySide==1.2.4
