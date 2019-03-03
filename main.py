@@ -1219,18 +1219,18 @@ class Base(QMainWindow, Ui_Base):
     def sort_high4view(self, data):
         """ Sets the sorting method of displayed highlights
 
-        :type data: dict
+        :type data: tuple
         param: data: The highlight's data
         """
-        return data[DATE] if self.high_by_page else int(data[PAGE])
+        return int(data[PAGE]) if self.high_by_page else data[DATE]
 
     def sort_high4write(self, data):
         """ Sets the sorting method of written highlights
 
-        :type data: dict
+        :type data: tuple
         param: data: The highlight's data
         """
-        return data[0] if self.high_by_page else int(data[3][5:])
+        return int(data[3][5:]) if self.high_by_page else data[0]
 
     # ___ ___________________ DELETING STUFF ________________________
 
