@@ -37,10 +37,11 @@ Read the version history at [App's Page](http://www.noembryo.com/apps.php?kohigh
 
 ## Dependencies
 Should run in any system with Python 2.7.x  
-It needs [Pyside](https://pypi.org/project/PySide/),
+It needs the [Pyside](https://pypi.org/project/PySide/),
 [BeautifulSoup4](https://pypi.org/project/beautifulsoup4/),
 [future](https://pypi.org/project/future/) and
-[mechanize](https://pypi.org/project/mechanize/)  
+[mechanize](https://pypi.org/project/mechanize/) libraries.  
+After cloning the source, run `pip install -r requirements.txt`  
 
 ## Extra
 KoHighlights includes SLPPU (a converter between python and lua objects).  
