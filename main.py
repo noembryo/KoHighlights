@@ -138,7 +138,7 @@ class Base(QMainWindow, Ui_Base):
         QTimer.singleShot(0, self.on_load)
 
         # noinspection PyTypeChecker
-        QTimer.singleShot(200000, self.auto_check4update)  # check for updates
+        QTimer.singleShot(30000, self.auto_check4update)  # check for updates
 
         # self.threads4process = []
         # thread_cleanup_timer = QTimer(self)  # cleanup threads for ever
@@ -1187,7 +1187,6 @@ class Base(QMainWindow, Ui_Base):
         :type data: dict
         :param data: The book's data
         """
-        # path = self.file_table.item(row, PATH).text()
         times = os.stat(path)  # read the file's created/modified times
         self.encode_data(path, data)
         os.utime(path, (times.st_ctime, times.st_mtime))  # reapply original times
