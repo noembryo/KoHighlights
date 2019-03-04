@@ -51,18 +51,69 @@ def _(text):
     return text
 
 
+def decode_data(path):
+    """ Converts a lua table to a Python dict
+
+    :type path: str|unicode
+    :param path: The path to the lua file
+    """
+    with codecs.open(path, "r", encoding="utf8") as txt_file:
+        txt = txt_file.read()[39:]  # offset the first words of the file
+        data = lua.decode(txt.replace("--", "—"))
+        if type(data) == dict:
+            return data
+
+
+def encode_data(path, dict_data):
+    """ Converts a Python dict to a lua table
+
+    :type path: str|unicode
+    :param path: The path to the lua file
+    :type dict_data: dict
+    :param dict_data: The dictionary to be encoded as lua table
+    """
+    with codecs.open(path, "w+", encoding="utf8") as txt_file:
+        lua_text = "-- we can read Lua syntax here!\nreturn "
+        lua_text += lua.encode(dict_data)
+        txt_file.write(lua_text)
+
+
+def sanitize_filename(filename):
+    """ Creates a safe filename
+
+    :type filename: str|unicode
+    :param filename: The filename to be sanitized
+    """
+    filename = re.sub(r'[/:*?"<>|\\]', "_", filename)
+    return filename
+
+
+# if sys.platform.lower().startswith("win"):
+#     import ctypes
+#
+#     def hide_console():
+#         """ Hides the console window in GUI mode. Necessary for frozen application,
+#         because this application support both, command line processing AND GUI mode
+#         and therefor cannot be run via pythonw.exe.
+#         """
+#
+#         win_handles = ctypes.windll.kernel32.GetConsoleWindow()
+#         if win_handles != 0:
+#             ctypes.windll.user32.ShowWindow(win_handles, 0)
+#             # if you wanted to close the handles...
+#             # ctypes.windll.kernel32.CloseHandle(win_handles)
+#
+#     def show_console():
+#         """ UnHides console window"""
+#         win_handles = ctypes.windll.kernel32.GetConsoleWindow()
+#         if win_handles != 0:
+#             ctypes.windll.user32.ShowWindow(win_handles, 1)
+
+
 # noinspection PyCallByClass
 class Base(QMainWindow, Ui_Base):
     def __init__(self, parent=None):
         super(Base, self).__init__(parent)
-        self.parser = argparse.ArgumentParser(prog=APP_NAME,
-                                              description="{} v{} A KoReader's highlights"
-                                                          " converter"
-                                              .format(APP_NAME, __version__),
-                                              epilog="Thanks for using {}!"
-                                              .format(APP_NAME))
-        self.parser.add_argument("-v", "--version", action="version",
-                                 version="%(prog)s v{}".format(__version__))
 
         self.scan_thread = QThread()
         self.highlight_scan_thread = QThread()
@@ -167,7 +218,7 @@ class Base(QMainWindow, Ui_Base):
         self.toolbar.merge_btn.setMenu(self.merge_menu())  # assign/create menu
         self.toolbar.delete_btn.setMenu(self.delete_menu())  # assign/create menu
         self.connect_gui()
-        self.parse_args()
+        self.passed_files()
         self.show()
         # if self.parse_args():
         #     self.show()
@@ -559,7 +610,7 @@ class Base(QMainWindow, Ui_Base):
             self.loaded_paths.add(filename)
             self.file_table.setSortingEnabled(False)
             self.file_table.insertRow(0)
-            data = self.decode_data(filename)
+            data = decode_data(filename)
             if not data:
                 print("No data here!", filename)
                 return
@@ -1201,7 +1252,7 @@ class Base(QMainWindow, Ui_Base):
         :param data: The book's data
         """
         times = os.stat(path)  # read the file's created/modified times
-        self.encode_data(path, data)
+        encode_data(path, data)
         os.utime(path, (times.st_ctime, times.st_mtime))  # reapply original times
         if self.file_table.isVisible():
             self.on_file_table_itemClicked(self.file_table.item(self.sel_idx.row(), 0),
@@ -1427,7 +1478,7 @@ class Base(QMainWindow, Ui_Base):
                 name = title
                 if authors:
                     name = "{} - {}".format(authors, title)
-                filename = join(path, self.sanitize_filename(name) + ".txt")
+                filename = join(path, sanitize_filename(name) + ".txt")
                 with codecs.open(filename, "w+", encoding="utf-8") as text_file:
                     for highlight in sorted(highlights, key=self.sort_high4write):
                         date_text, high_comment, high_text, page_text = highlight
@@ -1523,256 +1574,6 @@ class Base(QMainWindow, Ui_Base):
         high_comment = (line_break2 + "● " + comment
                         if self.status.act_comment.isChecked() and comment else "")
         return date_text, high_comment, high_text, page_text
-
-    # ___ ___________________ CLI STUFF _____________________________
-
-    def parse_args(self):
-        """ Parse the command line parameters that are passed to the program.
-        """
-        self.parser.add_argument("paths", nargs="*",
-                                 help="The paths to input files or folder")
-
-        self.parser.add_argument("-x", "--use_cli", required="-o" in sys.argv,
-                                 help="Use the command line interface only (close the "
-                                      "app after finishing)", action="store_true",
-                                 default=False)
-        # self.parser.add_argument("-i", "--input", required="-x" in sys.argv,
-        #                          help="The path to input files or folder")
-        # sort_group = self.parser.add_mutually_exclusive_group()
-        self.parser.add_argument("-s", "--sort_page", action="store_true", default=False,
-                                 help="Sort highlights by page, otherwise sort by date")
-        self.parser.add_argument("-m", "--merge", action="store_true", default=False,
-                                 help="Merge the highlights of all input books in a "
-                                      "single text file, otherwise save every book's "
-                                      "highlights to a different text file")
-
-        self.parser.add_argument("-np", "--no_page", action="store_true", default=False,
-                                 help="Exclude the page number of the highlight")
-        self.parser.add_argument("-nd", "--no_date", action="store_true", default=False,
-                                 help="Exclude the date of the highlight")
-        self.parser.add_argument("-nh", "--no_highlight",
-                                 action="store_true", default=False,
-                                 help="Exclude the highlighted text of the highlight")
-        self.parser.add_argument("-nc", "--no_comment",
-                                 action="store_true", default=False,
-                                 help="Exclude the comment of the highlight")
-
-        self.parser.add_argument("-o", "--output", required="-x" in sys.argv,
-                                 help="The filename of the text file (in merge mode) or "
-                                 "the directory for saving the highlight text files")
-
-        # args, paths = self.parser.parse_known_args()
-        args = self.parser.parse_args()
-        if args.use_cli:
-            self.cli_save(args)
-            sys.exit(0)  # quit the app if cli execution
-
-        if args.paths:
-            self.on_file_table_fileDropped(args.paths)
-
-    def cli_save(self, args):
-        """ Saves highlights from the command line interface
-
-        :type args: argparse.Namespace
-        :param args: The parsed cli args
-        """
-        # pprint(args.__dict__)
-        files = self.get_lua_files(args.paths)
-        if not files:
-            return
-        title_counter = [0]
-        saved = 0
-        extra = " " if not args.no_page and not args.no_date else ""
-        line_break = ":" + os.linesep if not args.no_page or not args.no_date else ""
-        path = abspath(args.output)
-        if not args.merge:  # save to different text files
-            if not isdir(path):
-                self.parser.error("The output path (-o/--output) must point "
-                                  "to an existing directory!")
-            for file_ in files:
-                data = self.decode_data(file_)
-                highlights = []
-                for page in data["highlight"]:
-                    for page_id in data["highlight"][page]:
-                        highlights.append(self.cli_analyze_high(data, page,
-                                                                page_id, args))
-                if not highlights:  # no highlights
-                    continue
-                name = self.get_name(data, file_, title_counter)
-                filename = join(path, self.sanitize_filename(name) + ".txt")
-                with codecs.open(filename, "w+", encoding="utf-8") as text_file:
-                    # noinspection PyTypeChecker
-                    for highlight in sorted(highlights,
-                                            key=partial(self.cli_sort_high, args)):
-                        date_text, high_comment, high_text, page_text = highlight
-                        highlight = (page_text + extra + date_text + line_break +
-                                     high_text + high_comment)
-                        highlight = highlight + 2 * os.linesep
-                        text_file.write(highlight)
-                    sys.stdout.write("{} is saved\n".format(basename(filename)))
-                    saved += 1
-        else:  # save combined text to one text file
-            if isdir(path):
-                self.parser.error("The output path (-o/--output) must be a .txt filename "
-                                  "not a directory!")
-            blocks = []
-            for file_ in files:
-                data = self.decode_data(file_)
-                highlights = []
-                for page in data["highlight"]:
-                    for page_id in data["highlight"][page]:
-                        highlights.append(self.cli_analyze_high(data, page,
-                                                                page_id, args))
-                # noinspection PyTypeChecker
-                highlights = [i[3] + extra + i[0] + line_break + i[2] + i[1]
-                              for i in sorted(highlights,
-                                              key=partial(self.cli_sort_high, args))]
-                if not highlights:  # no highlights
-                    continue
-                name = self.get_name(data, file_, title_counter)
-                # noinspection PyUnresolvedReferences
-                blocks.append((name, (2 * os.linesep).join(highlights)))
-                saved += 1
-            line = "-" * 80
-            name, ext = splitext(path)
-            if ext.lower() != ".txt":
-                path = name + ".txt"
-            with codecs.open(path, "w+", encoding="utf-8") as text_file:
-                for block in blocks:
-                    text_file.write("{0}{3}{1}{3}{0}{3}{2}{3}{3}"
-                                    .format(line, block[0], block[1], os.linesep))
-                sys.stdout.write("{} is saved\n".format(path))
-
-        all_files = len(files)
-        sys.stdout.write(_("\n{} texts were saved from the {} processed.\n"
-                           "{} files with no highlights.").format(saved, all_files,
-                                                                  all_files - saved))
-
-    @staticmethod
-    def get_name(data, filename, title_counter):
-        """ Return the name of the book entry
-
-        :type data: dict
-        :param data: The book's metadata
-        :type filename: str|unicode
-        :param filename: The book's metadata path
-        :type title_counter: list
-        :param title_counter: A list with the current NO TITLE counter
-        """
-        authors = ""
-        try:
-            title = data["stats"]["title"]
-            authors = data["stats"]["authors"]
-        except KeyError:  # older type file
-            title = splitext(basename(filename))[0]
-            try:
-                name = title.split("#] ")[1]
-                title = splitext(name)[0]
-            except IndexError:  # no "#] " in filename
-                pass
-        if not title:
-            try:
-                name = filename.split("#] ")[1]
-                title = splitext(name)[0]
-            except IndexError:  # no "#] " in filename
-                title = _("NO TITLE FOUND") + str(title_counter[0])
-                title_counter[0] += 1
-        name = title
-        if authors:
-            name = "{} - {}".format(authors, title)
-        return name
-
-    @staticmethod
-    def get_lua_files(dropped):
-        """ Return the paths to the .lua metadata files
-
-        :type dropped: list
-        :param dropped: The input paths
-        """
-        paths = []
-        for path in dropped:
-            if isfile(path) and splitext(path)[1] == ".lua":
-                paths.append(abspath(path))
-                sys.stdout.write("Found: {}\n".format(path))
-        folders = [i for i in dropped if isdir(i)]
-        for folder in folders:
-            try:
-                for dir_tuple in os.walk(folder):
-                    dir_path = dir_tuple[0]
-                    if dir_path.lower().endswith(".sdr"):  # a book's metadata folder
-                        if dir_path.lower().endswith("evernote.sdr"):
-                            continue
-                        for file_ in dir_tuple[2]:  # get the .lua file not the .old
-                            if splitext(file_)[1].lower() == ".lua":
-                                path = abspath(join(dir_path, file_))
-                                paths.append(path)
-                                sys.stdout.write("Found: {}\n".format(path))
-                                break
-                    # older metadata storage or android history folder
-                    elif (dir_path.lower().endswith(join("koreader", "history"))
-                          or basename(dir_path).lower() == "history"):
-                        for file_ in dir_tuple[2]:
-                            if splitext(file_)[1].lower() == ".lua":
-                                path = abspath(join(dir_path, file_))
-                                paths.append(path)
-                                sys.stdout.write("Found: {}\n".format(path))
-                        continue
-            except UnicodeDecodeError:  # os.walk error
-                pass
-        return paths
-
-    @staticmethod
-    def cli_sort_high(args, data):
-        """ Sets the sorting method of written highlights
-
-        :type args: argparse.Namespace
-        :param args: The parsed cli args
-        :type data: tuple
-        param: data: The highlight's data
-        """
-        return int(data[3][5:]) if args.sort_page else data[0]
-
-    @staticmethod
-    def cli_analyze_high(data, page, page_id, args):
-        """ Get the highlight's info (text, comment, date and page)
-
-        :type data: dict
-        :param data: The highlight's data
-        :type page: int
-        :param page The page where the highlight starts
-        :type page_id: int
-        :param page_id The count of this page's highlight
-        """
-        date = data["highlight"][page][page_id]["datetime"]
-        text = data["highlight"][page][page_id]["text"]
-        pos_0 = data["highlight"][page][page_id]["pos0"]
-        pos_1 = data["highlight"][page][page_id]["pos1"]
-        comment = ""
-        for bookmark_idx in data["bookmarks"]:
-            try:
-                book_pos0 = data["bookmarks"][bookmark_idx]["pos0"]
-            except KeyError:  # no [bookmark_idx]["pos0"] exists (blank highlight)
-                continue
-            book_pos1 = data["bookmarks"][bookmark_idx]["pos1"]
-            if (pos_0 == book_pos0) and (pos_1 == book_pos1):
-                book_text = data["bookmarks"][bookmark_idx].get("text", "")
-                if not book_text:
-                    break
-                book_text = re.sub(r"Page \d+ (.+?) @ \d+-\d+-\d+ \d+:\d+:\d+",
-                                   r"\1", book_text, 1, re.DOTALL | re.MULTILINE)
-                if text != book_text:
-                    comment = book_text
-                break
-        page_text = "Page " + str(page) if not args.no_page else ""
-        date_text = "[" + date + "]" if not args.no_date else ""
-        high_text = text.replace("\n", os.linesep) if not args.no_highlight else ""
-        comment = comment.replace("\n", os.linesep)
-        line_break2 = os.linesep if not args.no_highlight and comment else ""
-        high_comment = (line_break2 + "● " + comment
-                        if not args.no_comment and comment else "")
-        return date_text, high_comment, high_text, page_text
-
-    # ___ ___________________ SETTINGS STUFF ________________________
 
     def settings_load(self):
         """ Loads the jason based configuration settings
@@ -1903,42 +1704,15 @@ class Base(QMainWindow, Ui_Base):
 
         return popup
 
-    @staticmethod
-    def decode_data(path):
-        """ Converts a lua table to a Python dict
-
-        :type path: str|unicode
-        :param path: The path to the lua file
+    def passed_files(self):
+        """ Command line parameters that are passed to the program.
         """
-        with codecs.open(path, "r", encoding="utf8") as txt_file:
-            txt = txt_file.read()[39:]  # offset the first words of the file
-            data = lua.decode(txt.replace("--", "—"))
-            if type(data) == dict:
-                return data
-
-    @staticmethod
-    def encode_data(path, dict_data):
-        """ Converts a Python dict to a lua table
-
-        :type path: str|unicode
-        :param path: The path to the lua file
-        :type dict_data: dict
-        :param dict_data: The dictionary to be encoded as lua table
-        """
-        with codecs.open(path, "w+", encoding="utf8") as txt_file:
-            lua_text = "-- we can read Lua syntax here!\nreturn "
-            lua_text += lua.encode(dict_data)
-            txt_file.write(lua_text)
-
-    @staticmethod
-    def sanitize_filename(filename):
-        """ Creates a safe filename
-
-        :type filename: str|unicode
-        :param filename: The filename to be sanitized
-        """
-        filename = re.sub(r'[/:*?"<>|\\]', "_", filename)
-        return filename
+        # args = QApplication.instance().arguments()
+        try:
+            if sys.argv[1]:
+                self.on_file_table_fileDropped(sys.argv[1:])
+        except IndexError:
+            pass
 
     def open_file(self, path):
         """ Opens a file with its associated app
@@ -2576,13 +2350,284 @@ class XMessageBox(QMessageBox):
 
 
 class KoHighlights(QApplication):
+
     def __init__(self, *args, **kwargs):
         super(KoHighlights, self).__init__(*args, **kwargs)
+
         # decode app's arguments
         sys.argv = [i.decode(sys.getfilesystemencoding()) for i in sys.argv]
 
+        self.parser = argparse.ArgumentParser(prog=APP_NAME,
+                                              description="{} v{} A KoReader's highlights"
+                                                          " converter"
+                                              .format(APP_NAME, __version__),
+                                              epilog="Thanks for using {}!"
+                                              .format(APP_NAME))
+        self.parser.add_argument("-v", "--version", action="version",
+                                 version="%(prog)s v{}".format(__version__))
+        if not getattr(sys, 'frozen', False):
+            self.parse_args()
+
+        # # hide console window, but only under Windows and only if app is frozen
+        # if sys.platform.lower().startswith("win"):
+        #     if getattr(sys, 'frozen', False):
+        #         hide_console()
+
         self.base = Base()
         self.exec_()
+
+        # if sys.platform.lower().startswith('win'):
+        #         if getattr(sys, 'frozen', False):
+        #             show_console()
+
+    # ___ ___________________ CLI STUFF _____________________________
+
+    def parse_args(self):
+        """ Parse the command line parameters that are passed to the program.
+        """
+        self.parser.add_argument("paths", nargs="*",
+                                 help="The paths to input files or folder")
+
+        self.parser.add_argument("-x", "--use_cli", required="-o" in sys.argv,
+                                 help="Use the command line interface only (close the "
+                                      "app after finishing)", action="store_true",
+                                 default=False)
+        # self.parser.add_argument("-i", "--input", required="-x" in sys.argv,
+        #                          help="The path to input files or folder")
+        # sort_group = self.parser.add_mutually_exclusive_group()
+        self.parser.add_argument("-s", "--sort_page", action="store_true", default=False,
+                                 help="Sort highlights by page, otherwise sort by date")
+        self.parser.add_argument("-m", "--merge", action="store_true", default=False,
+                                 help="Merge the highlights of all input books in a "
+                                      "single text file, otherwise save every book's "
+                                      "highlights to a different text file")
+
+        self.parser.add_argument("-np", "--no_page", action="store_true", default=False,
+                                 help="Exclude the page number of the highlight")
+        self.parser.add_argument("-nd", "--no_date", action="store_true", default=False,
+                                 help="Exclude the date of the highlight")
+        self.parser.add_argument("-nh", "--no_highlight",
+                                 action="store_true", default=False,
+                                 help="Exclude the highlighted text of the highlight")
+        self.parser.add_argument("-nc", "--no_comment",
+                                 action="store_true", default=False,
+                                 help="Exclude the comment of the highlight")
+
+        self.parser.add_argument("-o", "--output", required="-x" in sys.argv,
+                                 help="The filename of the text file (in merge mode) or "
+                                 "the directory for saving the highlight text files")
+
+        # args, paths = self.parser.parse_known_args()
+        args = self.parser.parse_args()
+        if args.use_cli:
+            self.cli_save(args)
+            sys.exit(0)  # quit the app if cli execution
+
+        # if args.paths:
+        #     self.on_file_table_fileDropped(args.paths)
+
+    def cli_save(self, args):
+        """ Saves highlights from the command line interface
+
+        :type args: argparse.Namespace
+        :param args: The parsed cli args
+        """
+        # pprint(args.__dict__)
+        files = self.get_lua_files(args.paths)
+        if not files:
+            return
+        title_counter = [0]
+        saved = 0
+        extra = " " if not args.no_page and not args.no_date else ""
+        line_break = ":" + os.linesep if not args.no_page or not args.no_date else ""
+        path = abspath(args.output)
+        if not args.merge:  # save to different text files
+            if not isdir(path):
+                self.parser.error("The output path (-o/--output) must point "
+                                  "to an existing directory!")
+            for file_ in files:
+                data = decode_data(file_)
+                highlights = []
+                for page in data["highlight"]:
+                    for page_id in data["highlight"][page]:
+                        highlights.append(self.cli_analyze_high(data, page,
+                                                                page_id, args))
+                if not highlights:  # no highlights
+                    continue
+                name = self.get_name(data, file_, title_counter)
+                filename = join(path, sanitize_filename(name) + ".txt")
+                with codecs.open(filename, "w+", encoding="utf-8") as text_file:
+                    # noinspection PyTypeChecker
+                    for highlight in sorted(highlights,
+                                            key=partial(self.cli_sort_high, args)):
+                        date_text, high_comment, high_text, page_text = highlight
+                        highlight = (page_text + extra + date_text + line_break +
+                                     high_text + high_comment)
+                        highlight = highlight + 2 * os.linesep
+                        text_file.write(highlight)
+                    sys.stdout.write("Created {}\n\n".format(basename(filename)))
+                    saved += 1
+        else:  # save combined text to one text file
+            if isdir(path):
+                self.parser.error("The output path (-o/--output) must be a .txt filename "
+                                  "not a directory!")
+            blocks = []
+            for file_ in files:
+                data = decode_data(file_)
+                highlights = []
+                for page in data["highlight"]:
+                    for page_id in data["highlight"][page]:
+                        highlights.append(self.cli_analyze_high(data, page,
+                                                                page_id, args))
+                # noinspection PyTypeChecker
+                highlights = [i[3] + extra + i[0] + line_break + i[2] + i[1]
+                              for i in sorted(highlights,
+                                              key=partial(self.cli_sort_high, args))]
+                if not highlights:  # no highlights
+                    continue
+                name = self.get_name(data, file_, title_counter)
+                # noinspection PyUnresolvedReferences
+                blocks.append((name, (2 * os.linesep).join(highlights)))
+                saved += 1
+            line = "-" * 80
+            path = sanitize_filename(path)
+            name, ext = splitext(path)
+            if ext.lower() != ".txt":
+                path = name + ".txt"
+            with codecs.open(path, "w+", encoding="utf-8") as text_file:
+                for block in blocks:
+                    text_file.write("{0}{3}{1}{3}{0}{3}{2}{3}{3}"
+                                    .format(line, block[0], block[1], os.linesep))
+                sys.stdout.write("Created {}\n\n".format(path))
+
+        all_files = len(files)
+        sys.stdout.write(_("\n{} texts were saved from the {} processed.\n"
+                           "{} files with no highlights.\n").format(saved, all_files,
+                                                                  all_files - saved))
+
+    @staticmethod
+    def get_lua_files(dropped):
+        """ Return the paths to the .lua metadata files
+
+        :type dropped: list
+        :param dropped: The input paths
+        """
+        paths = []
+        for path in dropped:
+            if isfile(path) and splitext(path)[1] == ".lua":
+                paths.append(abspath(path))
+                sys.stdout.write("Found: {}\n\n".format(path))
+        folders = [i for i in dropped if isdir(i)]
+        for folder in folders:
+            try:
+                for dir_tuple in os.walk(folder):
+                    dir_path = dir_tuple[0]
+                    if dir_path.lower().endswith(".sdr"):  # a book's metadata folder
+                        if dir_path.lower().endswith("evernote.sdr"):
+                            continue
+                        for file_ in dir_tuple[2]:  # get the .lua file not the .old
+                            if splitext(file_)[1].lower() == ".lua":
+                                path = abspath(join(dir_path, file_))
+                                paths.append(path)
+                                sys.stdout.write("Found: {}\n\n".format(path))
+                                break
+                    # older metadata storage or android history folder
+                    elif (dir_path.lower().endswith(join("koreader", "history"))
+                          or basename(dir_path).lower() == "history"):
+                        for file_ in dir_tuple[2]:
+                            if splitext(file_)[1].lower() == ".lua":
+                                path = abspath(join(dir_path, file_))
+                                paths.append(path)
+                                sys.stdout.write("Found: {}\n\n".format(path))
+                        continue
+            except UnicodeDecodeError:  # os.walk error
+                pass
+        return paths
+
+    @staticmethod
+    def cli_sort_high(args, data):
+        """ Sets the sorting method of written highlights
+
+        :type args: argparse.Namespace
+        :param args: The parsed cli args
+        :type data: tuple
+        param: data: The highlight's data
+        """
+        return int(data[3][5:]) if args.sort_page else data[0]
+
+    @staticmethod
+    def cli_analyze_high(data, page, page_id, args):
+        """ Get the highlight's info (text, comment, date and page)
+
+        :type data: dict
+        :param data: The highlight's data
+        :type page: int
+        :param page The page where the highlight starts
+        :type page_id: int
+        :param page_id The count of this page's highlight
+        """
+        date = data["highlight"][page][page_id]["datetime"]
+        text = data["highlight"][page][page_id]["text"]
+        pos_0 = data["highlight"][page][page_id]["pos0"]
+        pos_1 = data["highlight"][page][page_id]["pos1"]
+        comment = ""
+        for bookmark_idx in data["bookmarks"]:
+            try:
+                book_pos0 = data["bookmarks"][bookmark_idx]["pos0"]
+            except KeyError:  # no [bookmark_idx]["pos0"] exists (blank highlight)
+                continue
+            book_pos1 = data["bookmarks"][bookmark_idx]["pos1"]
+            if (pos_0 == book_pos0) and (pos_1 == book_pos1):
+                book_text = data["bookmarks"][bookmark_idx].get("text", "")
+                if not book_text:
+                    break
+                book_text = re.sub(r"Page \d+ (.+?) @ \d+-\d+-\d+ \d+:\d+:\d+",
+                                   r"\1", book_text, 1, re.DOTALL | re.MULTILINE)
+                if text != book_text:
+                    comment = book_text
+                break
+        page_text = "Page " + str(page) if not args.no_page else ""
+        date_text = "[" + date + "]" if not args.no_date else ""
+        high_text = text.replace("\n", os.linesep) if not args.no_highlight else ""
+        comment = comment.replace("\n", os.linesep)
+        line_break2 = os.linesep if not args.no_highlight and comment else ""
+        high_comment = (line_break2 + "● " + comment
+                        if not args.no_comment and comment else "")
+        return date_text, high_comment, high_text, page_text
+
+    @staticmethod
+    def get_name(data, filename, title_counter):
+        """ Return the name of the book entry
+
+        :type data: dict
+        :param data: The book's metadata
+        :type filename: str|unicode
+        :param filename: The book's metadata path
+        :type title_counter: list
+        :param title_counter: A list with the current NO TITLE counter
+        """
+        authors = ""
+        try:
+            title = data["stats"]["title"]
+            authors = data["stats"]["authors"]
+        except KeyError:  # older type file
+            title = splitext(basename(filename))[0]
+            try:
+                name = title.split("#] ")[1]
+                title = splitext(name)[0]
+            except IndexError:  # no "#] " in filename
+                pass
+        if not title:
+            try:
+                name = filename.split("#] ")[1]
+                title = splitext(name)[0]
+            except IndexError:  # no "#] " in filename
+                title = _("NO TITLE FOUND") + str(title_counter[0])
+                title_counter[0] += 1
+        name = title
+        if authors:
+            name = "{} - {}".format(authors, title)
+        return name
 
 
 if __name__ == '__main__':
