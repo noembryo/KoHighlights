@@ -46,17 +46,11 @@ After cloning the source, run `sudo pip install -r requirements.txt`
 ###### OR manually:  
 
 ##### for Python 2   
-`sudo pip install beautifulsoup4`  
-`sudo pip install future`  
-`sudo pip install mechanize`  
-`sudo pip install pyside`  
+`sudo pip install beautifulsoup4 future mechanize pyside`  
 If there is a problem with Pyside, use `sudo apt-get install python-pyside`   
 
 ##### for Python 3   
-`sudo pip3 install beautifulsoup4`  
-`sudo pip3 install future`  
-`sudo pip3 install mechanize`  
-`sudo pip3 install pyside`  
+`sudo pip3 install beautifulsoup4 future mechanize pyside`  
 If there is a problem with Pyside, use `sudo apt-get install python3-pyside`   
 
 ## Extra
