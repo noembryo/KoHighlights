@@ -1624,6 +1624,7 @@ class Base(QMainWindow, Ui_Base):
             self.header_high_view.resizeSection(HIGHLIGHT_H, self.highlight_width)
         if self.comment_width:
             self.header_high_view.resizeSection(COMMENT_H, self.comment_width)
+        self.toolbar.set_btn_size(self.toolbar_size)
 
     def settings_save(self):
         """ Saves the jason based configuration settings
