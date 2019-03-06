@@ -2019,7 +2019,7 @@ class ToolBar(QWidget, Ui_ToolBar):
     def on_tool_frame_customContextMenuRequested(self):
         """ The Toolbar is right-clicked
         """
-        sizes = (_("Small"), 24), (_("Medium"), 32), (_("Big"), 48), (_("Bigger"), 64),
+        sizes = (_("Small"), 16), (_("Medium"), 32), (_("Big"), 48), (_("Bigger"), 64),
         menu = QMenu(self)
         group = QActionGroup(self)
         for name, size in sizes:
