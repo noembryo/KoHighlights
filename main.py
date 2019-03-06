@@ -41,7 +41,6 @@ except ImportError:  # python 3.x
     unicode = str
     PYTHON2 = False
 from future.moves.urllib.request import Request
-# from future.moves.urllib.request import Request, URLError
 from pprint import pprint
 
 
@@ -90,26 +89,26 @@ def sanitize_filename(filename):
     return filename
 
 
-# if sys.platform.lower().startswith("win"):
-#     import ctypes
-#
-#     def hide_console():
-#         """ Hides the console window in GUI mode. Necessary for frozen application,
-#         because this application support both, command line processing AND GUI mode
-#         and therefor cannot be run via pythonw.exe.
-#         """
-#
-#         win_handles = ctypes.windll.kernel32.GetConsoleWindow()
-#         if win_handles != 0:
-#             ctypes.windll.user32.ShowWindow(win_handles, 0)
-#             # if you wanted to close the handles...
-#             # ctypes.windll.kernel32.CloseHandle(win_handles)
-#
-#     def show_console():
-#         """ UnHides console window"""
-#         win_handles = ctypes.windll.kernel32.GetConsoleWindow()
-#         if win_handles != 0:
-#             ctypes.windll.user32.ShowWindow(win_handles, 1)
+if sys.platform.lower().startswith("win"):
+    import ctypes
+
+    def hide_console():
+        """ Hides the console window in GUI mode. Necessary for frozen application,
+        because this application support both, command line processing AND GUI mode
+        and therefor cannot be run via pythonw.exe.
+        """
+
+        win_handles = ctypes.windll.kernel32.GetConsoleWindow()
+        if win_handles != 0:
+            ctypes.windll.user32.ShowWindow(win_handles, 0)
+            # if you wanted to close the handles...
+            # ctypes.windll.kernel32.CloseHandle(win_handles)
+
+    def show_console():
+        """ UnHides console window"""
+        win_handles = ctypes.windll.kernel32.GetConsoleWindow()
+        if win_handles != 0:
+            ctypes.windll.user32.ShowWindow(win_handles, 1)
 
 
 # noinspection PyCallByClass
@@ -215,17 +214,18 @@ class Base(QMainWindow, Ui_Base):
         """
         self.settings_load()
         if FIRST_RUN:  # on first run
+            self.toolbar.books_btn.click()
             self.splitter.setSizes((500, 250))
         self.toolbar.save_btn.setMenu(self.save_menu())  # assign/create menu
         self.toolbar.merge_btn.setMenu(self.merge_menu())  # assign/create menu
         self.toolbar.delete_btn.setMenu(self.delete_menu())  # assign/create menu
         self.connect_gui()
         self.passed_files()
-        self.show()
         # if self.parse_args():
         #     self.show()
         # else:
         #     self.close()
+        self.show()
 
     # ___ ___________________ EVENTS STUFF __________________________
 
@@ -337,6 +337,8 @@ class Base(QMainWindow, Ui_Base):
         :type reset: bool
         :param reset: Select the first highlight in the list
         """
+        if not item:  # empty list
+            return
         row = item.row()
         data = self.file_table.item(row, TITLE).data(Qt.UserRole)
         self.sel_book_data = data
@@ -2104,6 +2106,7 @@ class ToolBar(QWidget, Ui_ToolBar):
         elif self.base.current_view == 1:  # highlights view
             (self.base.highlight_table.model()
              .removeRows(0, self.base.highlight_table.rowCount()))
+            self.base.file_table.model().removeRows(0, self.base.file_table.rowCount())
 
     def change_view(self, idx):
         if idx == 0:  # books view
@@ -2397,7 +2400,7 @@ class KoHighlights(QApplication):
         # decode app's arguments
         try:
             sys.argv = [i.decode(sys.getfilesystemencoding()) for i in sys.argv]
-        except AttributeError:  # str.decode does not exists in Python 3
+        except AttributeError:  # i.decode does not exists in Python 3
             pass
 
         self.parser = argparse.ArgumentParser(prog=APP_NAME,
@@ -2408,18 +2411,21 @@ class KoHighlights(QApplication):
                                               .format(APP_NAME))
         self.parser.add_argument("-v", "--version", action="version",
                                  version="%(prog)s v{}".format(__version__))
-        if not getattr(sys, 'frozen', False):
-            self.parse_args()
-        # # hide console window, but only under Windows and only if app is frozen
-        # if sys.platform.lower().startswith("win"):
-        #     if getattr(sys, 'frozen', False):
-        #         hide_console()
+
+        # if not getattr(sys, 'frozen', False):
+        #     self.parse_args()
+
+        # hide console window, but only under Windows and only if app is frozen
+        if sys.platform.lower().startswith("win"):
+            if getattr(sys, 'frozen', False):
+                hide_console()
+        self.parse_args()
 
         self.base = Base()
         self.exec_()
-        # if sys.platform.lower().startswith('win'):
-        #         if getattr(sys, 'frozen', False):
-        #             show_console()
+        if sys.platform.lower().startswith('win'):
+                if getattr(sys, 'frozen', False):
+                    show_console()
 
     # ___ ___________________ CLI STUFF _____________________________
 
@@ -2468,7 +2474,7 @@ class KoHighlights(QApplication):
         #     self.on_file_table_fileDropped(args.paths)
 
     def cli_save(self, args):
-        """ Saves highlights from the command line interface
+        """ Saves highlights using the command line interface
 
         :type args: argparse.Namespace
         :param args: The parsed cli args
