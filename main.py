@@ -20,7 +20,7 @@ from os.path import (isdir, isfile, join, basename, splitext, dirname, split, ex
 import mechanize  # ___ _______________ DEPENDENCIES ________________
 from bs4 import BeautifulSoup
 from PySide.QtCore import (Qt, QTimer, Slot, QObject, Signal, QThread, QMimeData,
-                           QModelIndex, QByteArray)
+                           QModelIndex, QByteArray, QSize)
 from PySide.QtGui import (QMainWindow, QApplication, QMessageBox, QIcon, QFileDialog,
                           QTableWidgetItem, QTextCursor, QDialog, QWidget, QMovie, QFont,
                           QMenu, QAction, QTableWidget, QCheckBox, QHeaderView, QCursor,
@@ -53,6 +53,28 @@ __version__ = "0.8.0.0"
 
 def _(text):
     return text
+
+
+# if sys.platform.lower().startswith("win"):
+#     import ctypes
+#
+#     def hide_console():
+#         """ Hides the console window in GUI mode. Necessary for frozen application,
+#         because this application support both, command line processing AND GUI mode
+#         and therefor cannot be run via pythonw.exe.
+#         """
+#
+#         win_handles = ctypes.windll.kernel32.GetConsoleWindow()
+#         if win_handles != 0:
+#             ctypes.windll.user32.ShowWindow(win_handles, 0)
+#             # if you wanted to close the handles...
+#             # ctypes.windll.kernel32.CloseHandle(win_handles)
+#
+#     def show_console():
+#         """ UnHides console window"""
+#         win_handles = ctypes.windll.kernel32.GetConsoleWindow()
+#         if win_handles != 0:
+#             ctypes.windll.user32.ShowWindow(win_handles, 1)
 
 
 def decode_data(path):
@@ -92,28 +114,6 @@ def sanitize_filename(filename):
     return filename
 
 
-if sys.platform.lower().startswith("win"):
-    import ctypes
-
-    def hide_console():
-        """ Hides the console window in GUI mode. Necessary for frozen application,
-        because this application support both, command line processing AND GUI mode
-        and therefor cannot be run via pythonw.exe.
-        """
-
-        win_handles = ctypes.windll.kernel32.GetConsoleWindow()
-        if win_handles != 0:
-            ctypes.windll.user32.ShowWindow(win_handles, 0)
-            # if you wanted to close the handles...
-            # ctypes.windll.kernel32.CloseHandle(win_handles)
-
-    def show_console():
-        """ UnHides console window"""
-        win_handles = ctypes.windll.kernel32.GetConsoleWindow()
-        if win_handles != 0:
-            ctypes.windll.user32.ShowWindow(win_handles, 1)
-
-
 # noinspection PyCallByClass
 class Base(QMainWindow, Ui_Base):
     def __init__(self, parent=None):
@@ -145,6 +145,7 @@ class Base(QMainWindow, Ui_Base):
         self.edit_lua_file_warning = True
         self.high_merge_warning = True
         self.current_view = 0
+        self.toolbar_size = 48
         self.high_by_page = False
         self.exit_msg = True
 
@@ -1308,9 +1309,9 @@ class Base(QMainWindow, Ui_Base):
         """ Creates the `Delete` button menu
         """
         menu = QMenu(self)
-        for idx, title in enumerate([_("selected books' info"),
-                                     _("selected books"),
-                                     _("all missing books' info")]):
+        for idx, title in enumerate([_("Selected books' info"),
+                                     _("Selected books"),
+                                     _("All missing books' info")]):
             action = QAction(self.ico_files_delete, title, menu)
             action.triggered.connect(self.on_delete_actions)
             action.setData(idx)
@@ -1602,6 +1603,7 @@ class Base(QMainWindow, Ui_Base):
             self.current_view = app_config.get("current_view", 0)
             self.fold_btn.setChecked(app_config.get("show_info", True))
             self.opened_times = app_config.get("opened_times", 0)
+            self.toolbar_size = app_config.get("toolbar_size", 48)
             self.skip_version = app_config.get("skip_version", None)
             self.exit_msg = app_config.get("exit_msg", True)
             self.high_merge_warning = app_config.get("high_merge_warning", True)
@@ -1633,7 +1635,7 @@ class Base(QMainWindow, Ui_Base):
                   "col_sort_asc": self.col_sort_asc, "col_sort": self.col_sort,
                   "col_sort_asc_h": self.col_sort_asc_h, "col_sort_h": self.col_sort_h,
                   "highlight_width": self.highlight_width,
-                  "comment_width": self.comment_width,
+                  "comment_width": self.comment_width, "toolbar_size": self.toolbar_size,
                   "last_dir": self.last_dir, "exit_msg": self.exit_msg,
                   "current_view": self.current_view, "high_by_page": self.high_by_page,
                   "show_info": self.fold_btn.isChecked(),
@@ -2000,7 +2002,9 @@ class ToolBar(QWidget, Ui_ToolBar):
         self.setupUi(self)
         self.base = parent
 
-        # buttons = (self.add_folder_btn, self.manage_folders_btn, self.del_files_btn)
+        self.buttons = (self.check_btn, self.select_btn, self.save_btn, self.open_btn,
+                        self.merge_btn, self.delete_btn, self.clear_btn, self.books_btn,
+                        self.highlights_btn, self.about_btn)
         # for button in buttons:
         #     button.installEventFilter(TextSizer(button))
 
@@ -2009,6 +2013,39 @@ class ToolBar(QWidget, Ui_ToolBar):
 
         self.check_btn.clicked.connect(parent.on_check_btn)
         self.check_btn.hide()
+
+    @Slot()
+    def on_tool_frame_customContextMenuRequested(self):
+        """ The Toolbar is right-clicked
+        """
+        sizes = (_("Small"), 24), (_("Medium"), 32), (_("Big"), 48), (_("Bigger"), 64),
+        menu = QMenu(self)
+        group = QActionGroup(self)
+        for name, size in sizes:
+            action = QAction(name, menu)
+            action.setCheckable(True)
+            if size == self.base.toolbar_size:
+                action.setChecked(True)
+            action.triggered.connect(partial(self.set_btn_size, size))
+            group.addAction(action)
+            menu.addAction(action)
+        # noinspection PyArgumentList
+        menu.exec_(QCursor.pos())
+
+    def set_btn_size(self, size):
+        """ Changes the Toolbar's icons size
+
+        :type size: int
+        :param size: The Icons' size preset
+        """
+        self.base.toolbar_size = size
+        button_size = QSize(size, size)
+
+        for btn in self.buttons:
+            btn.setMinimumWidth(size + 20)
+            btn.setIconSize(button_size)
+        # noinspection PyArgumentList
+        QApplication.processEvents()
 
     @Slot()
     def on_select_btn_clicked(self):
@@ -2415,20 +2452,21 @@ class KoHighlights(QApplication):
         self.parser.add_argument("-v", "--version", action="version",
                                  version="%(prog)s v{}".format(__version__))
 
-        # if not getattr(sys, 'frozen', False):
-        #     self.parse_args()
+        if not getattr(sys, 'frozen', False):
+            self.parse_args()
 
-        # hide console window, but only under Windows and only if app is frozen
-        if sys.platform.lower().startswith("win"):
-            if getattr(sys, 'frozen', False):
-                hide_console()
-        self.parse_args()
+        # # hide console window, but only under Windows and only if app is frozen
+        # if sys.platform.lower().startswith("win"):
+        #     if getattr(sys, 'frozen', False):
+        #         hide_console()
+        # self.parse_args()
 
         self.base = Base()
         self.exec_()
-        if sys.platform.lower().startswith('win'):
-                if getattr(sys, 'frozen', False):
-                    show_console()
+
+        # if sys.platform.lower().startswith('win'):
+        #         if getattr(sys, 'frozen', False):
+        #             show_console()
 
     # ___ ___________________ CLI STUFF _____________________________
 
