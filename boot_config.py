@@ -32,6 +32,7 @@ sys.excepthook = except_hook
 
 import gzip, json
 
+PYTHON2 = True
 FIRST_RUN = False
 try:
     with gzip.GzipFile(join(SETTINGS_DIR, "settings.json.gz"), "rb") as settings:

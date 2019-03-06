@@ -1,8 +1,5 @@
 # coding=utf-8
 from __future__ import absolute_import, division, print_function, unicode_literals
-
-import argparse
-
 from boot_config import *
 import os, sys, re
 import codecs
@@ -11,24 +8,24 @@ import json
 import shutil
 import webbrowser
 import subprocess
+import argparse
 from datetime import datetime
 from functools import partial
 from collections import defaultdict
 from distutils.version import LooseVersion
 from os.path import (isdir, isfile, join, basename, splitext, dirname, split, exists,
                      getmtime, abspath)
-from pprint import pprint
 
 import mechanize  # ___ _______________ DEPENDENCIES ________________
-from slppu import slppu as lua  # https://github.com/noembryo/slppu
 from bs4 import BeautifulSoup
 from PySide.QtCore import (Qt, QTimer, Slot, QObject, Signal, QThread, QMimeData,
-                           QModelIndex)
+                           QModelIndex, QByteArray)
 from PySide.QtGui import (QMainWindow, QApplication, QMessageBox, QIcon, QFileDialog,
                           QTableWidgetItem, QTextCursor, QDialog, QWidget, QMovie, QFont,
                           QMenu, QAction, QTableWidget, QCheckBox, QHeaderView, QCursor,
                           QListWidgetItem, QPixmap, QToolButton, QActionGroup)
 
+from slppu import slppu as lua  # https://github.com/noembryo/slppu
 from gui_main import Ui_Base  # ___ ______ GUI STUFF ________________
 from gui_about import Ui_About
 from gui_auto_info import Ui_AutoInfo
@@ -40,7 +37,12 @@ try:  # ___ _______ PYTHON 2/3 COMPATIBILITY ________________________
     import cPickle as pickle
 except ImportError:  # python 3.x
     import pickle
-from future.moves.urllib.request import Request, URLError
+    # noinspection PyShadowingBuiltins
+    unicode = str
+    PYTHON2 = False
+from future.moves.urllib.request import Request
+# from future.moves.urllib.request import Request, URLError
+from pprint import pprint
 
 
 __author__ = "noEmbryo"
@@ -1575,6 +1577,8 @@ class Base(QMainWindow, Ui_Base):
                         if self.status.act_comment.isChecked() and comment else "")
         return date_text, high_comment, high_text, page_text
 
+    # ___ ___________________ SETTINGS STUFF ________________________
+
     def settings_load(self):
         """ Loads the jason based configuration settings
         """
@@ -1617,10 +1621,10 @@ class Base(QMainWindow, Ui_Base):
     def settings_save(self):
         """ Saves the jason based configuration settings
         """
-        config = {"geometry": pickle.dumps(self.saveGeometry()),
-                  "state": pickle.dumps(self.saveState()),
-                  "splitter": pickle.dumps(self.splitter.saveState()),
-                  "about_geometry": pickle.dumps(self.about.saveGeometry()),
+        config = {"geometry": self.serialize(self.saveGeometry()),
+                  "state": self.serialize(self.saveState()),
+                  "splitter": self.serialize(self.splitter.saveState()),
+                  "about_geometry": self.serialize(self.about.saveGeometry()),
                   "col_sort_asc": self.col_sort_asc, "col_sort": self.col_sort,
                   "col_sort_asc_h": self.col_sort_asc_h, "col_sort_h": self.col_sort_h,
                   "highlight_width": self.highlight_width,
@@ -1637,10 +1641,32 @@ class Base(QMainWindow, Ui_Base):
                   "high_merge_warning": self.high_merge_warning,
                   }
         try:
+            if not PYTHON2:
+                # noinspection PyUnresolvedReferences
+                for k, v in config.items():
+                    if type(v) == bytes:
+                        # noinspection PyArgumentList
+                        config[k] = str(v, encoding="utf8")
+            config_json = json.dumps(config, sort_keys=True, indent=4)
             with gzip.GzipFile(join(SETTINGS_DIR, "settings.json.gz"), "w+") as gz_file:
-                gz_file.write(json.dumps(config, sort_keys=True, indent=4))
+                try:
+                    gz_file.write(config_json)
+                except TypeError:  # Python3
+                    gz_file.write(config_json.encode("utf8"))
         except IOError as error:
             print("On saving settings:", error)
+
+    @staticmethod
+    def serialize(array):
+        """ Serialize some binary settings
+
+        :type array: QByteArray
+        :param array: The data
+        """
+        if PYTHON2:
+            return pickle.dumps(array)
+        # noinspection PyArgumentList
+        return str(pickle.dumps(array.data()), encoding="unicode_escape")
 
     @staticmethod
     def unpickle(key):
@@ -1650,8 +1676,20 @@ class Base(QMainWindow, Ui_Base):
         :param key: The dict key to be un-pickled
         """
         try:
-            value = pickle.loads(str(app_config.get(key)))
-        except pickle.UnpicklingError:
+            if PYTHON2:
+                try:
+                    value = pickle.loads(str(app_config.get(key)))
+                except UnicodeEncodeError:  # settings from Python3
+                    return
+            else:
+                try:
+                    # noinspection PyArgumentList
+                    pickled = pickle.loads(bytes(app_config.get(key), encoding="latin"))
+                    value = QByteArray(pickled)
+                except UnicodeDecodeError:  # settings from Python2
+                    return
+        except pickle.UnpicklingError as err:
+            print(err)
             return
         return value
 
@@ -1766,9 +1804,11 @@ class Base(QMainWindow, Ui_Base):
                 webbrowser.open("https://www.paypal.com/cgi-bin/webscr?"
                                 "cmd=_s-xclick%20&hosted_button_id=MYV4WLTD6PEVG")
             return
+        # noinspection PyBroadException
         try:
             version_new = self.about.get_online_version()
-        except URLError:  # can not connect
+        # except URLError:  # can not connect
+        except Exception:
             return
         if not version_new:
             return
@@ -1810,7 +1850,7 @@ class Base(QMainWindow, Ui_Base):
     def delete_logs():
         """ Keeps the number of log texts steady.
         """
-        _, _, files = os.walk(SETTINGS_DIR).next()
+        _, _, files = next(os.walk(SETTINGS_DIR))
         files = sorted(i for i in files if i.startswith("error_log"))
         if len(files) > 3:
             for name in files[:-3]:
@@ -2355,7 +2395,10 @@ class KoHighlights(QApplication):
         super(KoHighlights, self).__init__(*args, **kwargs)
 
         # decode app's arguments
-        sys.argv = [i.decode(sys.getfilesystemencoding()) for i in sys.argv]
+        try:
+            sys.argv = [i.decode(sys.getfilesystemencoding()) for i in sys.argv]
+        except AttributeError:  # str.decode does not exists in Python 3
+            pass
 
         self.parser = argparse.ArgumentParser(prog=APP_NAME,
                                               description="{} v{} A KoReader's highlights"
@@ -2367,7 +2410,6 @@ class KoHighlights(QApplication):
                                  version="%(prog)s v{}".format(__version__))
         if not getattr(sys, 'frozen', False):
             self.parse_args()
-
         # # hide console window, but only under Windows and only if app is frozen
         # if sys.platform.lower().startswith("win"):
         #     if getattr(sys, 'frozen', False):
@@ -2375,7 +2417,6 @@ class KoHighlights(QApplication):
 
         self.base = Base()
         self.exec_()
-
         # if sys.platform.lower().startswith('win'):
         #         if getattr(sys, 'frozen', False):
         #             show_console()
@@ -2503,7 +2544,7 @@ class KoHighlights(QApplication):
         all_files = len(files)
         sys.stdout.write(_("\n{} texts were saved from the {} processed.\n"
                            "{} files with no highlights.\n").format(saved, all_files,
-                                                                  all_files - saved))
+                                                                    all_files - saved))
 
     @staticmethod
     def get_lua_files(dropped):
