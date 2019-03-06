@@ -164,17 +164,17 @@ class Base(QMainWindow, Ui_Base):
                             self.lang_txt, self.pages_txt, self.tags_txt]
         self.info_keys = ["title", "authors", "series", "language", "pages", "keywords"]
 
-        self.ico_file_save = QIcon(":/stuff/file_save.png")
-        self.ico_files_merge = QIcon(":/stuff/files_merge.png")
-        self.ico_files_delete = QIcon(":/stuff/files_delete.png")
-        self.ico_file_exists = QIcon(":/stuff/file_exists.png")
-        self.ico_file_missing = QIcon(":/stuff/file_missing.png")
-        self.ico_file_edit = QIcon(":/stuff/file_edit.png")
-        self.ico_copy = QIcon(":/stuff/copy.png")
-        self.ico_delete = QIcon(":/stuff/delete.png")
-        self.ico_label_green = QIcon(":/stuff/label_green.png")
-        self.ico_view_books = QIcon(":/stuff/view_books.png")
-        self.ico_empty = QIcon(":/stuff/trans32.png")
+        self.ico_file_save = QIcon("stuff/file_save.png")
+        self.ico_files_merge = QIcon("stuff/files_merge.png")
+        self.ico_files_delete = QIcon("stuff/files_delete.png")
+        self.ico_file_exists = QIcon("stuff/file_exists.png")
+        self.ico_file_missing = QIcon("stuff/file_missing.png")
+        self.ico_file_edit = QIcon("stuff/file_edit.png")
+        self.ico_copy = QIcon("stuff/copy.png")
+        self.ico_delete = QIcon("stuff/delete.png")
+        self.ico_label_green = QIcon("stuff/label_green.png")
+        self.ico_view_books = QIcon("stuff/view_books.png")
+        self.ico_empty = QIcon("stuff/trans32.png")
 
         self.about = About(self)
         self.auto_info = AutoInfo(self)
@@ -1721,7 +1721,7 @@ class Base(QMainWindow, Ui_Base):
         :parameter check_text: The checkbox's text (checkbox is omitted if "")
         """
         popup = XMessageBox(self)
-        popup.setWindowIcon(QIcon(":/stuff/icon.png"))
+        popup.setWindowIcon(QIcon("stuff/icon.png"))
         if type(icon) == QMessageBox.Icon:
             popup.setIcon(icon)
         elif type(icon) == unicode:
@@ -1806,7 +1806,7 @@ class Base(QMainWindow, Ui_Base):
                      "the PayPal donation page?\n\nThis is a one-time message. "
                      "It will never appear again!").format(APP_NAME)
             popup = self.popup(_("A reminder..."), text,
-                               icon=":/stuff/paypal76.png", buttons=3)
+                               icon="stuff/paypal76.png", buttons=3)
 
             if popup.buttonRole(popup.clickedButton()) == QMessageBox.AcceptRole:
                 webbrowser.open("https://www.paypal.com/cgi-bin/webscr?"
@@ -1948,8 +1948,8 @@ class About(QDialog, Ui_About):
 
     def create_text(self):
         # color = self.palette().color(QPalette.WindowText).name()  # for links
-        splash = ":/stuff/logo.png"
-        paypal = ":/stuff/paypal.png"
+        splash = "stuff/logo.png"
+        paypal = "stuff/paypal.png"
         info = _("""<body style="font-size:10pt; font-weight:400; font-style:normal">
         <center>
           <table width="100%" border="0">
@@ -2019,7 +2019,7 @@ class ToolBar(QWidget, Ui_ToolBar):
     def on_tool_frame_customContextMenuRequested(self):
         """ The Toolbar is right-clicked
         """
-        sizes = (_("Small"), 16), (_("Medium"), 32), (_("Big"), 48), (_("Bigger"), 64),
+        sizes = (_("Tiny"), 16), (_("Small"), 32), (_("Medium"), 48), (_("Big"), 64),
         menu = QMenu(self)
         group = QActionGroup(self)
         for name, size in sizes:
@@ -2204,7 +2204,7 @@ class Status(QWidget, Ui_Status):
         self.setupUi(self)
         self.base = parent
 
-        self.wait_anim = QMovie(":/stuff/wait.gif")
+        self.wait_anim = QMovie("stuff/wait.gif")
         self.anim_lbl.setMovie(self.wait_anim)
         self.anim_lbl.hide()
 
@@ -2216,7 +2216,7 @@ class Status(QWidget, Ui_Status):
             i.setChecked(True)
 
         sort_menu = QMenu(self)
-        ico_sort = QIcon(":/stuff/sort.png")
+        ico_sort = QIcon("stuff/sort.png")
         group = QActionGroup(self)
 
         action = QAction(_("Date"), sort_menu)
