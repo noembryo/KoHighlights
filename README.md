@@ -36,13 +36,28 @@ Check the latest release on the [Downloads Page](https://github.com/noembryo/KoH
 Read the version history at [App's Page](http://www.noembryo.com/apps.php?kohighlights).
 
 ## Dependencies
-Should run in any system with Python 2.7.x  
+Should run in any system with Python 2.7.x or 3.x (more testing required)  
 It needs the [Pyside](https://pypi.org/project/PySide/),
 [BeautifulSoup4](https://pypi.org/project/beautifulsoup4/),
 [future](https://pypi.org/project/future/) and
 [mechanize](https://pypi.org/project/mechanize/) libraries.  
 After cloning the source, run `sudo pip install -r requirements.txt`  
-If there is a problem with Pyside, use `sudo apt-get install python-pyside`  
+
+######OR manually:  
+
+#####for Python 2   
+`sudo pip install beautifulsoup4`  
+`sudo pip install future`  
+`sudo pip install mechanize`  
+`sudo pip install pyside`  
+If there is a problem with Pyside, use `sudo apt-get install python-pyside`   
+
+#####for Python 3   
+`sudo pip3 install beautifulsoup4`  
+`sudo pip3 install future`  
+`sudo pip3 install mechanize`  
+`sudo pip3 install pyside`  
+If there is a problem with Pyside, use `sudo apt-get install python3-pyside`   
 
 ## Extra
 KoHighlights includes SLPPU (a converter between python and lua objects).  

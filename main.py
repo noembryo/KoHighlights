@@ -16,6 +16,7 @@ from distutils.version import LooseVersion
 from os.path import (isdir, isfile, join, basename, splitext, dirname, split, exists,
                      getmtime, abspath)
 
+
 import mechanize  # ___ _______________ DEPENDENCIES ________________
 from bs4 import BeautifulSoup
 from PySide.QtCore import (Qt, QTimer, Slot, QObject, Signal, QThread, QMimeData,
@@ -25,6 +26,7 @@ from PySide.QtGui import (QMainWindow, QApplication, QMessageBox, QIcon, QFileDi
                           QMenu, QAction, QTableWidget, QCheckBox, QHeaderView, QCursor,
                           QListWidgetItem, QPixmap, QToolButton, QActionGroup)
 
+
 from slppu import slppu as lua  # https://github.com/noembryo/slppu
 from gui_main import Ui_Base  # ___ ______ GUI STUFF ________________
 from gui_about import Ui_About
@@ -32,6 +34,7 @@ from gui_auto_info import Ui_AutoInfo
 from gui_toolbar import Ui_ToolBar
 from gui_status import Ui_Status
 from gui_edit import Ui_TextDialog
+
 
 try:  # ___ _______ PYTHON 2/3 COMPATIBILITY ________________________
     import cPickle as pickle
