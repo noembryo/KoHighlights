@@ -43,16 +43,16 @@ It needs the [Pyside](https://pypi.org/project/PySide/),
 [mechanize](https://pypi.org/project/mechanize/) libraries.  
 After cloning the source, run `sudo pip install -r requirements.txt`  
 
-######OR manually:  
+###### OR manually:  
 
-#####for Python 2   
+##### for Python 2   
 `sudo pip install beautifulsoup4`  
 `sudo pip install future`  
 `sudo pip install mechanize`  
 `sudo pip install pyside`  
 If there is a problem with Pyside, use `sudo apt-get install python-pyside`   
 
-#####for Python 3   
+##### for Python 3   
 `sudo pip3 install beautifulsoup4`  
 `sudo pip3 install future`  
 `sudo pip3 install mechanize`  
