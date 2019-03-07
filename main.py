@@ -164,17 +164,17 @@ class Base(QMainWindow, Ui_Base):
                             self.lang_txt, self.pages_txt, self.tags_txt]
         self.info_keys = ["title", "authors", "series", "language", "pages", "keywords"]
 
-        self.ico_file_save = QIcon("stuff/file_save.png")
-        self.ico_files_merge = QIcon("stuff/files_merge.png")
-        self.ico_files_delete = QIcon("stuff/files_delete.png")
-        self.ico_file_exists = QIcon("stuff/file_exists.png")
-        self.ico_file_missing = QIcon("stuff/file_missing.png")
-        self.ico_file_edit = QIcon("stuff/file_edit.png")
-        self.ico_copy = QIcon("stuff/copy.png")
-        self.ico_delete = QIcon("stuff/delete.png")
-        self.ico_label_green = QIcon("stuff/label_green.png")
-        self.ico_view_books = QIcon("stuff/view_books.png")
-        self.ico_empty = QIcon("stuff/trans32.png")
+        self.ico_file_save = QIcon(":/stuff/file_save.png")
+        self.ico_files_merge = QIcon(":/stuff/files_merge.png")
+        self.ico_files_delete = QIcon(":/stuff/files_delete.png")
+        self.ico_file_exists = QIcon(":/stuff/file_exists.png")
+        self.ico_file_missing = QIcon(":/stuff/file_missing.png")
+        self.ico_file_edit = QIcon(":/stuff/file_edit.png")
+        self.ico_copy = QIcon(":/stuff/copy.png")
+        self.ico_delete = QIcon(":/stuff/delete.png")
+        self.ico_label_green = QIcon(":/stuff/label_green.png")
+        self.ico_view_books = QIcon(":/stuff/view_books.png")
+        self.ico_empty = QIcon(":/stuff/trans32.png")
 
         self.about = About(self)
         self.auto_info = AutoInfo(self)
@@ -1674,7 +1674,7 @@ class Base(QMainWindow, Ui_Base):
         if PYTHON2:
             return pickle.dumps(array)
         # noinspection PyArgumentList
-        return str(pickle.dumps(array.data()), encoding="unicode_escape")
+        return str(pickle.dumps(array.data()), encoding="unicode_escape")  # Python3
 
     @staticmethod
     def unpickle(key):
@@ -1687,14 +1687,14 @@ class Base(QMainWindow, Ui_Base):
             if PYTHON2:
                 try:
                     value = pickle.loads(str(app_config.get(key)))
-                except UnicodeEncodeError:  # settings from Python3
+                except UnicodeEncodeError:  # settings file from Python3
                     return
             else:
                 try:
                     # noinspection PyArgumentList
                     pickled = pickle.loads(bytes(app_config.get(key), encoding="latin"))
                     value = QByteArray(pickled)
-                except UnicodeDecodeError:  # settings from Python2
+                except UnicodeDecodeError:  # settings file from Python2
                     return
         except pickle.UnpicklingError as err:
             print(err)
@@ -1721,7 +1721,7 @@ class Base(QMainWindow, Ui_Base):
         :parameter check_text: The checkbox's text (checkbox is omitted if "")
         """
         popup = XMessageBox(self)
-        popup.setWindowIcon(QIcon("stuff/icon.png"))
+        popup.setWindowIcon(QIcon(":/stuff/icon.png"))
         if type(icon) == QMessageBox.Icon:
             popup.setIcon(icon)
         elif type(icon) == unicode:
@@ -1806,7 +1806,7 @@ class Base(QMainWindow, Ui_Base):
                      "the PayPal donation page?\n\nThis is a one-time message. "
                      "It will never appear again!").format(APP_NAME)
             popup = self.popup(_("A reminder..."), text,
-                               icon="stuff/paypal76.png", buttons=3)
+                               icon=":/stuff/paypal76.png", buttons=3)
 
             if popup.buttonRole(popup.clickedButton()) == QMessageBox.AcceptRole:
                 webbrowser.open("https://www.paypal.com/cgi-bin/webscr?"
@@ -1948,8 +1948,8 @@ class About(QDialog, Ui_About):
 
     def create_text(self):
         # color = self.palette().color(QPalette.WindowText).name()  # for links
-        splash = "stuff/logo.png"
-        paypal = "stuff/paypal.png"
+        splash = ":/stuff/logo.png"
+        paypal = ":/stuff/paypal.png"
         info = _("""<body style="font-size:10pt; font-weight:400; font-style:normal">
         <center>
           <table width="100%" border="0">
@@ -2204,7 +2204,7 @@ class Status(QWidget, Ui_Status):
         self.setupUi(self)
         self.base = parent
 
-        self.wait_anim = QMovie("stuff/wait.gif")
+        self.wait_anim = QMovie(":/stuff/wait.gif")
         self.anim_lbl.setMovie(self.wait_anim)
         self.anim_lbl.hide()
 
@@ -2216,7 +2216,7 @@ class Status(QWidget, Ui_Status):
             i.setChecked(True)
 
         sort_menu = QMenu(self)
-        ico_sort = QIcon("stuff/sort.png")
+        ico_sort = QIcon(":/stuff/sort.png")
         group = QActionGroup(self)
 
         action = QAction(_("Date"), sort_menu)
@@ -2453,7 +2453,7 @@ class KoHighlights(QApplication):
         self.parser.add_argument("-v", "--version", action="version",
                                  version="%(prog)s v{}".format(__version__))
 
-        if not getattr(sys, 'frozen', False):
+        if not getattr(sys, 'frozen',False):
             self.parse_args()
 
         # # hide console window, but only under Windows and only if app is frozen
