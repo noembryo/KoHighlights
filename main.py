@@ -1629,10 +1629,10 @@ class Base(QMainWindow, Ui_Base):
     def settings_save(self):
         """ Saves the jason based configuration settings
         """
-        config = {"geometry": self.serialize(self.saveGeometry()),
-                  "state": self.serialize(self.saveState()),
-                  "splitter": self.serialize(self.splitter.saveState()),
-                  "about_geometry": self.serialize(self.about.saveGeometry()),
+        config = {"geometry": self.pickle(self.saveGeometry()),
+                  "state": self.pickle(self.saveState()),
+                  "splitter": self.pickle(self.splitter.saveState()),
+                  "about_geometry": self.pickle(self.about.saveGeometry()),
                   "col_sort_asc": self.col_sort_asc, "col_sort": self.col_sort,
                   "col_sort_asc_h": self.col_sort_asc_h, "col_sort_h": self.col_sort_h,
                   "highlight_width": self.highlight_width,
@@ -1665,7 +1665,7 @@ class Base(QMainWindow, Ui_Base):
             print("On saving settings:", error)
 
     @staticmethod
-    def serialize(array):
+    def pickle(array):
         """ Serialize some binary settings
 
         :type array: QByteArray
@@ -2141,13 +2141,11 @@ class ToolBar(QWidget, Ui_ToolBar):
     def on_clear_btn_clicked(self):
         """ The `Clear List` button is pressed
         """
-        # self.base.file_table.setRowCount(0)
-        if self.base.current_view == 0:  # books view
-            self.base.file_table.model().removeRows(0, self.base.file_table.rowCount())
-        elif self.base.current_view == 1:  # highlights view
+        if self.base.current_view == 1:  # highlights view
             (self.base.highlight_table.model()
              .removeRows(0, self.base.highlight_table.rowCount()))
-            self.base.file_table.model().removeRows(0, self.base.file_table.rowCount())
+        self.base.loaded_paths.clear()
+        self.base.file_table.model().removeRows(0, self.base.file_table.rowCount())
 
     def change_view(self, idx):
         if idx == 0:  # books view
@@ -2453,7 +2451,7 @@ class KoHighlights(QApplication):
         self.parser.add_argument("-v", "--version", action="version",
                                  version="%(prog)s v{}".format(__version__))
 
-        if not getattr(sys, 'frozen',False):
+        if not getattr(sys, 'frozen', False):
             self.parse_args()
 
         # # hide console window, but only under Windows and only if app is frozen
