@@ -44,3 +44,46 @@ except IOError:  # on first run
 PAGE, HIGHLIGHT_TEXT, DATE, PAGE_ID, COMMENT = range(5)  # highlights_list item data
 TITLE, AUTHOR, TYPE, PERCENT, MODIFIED, PATH = range(6)  # highlight_table columns
 HIGHLIGHT_H, COMMENT_H, DATE_H, TITLE_H, PAGE_H, AUTHOR_H = range(6)  # -//- item data
+MANY_TEXT, ONE_TEXT, MANY_HTML, ONE_HTML, MERGED_HIGH = range(5)  # save actions
+
+HTML_HEAD = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {background-color: white;}
+        .book-block {
+            border: 2px solid rgba(20, 20, 20, 0.5);
+            padding: 20px;
+            padding-top: 5px;
+            background-color: #cdcdcd;
+            border-radius: 25px;
+        }
+        .high-block {
+            border: 2px solid rgba(115, 173, 33, 0.5);
+            padding: 20px;
+            background-color: #ebebeb;
+            border-radius: 20px;
+        }
+    </style>
+    <title>KoHighlights</title>
+</head>
+<body>
+"""
+BOOK_BLOCK = """
+<div class="book-block">
+
+<div align="center">
+    <h2 style="display: inline;">%(title)s</h2><br/>
+    <h3 style="display: inline;">%(authors)s</h3>
+</div>
+"""
+HIGH_BLOCK = """
+<div class="high-block">
+    <p style="text-align:left;float:left;padding:1px; margin:0;">%(page)s</p>
+    <p style="text-align:right;float:right;padding:1px; margin:0;">%(date)s</p>
+    <hr style="clear:both;"/>
+    <p>%(highlight)s</p>
+    <p>%(comment)s</p>
+</div>
+"""

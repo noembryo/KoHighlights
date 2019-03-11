@@ -1,11 +1,13 @@
 # coding=utf-8
 from __future__ import absolute_import, division, print_function, unicode_literals
+
+
 from boot_config import *
 import os, sys, re
-import codecs
 import gzip
 import json
 import shutil
+import codecs
 import webbrowser
 import subprocess
 import argparse
@@ -48,33 +50,33 @@ from pprint import pprint
 
 
 __author__ = "noEmbryo"
-__version__ = "0.8.0.0"
+__version__ = "0.9.0.0"
 
 
 def _(text):
     return text
 
 
-# if sys.platform.lower().startswith("win"):
-#     import ctypes
-#
-#     def hide_console():
-#         """ Hides the console window in GUI mode. Necessary for frozen application,
-#         because this application support both, command line processing AND GUI mode
-#         and therefor cannot be run via pythonw.exe.
-#         """
-#
-#         win_handles = ctypes.windll.kernel32.GetConsoleWindow()
-#         if win_handles != 0:
-#             ctypes.windll.user32.ShowWindow(win_handles, 0)
-#             # if you wanted to close the handles...
-#             # ctypes.windll.kernel32.CloseHandle(win_handles)
-#
-#     def show_console():
-#         """ UnHides console window"""
-#         win_handles = ctypes.windll.kernel32.GetConsoleWindow()
-#         if win_handles != 0:
-#             ctypes.windll.user32.ShowWindow(win_handles, 1)
+if sys.platform.lower().startswith("win"):
+    import ctypes
+
+    def hide_console():
+        """ Hides the console window in GUI mode. Necessary for frozen application,
+        because this application support both, command line processing AND GUI mode
+        and therefor cannot be run via pythonw.exe.
+        """
+
+        win_handles = ctypes.windll.kernel32.GetConsoleWindow()
+        if win_handles != 0:
+            ctypes.windll.user32.ShowWindow(win_handles, 0)
+            # if you wanted to close the handles...
+            # ctypes.windll.kernel32.CloseHandle(win_handles)
+
+    def show_console():
+        """ UnHides console window"""
+        win_handles = ctypes.windll.kernel32.GetConsoleWindow()
+        if win_handles != 0:
+            ctypes.windll.user32.ShowWindow(win_handles, 1)
 
 
 def decode_data(path):
@@ -277,7 +279,7 @@ class Base(QMainWindow, Ui_Base):
                 self.toolbar.on_select_btn_clicked()
                 return True
             if key == Qt.Key_S:  # ctrl+S
-                self.save_actions(0)
+                self.save_actions(MANY_TEXT)
                 return True
             if key == Qt.Key_O:  # ctrl+O
                 self.toolbar.on_info_btn_clicked()
@@ -353,12 +355,28 @@ class Base(QMainWindow, Ui_Base):
             self.toolbar.open_btn.setEnabled(False)
 
         self.highlights_list.clear()
+        self.populate_high_list(data)
+        self.populate_book_info(data, row)
 
+        description_state = False
+        if "doc_props" in self.sel_book_data and "description" in data["doc_props"]:
+            description_state = bool(data["doc_props"]["description"])
+        self.description_btn.setEnabled(description_state)
+
+        # self.highlights_list.sortItems()  # using XListWidgetItem for custom sorting
+        self.highlights_list.setCurrentRow(0) if reset else None
+
+    def populate_high_list(self, data):
+        """ Populates the Highlights list of `Book` view
+
+        :type data: dict
+        :param data: The item's data
+        """
+        highlights = []
         extra = (" " if self.status.act_page.isChecked() and
                  self.status.act_date.isChecked() else "")
         line_break = (":\n" if self.status.act_page.isChecked() or
                       self.status.act_date.isChecked() else "")
-        highlights = []
         for page in data["highlight"]:
             for page_id in data["highlight"][page]:
                 try:
@@ -379,7 +397,6 @@ class Base(QMainWindow, Ui_Base):
                 except KeyError:  # blank highlight
                     continue
                 highlights.append((page, text, date, page_id, comment))
-
         for item in sorted(highlights, key=self.sort_high4view):
             page, text, date, page_id, comment = item
             page_text = "Page " + str(page) if self.status.act_page.isChecked() else ""
@@ -388,28 +405,19 @@ class Base(QMainWindow, Ui_Base):
             line_break2 = "\n" if self.status.act_text.isChecked() and comment else ""
             high_comment = (line_break2 + "● " + comment
                             if self.status.act_comment.isChecked() and comment else "")
-            highlight = (page_text + extra + date_text + line_break +
-                         high_text + high_comment + "\n")
+            highlight = (page_text + extra + date_text +
+                         line_break + high_text + high_comment + "\n")
 
             highlight_item = QListWidgetItem(highlight, self.highlights_list)
             highlight_item.setData(Qt.UserRole, item)
-
-        description_state = False
-        if "doc_props" in self.sel_book_data and "description" in data["doc_props"]:
-            description_state = bool(data["doc_props"]["description"])
-        self.description_btn.setEnabled(description_state)
-
-        self.populate_book_info(data, row)
-        # self.highlights_list.sortItems()  # using XListWidgetItem for custom sorting
-        self.highlights_list.setCurrentRow(0) if reset else None
 
     def populate_book_info(self, data, row):
         """ Fill in the `Book Info` fields
 
         :type data: dict
-        :param data: The items data
+        :param data: The item's data
         :type row: int
-        :param row: The items row number
+        :param row: The item's row number
         """
         for key, field in zip(self.info_keys, self.info_fields):
             try:
@@ -470,7 +478,13 @@ class Base(QMainWindow, Ui_Base):
         else:  # only one item selected
             action = QAction(_("Save to text file"), menu)
             action.triggered.connect(self.on_save_actions)
-            action.setData(0)
+            action.setData(MANY_TEXT)
+            action.setIcon(self.ico_file_save)
+            menu.addAction(action)
+
+            action = QAction(_("Save to html file"), menu)
+            action.triggered.connect(self.on_save_actions)
+            action.setData(MANY_HTML)
             action.setIcon(self.ico_file_save)
             menu.addAction(action)
 
@@ -551,6 +565,8 @@ class Base(QMainWindow, Ui_Base):
         """
         if column == self.col_sort:
             self.col_sort_asc = not self.col_sort_asc
+        else:
+            self.col_sort_asc = True
         self.col_sort = column
 
     @Slot(bool)
@@ -954,11 +970,6 @@ class Base(QMainWindow, Ui_Base):
         action.setIcon(self.ico_file_save)
         menu.addAction(action)
 
-        # delete_menu = self.delete_menu()
-        # delete_menu.setIcon(self.ico_files_delete)
-        # delete_menu.setTitle(_('Delete\tDel'))
-        # menu.addMenu(delete_menu)
-
         # noinspection PyArgumentList
         menu.exec_(QCursor.pos())
 
@@ -1051,6 +1062,8 @@ class Base(QMainWindow, Ui_Base):
         """
         if column == self.col_sort_h:
             self.col_sort_asc_h = not self.col_sort_asc_h
+        else:
+            self.col_sort_asc_h = True
         self.col_sort_h = column
 
     # noinspection PyUnusedLocal
@@ -1332,7 +1345,7 @@ class Base(QMainWindow, Ui_Base):
         """
         if not self.sel_indexes and idx in [0, 1]:
             return
-
+        text = ""
         if idx == 0:
             text = _("This will delete the selected books' information\n"
                      "but will keep the equivalent books.")
@@ -1341,40 +1354,48 @@ class Base(QMainWindow, Ui_Base):
         elif idx == 2:
             text = _("This will delete all the books' information "
                      "that refers to missing books.")
-        else:
-            text = ""
         popup = self.popup(_("Warning!"), text, buttons=2)
         if popup.buttonRole(popup.clickedButton()) == QMessageBox.RejectRole:
             return
 
-        if idx == 0:  # selected books' info
-            for index in sorted(self.sel_indexes)[::-1]:
-                row = index.row()
-                path = self.get_sdr_folder(row)
-                shutil.rmtree(path) if isdir(path) else os.remove(path)
-                self.remove_book_row(row)
-        elif idx == 1:  # selected books
-            for index in sorted(self.sel_indexes)[::-1]:
-                row = index.row()
-                path = self.get_sdr_folder(row)
-                shutil.rmtree(path) if isdir(path) else os.remove(path)
+        if idx == 0:  # delete selected books' info
+            self.remove_sel_books()
+        elif idx == 1:  # delete selected books
+            self.remove_sel_books(delete=True)
+        elif idx == 2:  # delete all missing books info
+            self.clear_missing_info()
+
+    def remove_sel_books(self, delete=False):
+        """ Remove the selected book entries from the file_table
+
+        :type delete: bool
+        :param delete: Delete the book file too
+        """
+        for index in sorted(self.sel_indexes)[::-1]:
+            row = index.row()
+            path = self.get_sdr_folder(row)
+            shutil.rmtree(path) if isdir(path) else os.remove(path)
+            if delete:  # delete the book file too
                 try:
                     book_path = self.file_table.item(row, TYPE).data(Qt.UserRole)[0]
                     os.remove(book_path) if isfile(book_path) else None
                     self.remove_book_row(row)
                 except AttributeError:  # empty entry
-                    self.remove_book_row(row)
-                    continue
-        elif idx == 2:  # all missing books info
-            for row in range(self.file_table.rowCount())[::-1]:
-                try:
-                    book_exists = self.file_table.item(row, TYPE).data(Qt.UserRole)[1]
-                except AttributeError:  # empty entry
-                    continue
-                if not book_exists:
-                    path = self.get_sdr_folder(row)
-                    shutil.rmtree(path) if isdir(path) else os.remove(path)
-                    self.remove_book_row(row)
+                    pass
+            self.remove_book_row(row)  # remove file_table entry
+
+    def clear_missing_info(self):
+        """ Delete the book info of all entries that have no book file
+        """
+        for row in range(self.file_table.rowCount())[::-1]:
+            try:
+                book_exists = self.file_table.item(row, TYPE).data(Qt.UserRole)[1]
+            except AttributeError:  # empty entry
+                continue
+            if not book_exists:
+                path = self.get_sdr_folder(row)
+                shutil.rmtree(path) if isdir(path) else os.remove(path)
+                self.remove_book_row(row)
 
     def remove_book_row(self, row):
         """ Remove a book entry from the file table
@@ -1402,8 +1423,11 @@ class Base(QMainWindow, Ui_Base):
         """ Creates the `Save Files` button menu
         """
         menu = QMenu(self)
-        for idx, item in enumerate([_("to individual text files"),
-                                    _("combined to one text file")]):
+        for idx, item in enumerate([_("To individual text files"),
+                                    _("Combined to one text file"),
+                                    _("To individual html files"),
+                                    _("Combined to one html file")
+                                    ]):
             action = QAction(item, menu)
             action.triggered.connect(self.on_save_actions)
             action.setData(idx)
@@ -1423,118 +1447,41 @@ class Base(QMainWindow, Ui_Base):
         :type idx: int
         :param idx: The action type
         """
-        # save from the highlight_table
-        if idx == 2:
-            if not self.sel_high_view:
-                return
-            filename = QFileDialog.getSaveFileName(self, "Save to Text file",
-                                                   self.last_dir, "text files (*.txt);;"
-                                                                  "all files (*.*)")[0]
-            if filename:
-                self.last_dir = dirname(filename)
-            else:
-                return
-            text = ""
-            for i in sorted(self.sel_high_view):
-                row = i.row()
-                data = self.highlight_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)
-                comment = "\n● " + data["comment"] if data["comment"] else ""
-                txt = ("{} [{}]\nPage {} [{}]\n{}{}"
-                       .format(data["title"], data["authors"], data["page"],
-                               data["date"], data["text"], comment))
-                text += txt + "\n\n"
-            with codecs.open(filename, "w+", encoding="utf-8") as text_file:
-                    text_file.write(text.replace("\n", os.linesep))
-            return
-
-        # save from the file_table
-        title_counter = 0
         saved = 0
         if not self.sel_indexes:
             return
-        extra = (" " if self.status.act_page.isChecked() and
-                 self.status.act_date.isChecked() else "")
-        line_break = (":" + os.linesep if self.status.act_page.isChecked() or
-                      self.status.act_date.isChecked() else "")
 
-        if idx == 0:  # save to different text files
-            path = QFileDialog.getExistingDirectory(self,
-                                                    _("Select destination folder for the "
-                                                      "saved file(s)"), self.last_dir,
-                                                    QFileDialog.ShowDirsOnly)
-            if path:
-                self.last_dir = path
-                self.status.animation("start")
+        if idx in [MANY_TEXT, MANY_HTML]:  # Save from the file_table to different files
+            text = _("Select destination folder for the saved file(s)")
+            dir_path = QFileDialog.getExistingDirectory(self, text, self.last_dir,
+                                                        QFileDialog.ShowDirsOnly)
+            if dir_path:
+                self.last_dir = dir_path
             else:
                 return
-            for i in self.sel_indexes:
-                row = i.row()
-                data = self.file_table.item(row, 0).data(Qt.UserRole)
-                highlights = []
-                for page in data["highlight"]:
-                    for page_id in data["highlight"][page]:
-                        highlights.append(self.analyze_high(data, page, page_id))
-                if not highlights:  # no highlights
-                    continue
-                title = self.file_table.item(row, 0).data(0)
-                if title == _("NO TITLE FOUND"):
-                    title += str(title_counter)
-                    title_counter += 1
-                authors = self.file_table.item(row, 1).data(0)
-                if authors in ["OLD TYPE FILE", "NO AUTHOR FOUND"]:
-                    authors = ""
-                name = title
-                if authors:
-                    name = "{} - {}".format(authors, title)
-                filename = join(path, sanitize_filename(name) + ".txt")
-                with codecs.open(filename, "w+", encoding="utf-8") as text_file:
-                    for highlight in sorted(highlights, key=self.sort_high4write):
-                        date_text, high_comment, high_text, page_text = highlight
-                        highlight = (page_text + extra + date_text + line_break +
-                                     high_text + high_comment)
-                        highlight = highlight + 2 * os.linesep
-                        text_file.write(highlight)
-                    saved += 1
-
-        elif idx == 1:  # save combined text to one file
-            filename = QFileDialog.getSaveFileName(self, "Save to Text file",
-                                                   self.last_dir, "text files (*.txt);;"
-                                                                  "all files (*.*)")[0]
+            saved = self.save_multi_files(dir_path, idx == MANY_HTML)
+        elif idx == ONE_TEXT:  # Save from the file_table, combined to one text file
+            filename = QFileDialog.getSaveFileName(self, _("Save to Text file"),
+                                                   self.last_dir,
+                                                   _("Text files") + " (*.txt)")[0]
             if filename:
                 filename = filename
                 self.last_dir = dirname(filename)
             else:
                 return
-            blocks = []
-            for i in self.sel_indexes:
-                row = i.row()
-                data = self.file_table.item(row, 0).data(Qt.UserRole)
-                highlights = []
-                for page in data["highlight"]:
-                    for page_id in data["highlight"][page]:
-                        highlights.append(self.analyze_high(data, page, page_id))
-                highlights = [i[3] + extra + i[0] + line_break + i[2] + i[1]
-                              for i in sorted(highlights, key=self.sort_high4write)]
-                if not highlights:  # no highlights
-                    continue
-                title = self.file_table.item(row, 0).data(0)
-                if title == _("NO TITLE FOUND"):
-                    title += str(title_counter)
-                    title_counter += 1
-                authors = self.file_table.item(row, 1).data(0)
-                if authors in ["OLD TYPE FILE", "NO AUTHOR FOUND"]:
-                    authors = ""
-                name = title
-                if authors:
-                    name = "{} - {}".format(authors, title)
-                # noinspection PyUnresolvedReferences
-                blocks.append((name, (2 * os.linesep).join(highlights)))
-                saved += 1
-            line = "-" * 80
-            with codecs.open(filename, "w+", encoding="utf-8") as text_file:
-                for block in blocks:
-                    text_file.write("{0}{3}{1}{3}{0}{3}{2}{3}{3}"
-                                    .format(line, block[0], block[1], os.linesep))
+            saved = self.save_merged_text(filename)
+        elif idx == ONE_HTML:  # Save from the file_table, combined to one html file
+            filename = QFileDialog.getSaveFileName(self, _("Save to Html file"),
+                                                   self.last_dir,
+                                                   _("Html files") + " (*.html)")[0]
+            if filename:
+                filename = filename
+                self.last_dir = dirname(filename)
+            else:
+                return
+            saved = self.save_merged_html(filename)
+        elif idx == MERGED_HIGH:  # Save from the highlight_table
+            return self.save_sel_highlights()  # no popup
 
         self.status.animation("stop")
         all_files = len(self.file_table.selectionModel().selectedRows())
@@ -1543,7 +1490,175 @@ class Base(QMainWindow, Ui_Base):
                    .format(saved, all_files, all_files - saved),
                    icon=QMessageBox.Information)
 
-    def analyze_high(self, data, page, page_id):
+    def save_multi_files(self, dir_path, html=False):
+        """ Save each selected book's highlights to a different file
+
+        :type dir_path: str|unicode
+        :param dir_path: The directory where the files will be saved
+        """
+        self.status.animation("start")
+        saved = 0
+        title_counter = 0
+        extra = (" " if self.status.act_page.isChecked() and
+                 self.status.act_date.isChecked() else "")
+        line_break = (":" + os.linesep if self.status.act_page.isChecked() or
+                      self.status.act_date.isChecked() else "")
+        for i in self.sel_indexes:
+            row = i.row()
+            data = self.file_table.item(row, 0).data(Qt.UserRole)
+            highlights = []
+            for page in data["highlight"]:
+                for page_id in data["highlight"][page]:
+                    highlights.append(self.analyze_high(data, page, page_id, html))
+            if not highlights:  # no highlights
+                continue
+            title = self.file_table.item(row, 0).data(0)
+            if title == _("NO TITLE FOUND"):
+                title += str(title_counter)
+                title_counter += 1
+            authors = self.file_table.item(row, 1).data(0)
+            if authors in ["OLD TYPE FILE", "NO AUTHOR FOUND"]:
+                authors = ""
+            name = title
+            if authors:
+                name = "{} - {}".format(authors, title)
+            if not html:
+                ext = ".txt"
+                text = ""
+            else:
+                ext = ".html"
+                text = HTML_HEAD + BOOK_BLOCK % {"title": title, "authors": authors}
+            filename = join(dir_path, sanitize_filename(name) + ext)
+            with codecs.open(filename, "w+", encoding="utf-8") as text_file:
+                for highlight in sorted(highlights, key=self.sort_high4write):
+                    date_text, high_comment, high_text, page_text = highlight
+                    if not html:
+                        text += (page_text + extra + date_text + line_break +
+                                 high_text + high_comment)
+                        text += 2 * os.linesep
+                    else:
+                        text += HIGH_BLOCK % {"page": page_text, "date": date_text,
+                                              "highlight": high_text,
+                                              "comment": high_comment}
+                if html:
+                    text += "\n</div>\n</body>\n</html>"
+
+                text_file.write(text)
+                saved += 1
+        return saved
+
+    def save_merged_text(self, filename):
+        """ Save the selected book's highlights to a single text file
+
+        :type filename: str|unicode
+        :param filename: The name of the text file with the highlights
+        """
+        self.status.animation("start")
+        saved = 0
+        title_counter = 0
+        extra = (" " if self.status.act_page.isChecked() and
+                 self.status.act_date.isChecked() else "")
+        line_break = (":" + os.linesep if self.status.act_page.isChecked() or
+                      self.status.act_date.isChecked() else "")
+        blocks = []
+        for i in sorted(self.sel_indexes):
+            row = i.row()
+            data = self.file_table.item(row, 0).data(Qt.UserRole)
+            highlights = []
+            for page in data["highlight"]:
+                for page_id in data["highlight"][page]:
+                    highlights.append(self.analyze_high(data, page, page_id, html=False))
+            highlights = [i[3] + extra + i[0] + line_break + i[2] + i[1] for i in
+                          sorted(highlights, key=self.sort_high4write)]
+            if not highlights:  # no highlights
+                continue
+            title = self.file_table.item(row, 0).data(0)
+            if title == _("NO TITLE FOUND"):
+                title += str(title_counter)
+                title_counter += 1
+            authors = self.file_table.item(row, 1).data(0)
+            if authors in ["OLD TYPE FILE", "NO AUTHOR FOUND"]:
+                authors = ""
+            name = title
+            if authors:
+                name = "{} - {}".format(authors, title)
+            # noinspection PyUnresolvedReferences
+            blocks.append((name, (2 * os.linesep).join(highlights)))
+            saved += 1
+        line = "-" * 80
+        with codecs.open(filename, "w+", encoding="utf-8") as text_file:
+            for block in blocks:
+                text_file.write("{0}{3}{1}{3}{0}{3}{2}{3}{3}"
+                                .format(line, block[0], block[1], os.linesep))
+        return saved
+
+    def save_merged_html(self, filename):
+        """ Save the selected book's highlights to a single html file
+
+        :type filename: str|unicode
+        :param filename: The name of the html file with the highlights
+        """
+        self.status.animation("start")
+        saved = 0
+        title_counter = 0
+        text = HTML_HEAD
+        for i in sorted(self.sel_indexes):
+            row = i.row()
+            data = self.file_table.item(row, 0).data(Qt.UserRole)
+
+            title = self.file_table.item(row, 0).data(0)
+            if title == _("NO TITLE FOUND"):
+                title += str(title_counter)
+                title_counter += 1
+            authors = self.file_table.item(row, 1).data(0)
+            if authors in ["OLD TYPE FILE", "NO AUTHOR FOUND"]:
+                authors = ""
+
+            highlights = []
+            for page in data["highlight"]:
+                for page_id in data["highlight"][page]:
+                    highlights.append(self.analyze_high(data, page, page_id, html=True))
+            if not highlights:  # no highlights
+                continue
+
+            text += BOOK_BLOCK % {"title": title, "authors": authors}
+            for high in sorted(highlights, key=self.sort_high4write):
+                date_text, high_comment, high_text, page_text = high
+                text += HIGH_BLOCK % {"page": page_text, "date": date_text,
+                                      "highlight": high_text, "comment": high_comment}
+            text += "</div>\n"
+            saved += 1
+        text += "\n</body>\n</html>"
+
+        with codecs.open(filename, "w+", encoding="utf-8") as text_file:
+            text_file.write(text)
+        return saved
+
+    def save_sel_highlights(self):
+        """ Save the selected highlights to a text file (from highlight_table)
+        """
+        if not self.sel_high_view:
+            return
+        filename = QFileDialog.getSaveFileName(self, "Save to Text file", self.last_dir,
+                                               "text files (*.txt);;"
+                                               "all files (*.*)")[0]
+        if filename:
+            self.last_dir = dirname(filename)
+        else:
+            return
+        text = ""
+        for i in sorted(self.sel_high_view):
+            row = i.row()
+            data = self.highlight_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)
+            comment = "\n● " + data["comment"] if data["comment"] else ""
+            txt = ("{} [{}]\nPage {} [{}]\n{}{}".format(data["title"], data["authors"],
+                                                        data["page"], data["date"],
+                                                        data["text"], comment))
+            text += txt + "\n\n"
+        with codecs.open(filename, "w+", encoding="utf-8") as text_file:
+            text_file.write(text.replace("\n", os.linesep))
+
+    def analyze_high(self, data, page, page_id, html):
         """ Get the highlight's info (text, comment, date and page)
 
         :type data: dict
@@ -1552,9 +1667,11 @@ class Base(QMainWindow, Ui_Base):
         :param page The page where the highlight starts
         :type page_id: int
         :param page_id The count of this page's highlight
+        :type html: bool
+        :param html The output is for html
         """
         date = data["highlight"][page][page_id]["datetime"]
-        text = data["highlight"][page][page_id]["text"]
+        high_text = data["highlight"][page][page_id]["text"]
         pos_0 = data["highlight"][page][page_id]["pos0"]
         pos_1 = data["highlight"][page][page_id]["pos1"]
         comment = ""
@@ -1570,14 +1687,15 @@ class Base(QMainWindow, Ui_Base):
                     break
                 book_text = re.sub(r"Page \d+ (.+?) @ \d+-\d+-\d+ \d+:\d+:\d+",
                                    r"\1", book_text, 1, re.DOTALL | re.MULTILINE)
-                if text != book_text:
+                if high_text != book_text:
                     comment = book_text
                 break
         page_text = "Page " + str(page) if self.status.act_page.isChecked() else ""
         date_text = "[" + date + "]" if self.status.act_date.isChecked() else ""
-        high_text = (text.replace("\n", os.linesep)
+        linesep = "<br/>" if html else os.linesep
+        high_text = (high_text.replace("\\\n", linesep)
                      if self.status.act_text.isChecked() else "")
-        comment = comment.replace("\n", os.linesep)
+        comment = comment.replace("\\\n", linesep)
         line_break2 = (os.linesep if self.status.act_text.isChecked() and comment else "")
         high_comment = (line_break2 + "● " + comment
                         if self.status.act_comment.isChecked() and comment else "")
@@ -2068,9 +2186,9 @@ class ToolBar(QWidget, Ui_ToolBar):
         """ The `Save Selected` button is pressed
         """
         if self.base.current_view == 0:  # books view
-            self.base.save_actions(0)
+            self.base.save_actions(MANY_TEXT)
         elif self.base.current_view == 1:  # highlights view
-            self.base.save_actions(2)
+            self.base.save_actions(MERGED_HIGH)
 
     @Slot()
     def on_open_btn_clicked(self):
@@ -2443,29 +2561,32 @@ class KoHighlights(QApplication):
             pass
 
         self.parser = argparse.ArgumentParser(prog=APP_NAME,
-                                              description="{} v{} A KoReader's highlights"
-                                                          " converter"
+                                              description="{} v{} - A KoReader's "
+                                                          "highlights converter"
                                               .format(APP_NAME, __version__),
-                                              epilog="Thanks for using {}!"
-                                              .format(APP_NAME))
+                                              epilog="Thanks for using %s!" % APP_NAME)
         self.parser.add_argument("-v", "--version", action="version",
                                  version="%(prog)s v{}".format(__version__))
 
-        if not getattr(sys, 'frozen', False):
+        if getattr(sys, 'frozen', False):
+            if not sys.platform.lower().startswith("win"):
+                self.parse_args()
+        else:
             self.parse_args()
 
         # # hide console window, but only under Windows and only if app is frozen
-        # if sys.platform.lower().startswith("win"):
-        #     if getattr(sys, 'frozen', False):
-        #         hide_console()
-        # self.parse_args()
+        # on_windows = sys.platform.lower().startswith("win")
+        # compiled = getattr(sys, 'frozen', False)
+        # if on_windows and compiled:
+        #     hide_console()
+        #     self.parse_args()
+        # else:
+        #     self.parse_args()
 
         self.base = Base()
         self.exec_()
 
-        # if sys.platform.lower().startswith('win'):
-        #         if getattr(sys, 'frozen', False):
-        #             show_console()
+        # show_console() if on_windows and compiled else None
 
     # ___ ___________________ CLI STUFF _____________________________
 
@@ -2476,7 +2597,7 @@ class KoHighlights(QApplication):
                                  help="The paths to input files or folder")
 
         self.parser.add_argument("-x", "--use_cli", required="-o" in sys.argv,
-                                 help="Use the command line interface only (close the "
+                                 help="Use the command line interface only (exit the "
                                       "app after finishing)", action="store_true",
                                  default=False)
         # self.parser.add_argument("-i", "--input", required="-x" in sys.argv,
@@ -2486,8 +2607,10 @@ class KoHighlights(QApplication):
                                  help="Sort highlights by page, otherwise sort by date")
         self.parser.add_argument("-m", "--merge", action="store_true", default=False,
                                  help="Merge the highlights of all input books in a "
-                                      "single text file, otherwise save every book's "
-                                      "highlights to a different text file")
+                                      "single file, otherwise save every book's "
+                                      "highlights to a different file")
+        self.parser.add_argument("-f", "--html", action="store_true", default=False,
+                                 help="Saves highlights in html format instead of txt")
 
         self.parser.add_argument("-np", "--no_page", action="store_true", default=False,
                                  help="Exclude the page number of the highlight")
@@ -2507,13 +2630,13 @@ class KoHighlights(QApplication):
         # args, paths = self.parser.parse_known_args()
         args = self.parser.parse_args()
         if args.use_cli:
-            self.cli_save(args)
+            self.cli_save_highlights(args)
             sys.exit(0)  # quit the app if cli execution
 
         # if args.paths:
         #     self.on_file_table_fileDropped(args.paths)
 
-    def cli_save(self, args):
+    def cli_save_highlights(self, args):
         """ Saves highlights using the command line interface
 
         :type args: argparse.Namespace
@@ -2523,74 +2646,213 @@ class KoHighlights(QApplication):
         files = self.get_lua_files(args.paths)
         if not files:
             return
-        title_counter = [0]
-        saved = 0
-        extra = " " if not args.no_page and not args.no_date else ""
-        line_break = ":" + os.linesep if not args.no_page or not args.no_date else ""
         path = abspath(args.output)
-        if not args.merge:  # save to different text files
+        if not args.merge:  # save to different files
             if not isdir(path):
                 self.parser.error("The output path (-o/--output) must point "
                                   "to an existing directory!")
-            for file_ in files:
-                data = decode_data(file_)
-                highlights = []
-                for page in data["highlight"]:
-                    for page_id in data["highlight"][page]:
-                        highlights.append(self.cli_analyze_high(data, page,
-                                                                page_id, args))
-                if not highlights:  # no highlights
-                    continue
-                name = self.get_name(data, file_, title_counter)
-                filename = join(path, sanitize_filename(name) + ".txt")
-                with codecs.open(filename, "w+", encoding="utf-8") as text_file:
-                    # noinspection PyTypeChecker
-                    for highlight in sorted(highlights,
-                                            key=partial(self.cli_sort_high, args)):
-                        date_text, high_comment, high_text, page_text = highlight
-                        highlight = (page_text + extra + date_text + line_break +
-                                     high_text + high_comment)
-                        highlight = highlight + 2 * os.linesep
-                        text_file.write(highlight)
-                    sys.stdout.write("Created {}\n\n".format(basename(filename)))
-                    saved += 1
-        else:  # save combined text to one text file
+            saved = self.cli_save_multi_files(args, files)
+        else:  # save combined highlights to one file
             if isdir(path):
-                self.parser.error("The output path (-o/--output) must be a .txt filename "
-                                  "not a directory!")
-            blocks = []
-            for file_ in files:
-                data = decode_data(file_)
-                highlights = []
-                for page in data["highlight"]:
-                    for page_id in data["highlight"][page]:
-                        highlights.append(self.cli_analyze_high(data, page,
-                                                                page_id, args))
-                # noinspection PyTypeChecker
-                highlights = [i[3] + extra + i[0] + line_break + i[2] + i[1]
-                              for i in sorted(highlights,
-                                              key=partial(self.cli_sort_high, args))]
-                if not highlights:  # no highlights
-                    continue
-                name = self.get_name(data, file_, title_counter)
-                # noinspection PyUnresolvedReferences
-                blocks.append((name, (2 * os.linesep).join(highlights)))
-                saved += 1
-            line = "-" * 80
-            path = sanitize_filename(path)
-            name, ext = splitext(path)
-            if ext.lower() != ".txt":
-                path = name + ".txt"
-            with codecs.open(path, "w+", encoding="utf-8") as text_file:
-                for block in blocks:
-                    text_file.write("{0}{3}{1}{3}{0}{3}{2}{3}{3}"
-                                    .format(line, block[0], block[1], os.linesep))
-                sys.stdout.write("Created {}\n\n".format(path))
+                ext = "an .html" if args.html else "a .txt"
+                self.parser.error("The output path (-o/--output) must be {} filename "
+                                  "not a directory!".format(ext))
+                return
+            if args.html:
+                saved = self.cli_save_merged_html(args, files)
+            else:
+                saved = self.cli_save_merged_text(args, files)
 
         all_files = len(files)
-        sys.stdout.write(_("\n{} texts were saved from the {} processed.\n"
+        sys.stdout.write(_("\n{} files were saved from the {} processed.\n"
                            "{} files with no highlights.\n").format(saved, all_files,
                                                                     all_files - saved))
+
+    def cli_save_multi_files(self, args, files):
+        """ Save each selected book's highlights to a different file
+
+        :type args: argparse.Namespace
+        :param args: The parsed cli args
+        :type files: list
+        :param files: A list with the metadata files to get converted
+        """
+        saved = 0
+        title_counter = 0
+        extra = " " if not args.no_page and not args.no_date else ""
+        line_break = ":" + os.linesep if not args.no_page or not args.no_date else ""
+        path = abspath(args.output)
+        for file_ in files:
+            data = decode_data(file_)
+            highlights = []
+            for page in data["highlight"]:
+                for page_id in data["highlight"][page]:
+                    highlights.append(self.cli_analyze_high(data, page, page_id, args))
+            if not highlights:  # no highlights
+                continue
+            authors = ""
+            try:
+                title = data["stats"]["title"]
+                authors = data["stats"]["authors"]
+            except KeyError:  # older type file
+                title = splitext(basename(file_))[0]
+                try:
+                    name = title.split("#] ")[1]
+                    title = splitext(name)[0]
+                except IndexError:  # no "#] " in filename
+                    pass
+            if not title:
+                try:
+                    name = file_.split("#] ")[1]
+                    title = splitext(name)[0]
+                except IndexError:  # no "#] " in filename
+                    title = _("NO TITLE FOUND") + str(title_counter)
+                    title_counter += 1
+            name = title
+            if authors:
+                name = "{} - {}".format(authors, title)
+            if not args.html:
+                ext = ".txt"
+                text = ""
+            else:
+                ext = ".html"
+                text = HTML_HEAD + BOOK_BLOCK % {"title": title, "authors": authors}
+            filename = join(path, sanitize_filename(name) + ext)
+            with codecs.open(filename, "w+", encoding="utf-8") as text_file:
+                # noinspection PyTypeChecker
+                for highlight in sorted(highlights, key=partial(self.cli_sort, args)):
+                    date_text, high_comment, high_text, page_text = highlight
+                    if not args.html:
+                        text += (page_text + extra + date_text +
+                                 line_break + high_text + high_comment)
+                        text += 2 * os.linesep
+                    else:
+                        text += HIGH_BLOCK % {"page": page_text, "date": date_text,
+                                              "highlight": high_text,
+                                              "comment": high_comment}
+                if args.html:
+                    text += "\n</div>\n</body>\n</html>"
+
+                text_file.write(text)
+                sys.stdout.write("Created {}\n".format(basename(filename)))
+                saved += 1
+        return saved
+
+    def cli_save_merged_text(self, args, files):
+        """ Save the selected book's highlights to a single text file
+
+        :type args: argparse.Namespace
+        :param args: The parsed cli args
+        :type files: list
+        :param files: A list with the metadata files to get converted
+        """
+        saved = 0
+        title_counter = 0
+        extra = " " if not args.no_page and not args.no_date else ""
+        line_break = ":" + os.linesep if not args.no_page or not args.no_date else ""
+        path = abspath(args.output)
+        blocks = []
+        for file_ in files:
+            data = decode_data(file_)
+            highlights = []
+            for page in data["highlight"]:
+                for page_id in data["highlight"][page]:
+                    highlights.append(self.cli_analyze_high(data, page, page_id, args))
+            # noinspection PyTypeChecker
+            highlights = [i[3] + extra + i[0] + line_break + i[2] + i[1] for i in
+                          sorted(highlights, key=partial(self.cli_sort, args))]
+            if not highlights:  # no highlights
+                continue
+            authors = ""
+            try:
+                title = data["stats"]["title"]
+                authors = data["stats"]["authors"]
+            except KeyError:  # older type file
+                title = splitext(basename(file_))[0]
+                try:
+                    name = title.split("#] ")[1]
+                    title = splitext(name)[0]
+                except IndexError:  # no "#] " in filename
+                    pass
+            if not title:
+                try:
+                    name = file_.split("#] ")[1]
+                    title = splitext(name)[0]
+                except IndexError:  # no "#] " in filename
+                    title = _("NO TITLE FOUND") + str(title_counter)
+                    title_counter += 1
+            name = title
+            if authors:
+                name = "{} - {}".format(authors, title)
+            # noinspection PyUnresolvedReferences
+            blocks.append((name, (2 * os.linesep).join(highlights)))
+            saved += 1
+        line = "-" * 80
+        # path = sanitize_filename(path)
+        name, ext = splitext(path)
+        if ext.lower() != ".txt":
+            path = name + ".txt"
+        with codecs.open(path, "w+", encoding="utf-8") as text_file:
+            for block in blocks:
+                text_file.write(
+                    "{0}{3}{1}{3}{0}{3}{2}{3}{3}".format(line, block[0], block[1],
+                                                         os.linesep))
+            sys.stdout.write("Created {}\n\n".format(path))
+        return saved
+
+    def cli_save_merged_html(self, args, files):
+        """ Save the selected book's highlights to a single html file
+
+        :type args: argparse.Namespace
+        :param args: The parsed cli args
+        :type files: list
+        :param files: A list with the metadata files to get converted
+        """
+        saved = 0
+        title_counter = 0
+        text = HTML_HEAD
+        for file_ in files:
+            data = decode_data(file_)
+            authors = ""
+            try:
+                title = data["stats"]["title"]
+                authors = data["stats"]["authors"]
+            except KeyError:  # older type file
+                title = splitext(basename(file_))[0]
+                try:
+                    name = title.split("#] ")[1]
+                    title = splitext(name)[0]
+                except IndexError:  # no "#] " in filename
+                    pass
+            if not title:
+                try:
+                    name = file_.split("#] ")[1]
+                    title = splitext(name)[0]
+                except IndexError:  # no "#] " in filename
+                    title = _("NO TITLE FOUND") + str(title_counter)
+                    title_counter += 1
+            highlights = []
+            for page in data["highlight"]:
+                for page_id in data["highlight"][page]:
+                    highlights.append(self.cli_analyze_high(data, page, page_id, args))
+            if not highlights:  # no highlights
+                continue
+            text += BOOK_BLOCK % {"title": title, "authors": authors}
+            # noinspection PyTypeChecker
+            for high in sorted(highlights, key=partial(self.cli_sort, args)):
+                date_text, high_comment, high_text, page_text = high
+                text += HIGH_BLOCK % {"page": page_text, "date": date_text,
+                                      "highlight": high_text, "comment": high_comment}
+            text += "</div>\n"
+            saved += 1
+        text += "\n</body>\n</html>"
+        path = abspath(args.output)
+        name, ext = splitext(path)
+        if ext.lower() != ".html":
+            path = name + ".html"
+        with codecs.open(path, "w+", encoding="utf-8") as text_file:
+            text_file.write(text)
+            sys.stdout.write("Created {}\n\n".format(path))
+        return saved
 
     @staticmethod
     def get_lua_files(dropped):
@@ -2600,10 +2862,11 @@ class KoHighlights(QApplication):
         :param dropped: The input paths
         """
         paths = []
+        fount_txt = "Found: {}\n"
         for path in dropped:
             if isfile(path) and splitext(path)[1] == ".lua":
                 paths.append(abspath(path))
-                sys.stdout.write("Found: {}\n\n".format(path))
+                sys.stdout.write(fount_txt.format(path))
         folders = [i for i in dropped if isdir(i)]
         for folder in folders:
             try:
@@ -2616,7 +2879,7 @@ class KoHighlights(QApplication):
                             if splitext(file_)[1].lower() == ".lua":
                                 path = abspath(join(dir_path, file_))
                                 paths.append(path)
-                                sys.stdout.write("Found: {}\n\n".format(path))
+                                sys.stdout.write(fount_txt.format(path))
                                 break
                     # older metadata storage or android history folder
                     elif (dir_path.lower().endswith(join("koreader", "history"))
@@ -2625,14 +2888,14 @@ class KoHighlights(QApplication):
                             if splitext(file_)[1].lower() == ".lua":
                                 path = abspath(join(dir_path, file_))
                                 paths.append(path)
-                                sys.stdout.write("Found: {}\n\n".format(path))
+                                sys.stdout.write(fount_txt.format(path))
                         continue
             except UnicodeDecodeError:  # os.walk error
                 pass
         return paths
 
     @staticmethod
-    def cli_sort_high(args, data):
+    def cli_sort(args, data):
         """ Sets the sorting method of written highlights
 
         :type args: argparse.Namespace
@@ -2675,8 +2938,10 @@ class KoHighlights(QApplication):
                 break
         page_text = "Page " + str(page) if not args.no_page else ""
         date_text = "[" + date + "]" if not args.no_date else ""
-        high_text = text.replace("\n", os.linesep) if not args.no_highlight else ""
-        comment = comment.replace("\n", os.linesep)
+
+        linesep = "<br/>" if args.html else os.linesep
+        high_text = text.replace("\\\n", linesep) if not args.no_highlight else ""
+        comment = comment.replace("\\\n", linesep)
         line_break2 = os.linesep if not args.no_highlight and comment else ""
         high_comment = (line_break2 + "● " + comment
                         if not args.no_comment and comment else "")
