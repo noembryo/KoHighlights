@@ -41,17 +41,6 @@ It needs the [Pyside](https://pypi.org/project/PySide/),
 [BeautifulSoup4](https://pypi.org/project/beautifulsoup4/),
 [future](https://pypi.org/project/future/) and
 [mechanize](https://pypi.org/project/mechanize/) libraries.  
-After cloning the source, run `sudo pip install -r requirements.txt`  
-
-###### OR manually:  
-
-##### for Python 2   
-`sudo pip install beautifulsoup4 future mechanize pyside`  
-If there is a problem with Pyside, use `sudo apt-get install python-pyside`   
-
-##### for Python 3   
-`sudo pip3 install beautifulsoup4 future mechanize pyside`  
-If there is a problem with Pyside, use `sudo apt-get install python3-pyside`   
 
 ## Extra
 KoHighlights includes SLPPU (a converter between python and lua objects).  
