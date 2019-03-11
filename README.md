@@ -2,7 +2,7 @@
 ![kohighlights128w](https://cloud.githubusercontent.com/assets/14363074/9978678/22e01940-5f49-11e5-8112-bc58b8f0f56f.png)
 
 **KoHighlights** is a utility for viewing and converting the
-[Koreader](https://github.com/koreader/koreader)'s history files to simple text.  
+[Koreader](https://github.com/koreader/koreader)'s history files to simple text or html.  
 This is a totally re-written application using the Qt framework (PySide).  
 The original KoHighlights (using the wxPython) can be found
 [here](https://github.com/noonkey/KoHighlights), but is considered deprecated..
@@ -26,8 +26,8 @@ The original KoHighlights (using the wxPython) can be found
   highlights of the books. 
 * Double click or press the Open Book button to view the book in your system's reader.
 * Save all the selected books' highlights:
-    * A text file for every selected book or
-    * A single text file with all highlights combined
+    * A text/html file for every selected book or
+    * A single text/html file with all highlights combined
 * Delete some or all the highlights of any book.
 * Clear the .sdr folders with the metadata or the books in the eReader.
 
