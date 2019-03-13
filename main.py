@@ -898,18 +898,20 @@ class Base(QMainWindow, Ui_Base):
             for page_id in data["highlight"][page]:
                 try:
                     date = data["highlight"][page][page_id]["datetime"]
-                    text = data["highlight"][page][page_id]["text"].replace("\\\n", "\n")
+                    text4check = data["highlight"][page][page_id]["text"]
+                    text = text4check.replace("\\\n", "\n")
                     comment = ""
                     for idx in data["bookmarks"]:
-                        if text == data["bookmarks"][idx]["notes"]:
-                            book_text = data["bookmarks"][idx].get("text", "")
-                            if not book_text:
+                        if text4check == data["bookmarks"][idx]["notes"]:
+                            bkm_text = data["bookmarks"][idx].get("text", "")
+                            if not bkm_text:
                                 break
-                            book_text = re.sub(r"Page \d+ "
-                                               r"(.+?) @ \d+-\d+-\d+ \d+:\d+:\d+", r"\1",
-                                               book_text, 1, re.DOTALL | re.MULTILINE)
-                            if text != book_text:
-                                comment = book_text.replace("\\\n", "\n")
+                            bkm_text = re.sub(r"Page \d+ "
+                                              r"(.+?) @ \d+-\d+-\d+ \d+:\d+:\d+", r"\1",
+                                              bkm_text, 1, re.DOTALL | re.MULTILINE)
+
+                            if text4check != bkm_text:
+                                comment = bkm_text.replace("\\\n", "\n")
                             break
                 except KeyError:  # blank highlight
                     continue
@@ -984,7 +986,7 @@ class Base(QMainWindow, Ui_Base):
             high_index = self.sel_highlights[-1]
             high_row = high_index.row()
             high_data = self.high_list.item(high_row).data(Qt.UserRole)
-            high_text = high_data[HIGHLIGHT_TEXT]
+            high_text = high_data[HIGHLIGHT_TEXT].replace("\n", "\\\n")
 
             row = self.sel_idx.row()
             data = self.file_table.item(row, TITLE).data(Qt.UserRole)
@@ -999,11 +1001,12 @@ class Base(QMainWindow, Ui_Base):
             data = self.sel_book_data
             row = self.sel_high_view[-1].row()
             high_data = self.high_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)
-            high_text = high_data["text"]
+            high_text = high_data["text"].replace("\n", "\\\n")
 
             for bookmark in data["bookmarks"].keys():
                 if high_text == data["bookmarks"][bookmark]["notes"]:
                     data["bookmarks"][bookmark]["text"] = text.replace("\n", "\\\n")
+                    high_data["comment"] = text
                     break
             self.high_table.item(row, HIGHLIGHT_H).setData(Qt.UserRole, high_data)
             self.high_table.item(row, COMMENT_H).setText(text)
@@ -2421,18 +2424,19 @@ class HighlightScanner(QObject):
                 highlight = {"authors": authors, "title": title, "path": path}
                 try:
                     highlight["date"] = data["highlight"][page][page_id]["datetime"]
-                    text = data["highlight"][page][page_id]["text"].replace("\\\n", "\n")
+                    text4check = data["highlight"][page][page_id]["text"]
+                    text = text4check.replace("\\\n", "\n")
                     comment = ""
                     for idx in data["bookmarks"]:  # check for comment text
-                        if text == data["bookmarks"][idx]["notes"]:
-                            book_text = data["bookmarks"][idx].get("text", "")
-                            if not book_text:
+                        if text4check == data["bookmarks"][idx]["notes"]:
+                            bkm_text = data["bookmarks"][idx].get("text", "")
+                            if not bkm_text:
                                 break
-                            book_text = re.sub(r"Page \d+ "
-                                               r"(.+?) @ \d+-\d+-\d+ \d+:\d+:\d+", r"\1",
-                                               book_text, 1, re.DOTALL | re.MULTILINE)
-                            if text != book_text:  # there is a comment
-                                comment = book_text.replace("\\\n", "\n")
+                            bkm_text = re.sub(r"Page \d+ "
+                                              r"(.+?) @ \d+-\d+-\d+ \d+:\d+:\d+", r"\1",
+                                              bkm_text, 1, re.DOTALL | re.MULTILINE)
+                            if text4check != bkm_text:  # there is a comment
+                                comment = bkm_text.replace("\\\n", "\n")
                             break
                     highlight["text"] = text
                     highlight["comment"] = comment
