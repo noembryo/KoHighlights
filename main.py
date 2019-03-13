@@ -1,13 +1,10 @@
 # coding=utf-8
 from __future__ import absolute_import, division, print_function, unicode_literals
-
-
 from boot_config import *
-import os, sys, re
+import os, sys, re, io
 import gzip
 import json
 import shutil
-import codecs
 import webbrowser
 import subprocess
 import argparse
@@ -63,7 +60,7 @@ def decode_data(path):
     :type path: str|unicode
     :param path: The path to the lua file
     """
-    with codecs.open(path, "r", encoding="utf8") as txt_file:
+    with io.open(path, "r", encoding="utf8", newline=None) as txt_file:
         txt = txt_file.read()[39:]  # offset the first words of the file
         data = lua.decode(txt.replace("--", "—"))
         if type(data) == dict:
@@ -78,7 +75,7 @@ def encode_data(path, dict_data):
     :type dict_data: dict
     :param dict_data: The dictionary to be encoded as lua table
     """
-    with codecs.open(path, "w+", encoding="utf8") as txt_file:
+    with io.open(path, "w+", encoding="utf8", newline="") as txt_file:
         lua_text = "-- we can read Lua syntax here!\nreturn "
         lua_text += lua.encode(dict_data)
         txt_file.write(lua_text)
@@ -1505,7 +1502,7 @@ class Base(QMainWindow, Ui_Base):
                 ext = ".html"
                 text = HTML_HEAD + BOOK_BLOCK % {"title": title, "authors": authors}
             filename = join(dir_path, sanitize_filename(name) + ext)
-            with codecs.open(filename, "w+", encoding="utf-8") as text_file:
+            with io.open(filename, "w+", encoding="utf-8", newline="") as text_file:
                 for highlight in sorted(highlights, key=self.sort_high4write):
                     date_text, high_comment, high_text, page_text = highlight
                     if not html:
@@ -1578,7 +1575,7 @@ class Base(QMainWindow, Ui_Base):
             saved += 1
         text += "\n</body>\n</html>" if html else ""
 
-        with codecs.open(filename, "w+", encoding="utf-8") as text_file:
+        with io.open(filename, "w+", encoding="utf-8", newline="") as text_file:
             text_file.write(text)
         return saved
 
@@ -1604,7 +1601,7 @@ class Base(QMainWindow, Ui_Base):
                                                         data["page"], data["date"],
                                                         data["text"], comment))
             text += txt + "\n\n"
-        with codecs.open(filename, "w+", encoding="utf-8") as text_file:
+        with io.open(filename, "w+", encoding="utf-8", newline="") as text_file:
             text_file.write(text.replace("\n", os.linesep))
 
     def analyze_high(self, data, page, page_id, html):
@@ -2666,7 +2663,7 @@ class KoHighlights(QApplication):
                 ext = ".html"
                 text = HTML_HEAD + BOOK_BLOCK % {"title": title, "authors": authors}
             filename = join(path, sanitize_filename(name) + ext)
-            with codecs.open(filename, "w+", encoding="utf-8") as text_file:
+            with io.open(filename, "w+", encoding="utf-8", newline="") as text_file:
                 # noinspection PyTypeChecker
                 for highlight in sorted(highlights, key=partial(self.cli_sort, args)):
                     date_text, high_comment, high_text, page_text = highlight
@@ -2751,7 +2748,7 @@ class KoHighlights(QApplication):
         new_ext = ".html" if args.html else ".txt"
         if ext.lower() != new_ext:
             path = name + new_ext
-        with codecs.open(path, "w+", encoding="utf-8") as text_file:
+        with io.open(path, "w+", encoding="utf-8", newline="") as text_file:
             text_file.write(text)
             sys.stdout.write("Created {}\n\n".format(path))
         return saved
