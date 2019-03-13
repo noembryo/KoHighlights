@@ -22,11 +22,11 @@ from os.path import (isdir, isfile, join, basename, splitext, dirname, split, ex
 import mechanize  # ___ _______________ DEPENDENCIES ________________
 from bs4 import BeautifulSoup
 from PySide.QtCore import (Qt, QTimer, Slot, QObject, Signal, QThread, QMimeData,
-                           QModelIndex, QByteArray, QSize)
+                           QModelIndex, QByteArray, QSize, QPoint)
 from PySide.QtGui import (QMainWindow, QApplication, QMessageBox, QIcon, QFileDialog,
                           QTableWidgetItem, QTextCursor, QDialog, QWidget, QMovie, QFont,
-                          QMenu, QAction, QTableWidget, QCheckBox, QHeaderView, QCursor,
-                          QListWidgetItem, QPixmap, QToolButton, QActionGroup)
+                          QMenu, QAction, QTableWidget, QCheckBox, QHeaderView, QPixmap,
+                          QListWidgetItem, QToolButton, QActionGroup)
 
 
 from slppu import slppu as lua  # https://github.com/noembryo/slppu
@@ -50,33 +50,11 @@ from pprint import pprint
 
 
 __author__ = "noEmbryo"
-__version__ = "0.9.0.0"
+__version__ = "0.9.1.0"
 
 
 def _(text):
     return text
-
-
-if sys.platform.lower().startswith("win"):
-    import ctypes
-
-    def hide_console():
-        """ Hides the console window in GUI mode. Necessary for frozen application,
-        because this application support both, command line processing AND GUI mode
-        and therefor cannot be run via pythonw.exe.
-        """
-
-        win_handles = ctypes.windll.kernel32.GetConsoleWindow()
-        if win_handles != 0:
-            ctypes.windll.user32.ShowWindow(win_handles, 0)
-            # if you wanted to close the handles...
-            # ctypes.windll.kernel32.CloseHandle(win_handles)
-
-    def show_console():
-        """ UnHides console window"""
-        win_handles = ctypes.windll.kernel32.GetConsoleWindow()
-        if win_handles != 0:
-            ctypes.windll.user32.ShowWindow(win_handles, 1)
 
 
 def decode_data(path):
@@ -116,7 +94,28 @@ def sanitize_filename(filename):
     return filename
 
 
-# noinspection PyCallByClass
+# if sys.platform.lower().startswith("win"):
+#     import ctypes
+#
+#     def hide_console():
+#         """ Hides the console window in GUI mode. Necessary for frozen application,
+#         because this application support both, command line processing AND GUI mode
+#         and therefor cannot be run via pythonw.exe.
+#         """
+#
+#         win_handles = ctypes.windll.kernel32.GetConsoleWindow()
+#         if win_handles != 0:
+#             ctypes.windll.user32.ShowWindow(win_handles, 0)
+#             # if you wanted to close the handles...
+#             # ctypes.windll.kernel32.CloseHandle(win_handles)
+#
+#     def show_console():
+#         """ UnHides console window"""
+#         win_handles = ctypes.windll.kernel32.GetConsoleWindow()
+#         if win_handles != 0:
+#             ctypes.windll.user32.ShowWindow(win_handles, 1)
+
+
 class Base(QMainWindow, Ui_Base):
     def __init__(self, parent=None):
         super(Base, self).__init__(parent)
@@ -128,7 +127,7 @@ class Base(QMainWindow, Ui_Base):
         self.file_selection = None
         self.sel_idx = None
         self.sel_indexes = []
-        self.highlights_selection = None
+        self.high_list_selection = None
         self.sel_highlights = []
         self.sel_book_data = {}
         self.high_view_selection = None
@@ -156,8 +155,8 @@ class Base(QMainWindow, Ui_Base):
         self.header_main.setMovable(True)
         self.header_main.setDefaultAlignment(Qt.AlignLeft)
 
-        self.highlight_table.verticalHeader().setResizeMode(QHeaderView.Fixed)
-        self.header_high_view = self.highlight_table.horizontalHeader()
+        self.high_table.verticalHeader().setResizeMode(QHeaderView.Fixed)
+        self.header_high_view = self.high_table.horizontalHeader()
         self.header_high_view.setMovable(True)
         self.header_high_view.setDefaultAlignment(Qt.AlignLeft)
         # self.header_high_view.setResizeMode(HIGHLIGHT_H, QHeaderView.Stretch)
@@ -183,13 +182,15 @@ class Base(QMainWindow, Ui_Base):
 
         self.toolbar = ToolBar(self)
         self.tool_bar.addWidget(self.toolbar)
+        self.toolbar.open_btn.setEnabled(False)
         self.toolbar.merge_btn.setEnabled(False)
+        self.toolbar.delete_btn.setEnabled(False)
 
         self.status = Status(self)
         self.statusbar.addPermanentWidget(self.status)
 
         self.edit_high = TextDialog(self)
-        self.edit_high.on_ok = self.edit_highlight_ok
+        self.edit_high.on_ok = self.edit_comment_ok
         self.edit_high.setWindowTitle(_("Comments"))
 
         self.description = TextDialog(self)
@@ -204,16 +205,11 @@ class Base(QMainWindow, Ui_Base):
         # noinspection PyArgumentList
         self.clip = QApplication.clipboard()
 
-        # noinspection PyTypeChecker
+        # noinspection PyTypeChecker,PyCallByClass
         QTimer.singleShot(0, self.on_load)
 
-        # noinspection PyTypeChecker
+        # noinspection PyTypeChecker,PyCallByClass
         QTimer.singleShot(30000, self.auto_check4update)  # check for updates
-
-        # self.threads4process = []
-        # thread_cleanup_timer = QTimer(self)  # cleanup threads for ever
-        # thread_cleanup_timer.timeout.connect(self.thread_cleanup)
-        # thread_cleanup_timer.start(2000)
 
     def on_load(self):
         """ Things that must be done after the initialization
@@ -227,10 +223,6 @@ class Base(QMainWindow, Ui_Base):
         self.toolbar.delete_btn.setMenu(self.delete_menu())  # assign/create menu
         self.connect_gui()
         self.passed_files()
-        # if self.parse_args():
-        #     self.show()
-        # else:
-        #     self.close()
         self.show()
 
     # ___ ___________________ EVENTS STUFF __________________________
@@ -242,19 +234,13 @@ class Base(QMainWindow, Ui_Base):
         self.file_selection = self.file_table.selectionModel()
         self.file_selection.selectionChanged.connect(self.file_selection_update)
         self.header_main.sectionClicked.connect(self.on_column_clicked)
-        self.file_table.customContextMenuRequested.connect(self.on_item_right_clicked)
-        self.highlights_selection = self.highlights_list.selectionModel()
-        self.highlights_selection.selectionChanged.connect(
-            self.highlights_selection_update)
-        self.highlights_list.customContextMenuRequested.connect(
-            self.on_highlight_right_clicked)
+        self.high_list_selection = self.high_list.selectionModel()
+        self.high_list_selection.selectionChanged.connect(self.high_list_selection_update)
 
-        self.high_view_selection = self.highlight_table.selectionModel()
+        self.high_view_selection = self.high_table.selectionModel()
         self.high_view_selection.selectionChanged.connect(self.high_view_selection_update)
         self.header_high_view.sectionClicked.connect(self.on_highlight_column_clicked)
         self.header_high_view.sectionResized.connect(self.on_highlight_column_resized)
-        self.highlight_table.customContextMenuRequested.connect(
-            self.on_high_view_right_clicked)
 
         sys.stdout = LogStream()
         sys.stdout.setObjectName("out")
@@ -349,12 +335,12 @@ class Base(QMainWindow, Ui_Base):
         data = self.file_table.item(row, TITLE).data(Qt.UserRole)
         self.sel_book_data = data
 
-        if self.file_table.item(row, TYPE).data(Qt.UserRole)[1]:
-            self.toolbar.open_btn.setEnabled(True)
-        else:
-            self.toolbar.open_btn.setEnabled(False)
+        book_exists = self.file_table.item(row, TYPE).data(Qt.UserRole)[1]
+        self.toolbar.open_btn.setEnabled(book_exists)
+        self.toolbar.merge_btn.setEnabled(self.check4merge())
+        self.toolbar.delete_btn.setEnabled(bool(self.sel_indexes))
 
-        self.highlights_list.clear()
+        self.high_list.clear()
         self.populate_high_list(data)
         self.populate_book_info(data, row)
 
@@ -363,53 +349,8 @@ class Base(QMainWindow, Ui_Base):
             description_state = bool(data["doc_props"]["description"])
         self.description_btn.setEnabled(description_state)
 
-        # self.highlights_list.sortItems()  # using XListWidgetItem for custom sorting
-        self.highlights_list.setCurrentRow(0) if reset else None
-
-    def populate_high_list(self, data):
-        """ Populates the Highlights list of `Book` view
-
-        :type data: dict
-        :param data: The item's data
-        """
-        highlights = []
-        extra = (" " if self.status.act_page.isChecked() and
-                 self.status.act_date.isChecked() else "")
-        line_break = (":\n" if self.status.act_page.isChecked() or
-                      self.status.act_date.isChecked() else "")
-        for page in data["highlight"]:
-            for page_id in data["highlight"][page]:
-                try:
-                    date = data["highlight"][page][page_id]["datetime"]
-                    text = data["highlight"][page][page_id]["text"].replace("\\\n", "\n")
-                    comment = ""
-                    for idx in data["bookmarks"]:
-                        if text == data["bookmarks"][idx]["notes"]:
-                            book_text = data["bookmarks"][idx].get("text", "")
-                            if not book_text:
-                                break
-                            book_text = re.sub(r"Page \d+ "
-                                               r"(.+?) @ \d+-\d+-\d+ \d+:\d+:\d+", r"\1",
-                                               book_text, 1, re.DOTALL | re.MULTILINE)
-                            if text != book_text:
-                                comment = book_text.replace("\\\n", "\n")
-                            break
-                except KeyError:  # blank highlight
-                    continue
-                highlights.append((page, text, date, page_id, comment))
-        for item in sorted(highlights, key=self.sort_high4view):
-            page, text, date, page_id, comment = item
-            page_text = "Page " + str(page) if self.status.act_page.isChecked() else ""
-            date_text = "[" + date + "]" if self.status.act_date.isChecked() else ""
-            high_text = text if self.status.act_text.isChecked() else ""
-            line_break2 = "\n" if self.status.act_text.isChecked() and comment else ""
-            high_comment = (line_break2 + "● " + comment
-                            if self.status.act_comment.isChecked() and comment else "")
-            highlight = (page_text + extra + date_text +
-                         line_break + high_text + high_comment + "\n")
-
-            highlight_item = QListWidgetItem(highlight, self.highlights_list)
-            highlight_item.setData(Qt.UserRole, item)
+        # self.high_list.sortItems()  # using XListWidgetItem for custom sorting
+        self.high_list.setCurrentRow(0) if reset else None
 
     def populate_book_info(self, data, row):
         """ Fill in the `Book Info` fields
@@ -453,8 +394,8 @@ class Base(QMainWindow, Ui_Base):
         self.description.high_edit_txt.setHtml(description)
         self.description.show()
 
-    # noinspection PyUnusedLocal
-    def on_item_right_clicked(self, point):
+    @Slot(QPoint)
+    def on_file_table_customContextMenuRequested(self, point):
         """ When an item of the FileTable is right-clicked
 
         :type point: QPoint
@@ -493,8 +434,9 @@ class Base(QMainWindow, Ui_Base):
         delete_menu.setTitle(_("Delete\tDel"))
         menu.addMenu(delete_menu)
 
-        # noinspection PyArgumentList
-        menu.exec_(QCursor.pos())
+        # # noinspection PyArgumentList
+        # menu.exec_(QCursor.pos())
+        menu.exec_(self.file_table.mapToGlobal(point))
 
     @Slot(QTableWidgetItem)
     def on_file_table_itemDoubleClicked(self, item):
@@ -528,7 +470,7 @@ class Base(QMainWindow, Ui_Base):
             item = self.file_table.itemAt(row, 0)
             self.on_file_table_itemDoubleClicked(item)
         elif self.current_view == 1:  # highlights view
-            data = self.highlight_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)
+            data = self.high_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)
             self.open_file(data["path"])
 
     # noinspection PyUnusedLocal
@@ -551,11 +493,10 @@ class Base(QMainWindow, Ui_Base):
             item = self.file_table.item(self.sel_idx.row(), self.sel_idx.column())
             self.on_file_table_itemClicked(item)
         else:
-            self.highlights_list.clear()
+            self.high_list.clear()
             self.description_btn.setEnabled(False)
             for field in self.info_fields:
                 field.setText("")
-        self.toolbar.merge_btn.setEnabled(self.check4merge())
 
     def on_column_clicked(self, column):
         """ Sets the current sorting column
@@ -711,6 +652,491 @@ class Base(QMainWindow, Ui_Base):
         icon = self.ico_label_green if data["highlight"] else self.ico_empty
         return icon, title, authors, percent
 
+    # ___ ___________________ HIGHLIGHT TABLE STUFF _________________
+
+    @Slot(QTableWidgetItem)
+    def on_high_table_itemClicked(self, item):
+        """ When an item of the high_table is clicked
+
+        :type item: QTableWidgetItem
+        :param item: The item (cell) that is clicked
+        """
+        row = item.row()
+        data = self.high_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)
+
+        if isfile(data["path"]):
+            self.toolbar.open_btn.setEnabled(True)
+        else:
+            self.toolbar.open_btn.setEnabled(False)
+
+        # needed for edit "Comments" or "Find in Books" in Highlight View
+        for row in range(self.file_table.rowCount()):  # 2check: need to optimize?
+            if data["path"] == self.file_table.item(row, TYPE).data(Qt.UserRole)[0]:
+                self.sel_book_data = self.file_table.item(row, TITLE).data(Qt.UserRole)
+                break
+
+    @Slot(QModelIndex)
+    def on_high_table_doubleClicked(self, index):
+        """ When an item of the high_table is double-clicked
+
+        :type index: QTableWidgetItem
+        :param index: The item (cell) that is clicked
+        """
+        column = index.column()
+        if column == COMMENT_H:
+            self.on_edit_comment()
+
+    @Slot(QPoint)
+    def on_high_table_customContextMenuRequested(self, point):
+        """ When an item of the high_table is right-clicked
+
+        :type point: QPoint
+        :param point: The point where the right-click happened
+        """
+        if not len(self.sel_high_view):  # no items selected
+            return
+
+        menu = QMenu(self.high_table)
+
+        row = self.high_table.itemAt(point).row()
+        self.act_view_book.setData(row)
+        self.act_view_book.setEnabled(self.toolbar.open_btn.isEnabled())
+        menu.addAction(self.act_view_book)
+
+        highlights = ""
+        comments = ""
+        for idx in self.sel_high_view:
+            item_row = idx.row()
+            data = self.high_table.item(item_row, HIGHLIGHT_H).data(Qt.UserRole)
+            highlight = data["text"]
+            if highlight:
+                highlights += highlight + "\n\n"
+            comment = data["comment"]
+            if comment:
+                comments += comment + "\n\n"
+
+        highlights = highlights.rstrip("\n").replace("\n", os.linesep)
+        comments = comments.rstrip("\n").replace("\n", os.linesep)
+
+        high_text = _("Copy Highlights")
+        com_text = _("Copy Comments")
+        if len(self.sel_high_view) == 1:  # single selection
+            high_text = _("Copy Highlight")
+            com_text = _("Copy Comment")
+
+            action = QAction(_("Find in Books"), menu)
+            action.triggered.connect(partial(self.find_in_books, highlights))
+            action.setIcon(self.ico_view_books)
+            menu.addAction(action)
+
+            action = QAction(_("Comments"), menu)
+            action.triggered.connect(self.on_edit_comment)
+            action.setIcon(self.ico_file_edit)
+            menu.addAction(action)
+
+        action = QAction(high_text, menu)
+        action.triggered.connect(partial(self.copy_text_2clip, highlights))
+        action.setIcon(self.ico_copy)
+        menu.addAction(action)
+
+        action = QAction(com_text, menu)
+        action.triggered.connect(partial(self.copy_text_2clip, comments))
+        action.setIcon(self.ico_copy)
+        menu.addAction(action)
+
+        action = QAction(_("Save to text file"), menu)
+        action.triggered.connect(self.on_save_actions)
+        action.setData(2)
+        action.setIcon(self.ico_file_save)
+        menu.addAction(action)
+
+        menu.exec_(self.high_table.mapToGlobal(point))
+
+    def scan_highlights_thread(self):
+        """ Gets all the loaded highlights
+        """
+        self.high_table.model().removeRows(0, self.high_table.rowCount())
+        self.high_table.setSortingEnabled(False)  # need this before populating table
+
+        scanner = HighlightScanner()
+        scanner.moveToThread(self.highlight_scan_thread)
+        scanner.found.connect(self.create_highlight_row)
+        scanner.finished.connect(self.scan_highlights_finished)
+        scanner.finished.connect(self.highlight_scan_thread.quit)
+        self.highlight_scan_thread.scanner = scanner
+        self.highlight_scan_thread.started.connect(scanner.process)
+        self.highlight_scan_thread.start(QThread.IdlePriority)
+
+    def create_highlight_row(self, data):
+        """ Creates a highlight table row from the given data
+
+        :type data: dict
+        :param data: The highlight data
+        """
+        self.high_table.setSortingEnabled(False)
+        self.high_table.insertRow(0)
+
+        item = QTableWidgetItem(data["text"])
+        item.setToolTip("<p>{}</p>".format(data["text"]))
+        item.setData(Qt.UserRole, data)
+        self.high_table.setItem(0, HIGHLIGHT_H, item)
+
+        comment = data["comment"]
+        item = QTableWidgetItem(comment)
+        if comment:
+            item.setToolTip("<p>{}</p>".format(comment))
+        self.high_table.setItem(0, COMMENT_H, item)
+
+        item = QTableWidgetItem(data["date"])
+        item.setToolTip(data["date"])
+        item.setTextAlignment(Qt.AlignRight)
+        self.high_table.setItem(0, DATE_H, item)
+
+        item = QTableWidgetItem(data["title"])
+        item.setToolTip(data["title"])
+        self.high_table.setItem(0, TITLE_H, item)
+
+        page = data["page"]
+        item = XTableWidgetItem(page)
+        item.setToolTip(page)
+        item.setTextAlignment(Qt.AlignRight)
+        item.setData(Qt.UserRole, int(page))
+        self.high_table.setItem(0, PAGE_H, item)
+
+        item = QTableWidgetItem(data["authors"])
+        item.setToolTip(data["authors"])
+        self.high_table.setItem(0, PATH, item)
+
+        self.high_table.setSortingEnabled(True)
+
+    def scan_highlights_finished(self):
+        """ What will happen after the scanning for history files ends
+        """
+        for col in [PAGE_H, DATE_H, AUTHOR_H, TITLE_H]:
+            self.high_table.resizeColumnToContents(col)
+
+        self.high_table.setSortingEnabled(True)  # re-enable, after populating table
+        order = Qt.AscendingOrder if self.col_sort_asc_h else Qt.DescendingOrder
+        self.high_table.sortByColumn(self.col_sort_h, order)
+
+    # noinspection PyUnusedLocal
+    def high_view_selection_update(self, selected, deselected):
+        """ When a row in high_table gets selected
+
+        :type selected: QModelIndex
+        :parameter selected: The selected row
+        :type deselected: QModelIndex
+        :parameter deselected: The deselected row
+        """
+        try:
+            self.sel_high_view = self.high_view_selection.selectedRows()
+        except IndexError:  # empty table
+            pass
+
+    def on_highlight_column_clicked(self, column):
+        """ Sets the current sorting column
+
+        :type column: int
+        :parameter column: The column where the filtering is applied
+        """
+        if column == self.col_sort_h:
+            self.col_sort_asc_h = not self.col_sort_asc_h
+        else:
+            self.col_sort_asc_h = True
+        self.col_sort_h = column
+
+    # noinspection PyUnusedLocal
+    def on_highlight_column_resized(self, column, oldSize, newSize):
+        """ Gets the column size
+
+        :type column: int
+        :parameter column: The resized column
+        :type oldSize: int
+        :parameter oldSize: The old size
+        :type newSize: int
+        :parameter newSize: The new size
+        """
+        if column == HIGHLIGHT_H:
+            self.highlight_width = newSize
+        elif column == COMMENT_H:
+            self.comment_width = newSize
+
+    def find_in_books(self, highlight):
+        """ Finds the current highlight in the "Books View"
+
+        :type highlight: str|unicode
+        :parameter highlight: The highlight we searching for
+        """
+        data = self.sel_book_data
+        for row in range(self.file_table.rowCount()):
+            item = self.file_table.item(row, TITLE)
+            row_data = item.data(Qt.UserRole)
+            try:  # find the book row
+                if data["stats"]["title"] == row_data["stats"]["title"]:
+                    self.on_file_table_itemClicked(item)
+                    self.toolbar.books_btn.click()
+                    self.file_table.selectRow(row)  # select the book
+                    for high_row in range(self.high_list.count()):  # find the highlight
+                        if (self.high_list.item(high_row)
+                                .data(Qt.UserRole)[HIGHLIGHT_TEXT] == highlight):
+                            self.high_list.setCurrentRow(high_row)  # select the highlight
+                            return
+            except KeyError:  # old metadata with no "stats"
+                continue
+
+    # ___ ___________________ HIGHLIGHTS LIST STUFF _________________
+
+    def populate_high_list(self, data):
+        """ Populates the Highlights list of `Book` view
+
+        :type data: dict
+        :param data: The item's data
+        """
+        highlights = []
+        space = (" " if self.status.act_page.isChecked() and
+                 self.status.act_date.isChecked() else "")
+        line_break = (":\n" if self.status.act_page.isChecked() or
+                      self.status.act_date.isChecked() else "")
+        for page in data["highlight"]:
+            for page_id in data["highlight"][page]:
+                try:
+                    date = data["highlight"][page][page_id]["datetime"]
+                    text = data["highlight"][page][page_id]["text"].replace("\\\n", "\n")
+                    comment = ""
+                    for idx in data["bookmarks"]:
+                        if text == data["bookmarks"][idx]["notes"]:
+                            book_text = data["bookmarks"][idx].get("text", "")
+                            if not book_text:
+                                break
+                            book_text = re.sub(r"Page \d+ "
+                                               r"(.+?) @ \d+-\d+-\d+ \d+:\d+:\d+", r"\1",
+                                               book_text, 1, re.DOTALL | re.MULTILINE)
+                            if text != book_text:
+                                comment = book_text.replace("\\\n", "\n")
+                            break
+                except KeyError:  # blank highlight
+                    continue
+                highlights.append((page, text, date, page_id, comment))
+        for item in sorted(highlights, key=self.sort_high4view):
+            page, text, date, page_id, comment = item
+            page_text = "Page " + str(page) if self.status.act_page.isChecked() else ""
+            date_text = "[" + date + "]" if self.status.act_date.isChecked() else ""
+            high_text = text if self.status.act_text.isChecked() else ""
+            line_break2 = "\n" if self.status.act_text.isChecked() and comment else ""
+            high_comment = line_break2 + "● " + comment if line_break2 else ""
+            highlight = (page_text + space + date_text + line_break +
+                         high_text + high_comment + "\n")
+
+            highlight_item = QListWidgetItem(highlight, self.high_list)
+            highlight_item.setData(Qt.UserRole, item)
+
+    @Slot(QPoint)
+    def on_high_list_customContextMenuRequested(self, point):
+        """ When a highlight is right-clicked
+
+        :type point: QPoint
+        :param point: The point where the right-click happened
+        """
+        if self.sel_highlights:
+            menu = QMenu(self.high_list)
+
+            action = QAction(_("Comments"), menu)
+            action.triggered.connect(self.on_edit_comment)
+            action.setIcon(self.ico_file_edit)
+            menu.addAction(action)
+
+            action = QAction(_("Copy"), menu)
+            action.triggered.connect(self.on_copy_highlights)
+            action.setIcon(self.ico_copy)
+            menu.addAction(action)
+
+            action = QAction(_("Delete"), menu)
+            action.triggered.connect(self.on_delete_highlights)
+            action.setIcon(self.ico_delete)
+            menu.addAction(action)
+
+            menu.exec_(self.high_list.mapToGlobal(point))
+
+    @Slot()
+    def on_high_list_itemDoubleClicked(self):
+        """ An item on the Highlight List is double-clicked
+        """
+        self.on_edit_comment()
+
+    def on_edit_comment(self):
+        """ Opens a window to edit the selected highlight's comment
+        """
+        if self.file_table.isVisible():  # edit comments from Book View
+            row = self.sel_highlights[-1].row()
+            comment = self.high_list.item(row).data(Qt.UserRole)[COMMENT]
+        elif self.high_table.isVisible():  # edit comments from Highlights View
+            row = self.sel_high_view[-1].row()
+            high_data = self.high_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)
+            comment = high_data["comment"]
+        else:
+            return
+        self.edit_high.high_edit_txt.setText(comment)
+        # self.edit_high.high_edit_txt.setFocus()
+        self.edit_high.exec_()
+
+    def edit_comment_ok(self):
+        """ Change the selected highlight's comment
+        """
+        text = self.edit_high.high_edit_txt.toPlainText()
+        if self.file_table.isVisible():
+            high_index = self.sel_highlights[-1]
+            high_row = high_index.row()
+            high_data = self.high_list.item(high_row).data(Qt.UserRole)
+            high_text = high_data[HIGHLIGHT_TEXT]
+
+            row = self.sel_idx.row()
+            data = self.file_table.item(row, TITLE).data(Qt.UserRole)
+
+            for bookmark in data["bookmarks"].keys():
+                if high_text == data["bookmarks"][bookmark]["notes"]:
+                    data["bookmarks"][bookmark]["text"] = text.replace("\n", "\\\n")
+                    break
+            self.file_table.item(row, TITLE).setData(Qt.UserRole, data)
+            path = self.file_table.item(row, PATH).text()
+        elif self.high_table.isVisible():
+            data = self.sel_book_data
+            row = self.sel_high_view[-1].row()
+            high_data = self.high_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)
+            high_text = high_data["text"]
+
+            for bookmark in data["bookmarks"].keys():
+                if high_text == data["bookmarks"][bookmark]["notes"]:
+                    data["bookmarks"][bookmark]["text"] = text.replace("\n", "\\\n")
+                    break
+            self.high_table.item(row, HIGHLIGHT_H).setData(Qt.UserRole, high_data)
+            self.high_table.item(row, COMMENT_H).setText(text)
+            book_path, ext = splitext(high_data["path"])
+            path = join(book_path + ".sdr", "metadata{}.lua".format(ext))
+        else:
+            return
+        self.save_book_data(path, data)
+
+    def on_copy_highlights(self):
+        """ Copy the selected highlights to clipboard
+        """
+        clipboard_text = ""
+        for highlight in sorted(self.sel_highlights):
+            row = highlight.row()
+            text = self.high_list.item(row).text()
+            clipboard_text += text + "\n"
+        self.copy_text_2clip(clipboard_text)
+
+    def on_delete_highlights(self):
+        """ The delete highlights action was invoked
+        """
+        if self.edit_lua_file_warning:
+            text = _("This is an one-time warning!\n\nIn order to delete highlights "
+                     "from a book, its \"metadata\" file must be edited. This contains "
+                     "a small risk of corrupting that file and lose all the settings "
+                     "and info of that book.\n\nDo you still want to do it?")
+            popup = self.popup(_("Warning!"), text, buttons=3)
+            if popup.buttonRole(popup.clickedButton()) == QMessageBox.RejectRole:
+                return
+            else:
+                self.edit_lua_file_warning = False
+        text = _("This will delete the selected highlights!\nAre you sure?")
+        popup = self.popup(_("Warning!"), text, buttons=3)
+        if popup.buttonRole(popup.clickedButton()) == QMessageBox.RejectRole:
+            return
+        self.delete_highlights()
+
+    def delete_highlights(self):
+        """ Delete the selected highlights
+        """
+        row = self.sel_idx.row()
+        data = self.file_table.item(row, TITLE).data(Qt.UserRole)
+        for highlight in self.sel_highlights:
+            high_row = highlight.row()
+            page = self.high_list.item(high_row).data(Qt.UserRole)[PAGE]
+            page_id = self.high_list.item(high_row).data(Qt.UserRole)[PAGE_ID]
+            del data["highlight"][page][page_id]  # delete the highlight
+
+            # delete the associated bookmark
+            text = self.high_list.item(high_row).data(Qt.UserRole)[HIGHLIGHT_TEXT]
+            for bookmark in data["bookmarks"].keys():
+                if text == data["bookmarks"][bookmark]["notes"]:
+                    del data["bookmarks"][bookmark]
+
+        for i in data["highlight"].keys():
+            if not data["highlight"][i]:  # delete page dicts with no highlights
+                del data["highlight"][i]
+            else:  # renumbering the highlight keys
+                contents = [data["highlight"][i][j] for j in sorted(data["highlight"][i])]
+                if contents:
+                    for l in data["highlight"][i].keys():  # delete all the items and
+                        del data["highlight"][i][l]
+                    for k in range(len(contents)):      # rewrite them with the new keys
+                        data["highlight"][i][k + 1] = contents[k]
+
+        contents = [data["bookmarks"][bookmark] for bookmark in sorted(data["bookmarks"])]
+        if contents:  # renumbering the bookmarks keys
+            for bookmark in data["bookmarks"].keys():  # delete all the items and
+                del data["bookmarks"][bookmark]
+            for content in range(len(contents)):  # rewrite them with the new keys
+                data["bookmarks"][content + 1] = contents[content]
+        if not data["highlight"]:  # change icon if no highlights
+            item = self.file_table.item(0, 0)
+            item.setIcon(self.ico_empty)
+        path = self.file_table.item(row, PATH).text()
+        self.save_book_data(path, data)
+
+    def save_book_data(self, path, data):
+        """ Saves the data of a book to its lua file
+
+        :type path: str|unicode
+        :param path: The path to the book's data file
+        :type data: dict
+        :param data: The book's data
+        """
+        times = os.stat(path)  # read the file's created/modified times
+        encode_data(path, data)
+        os.utime(path, (times.st_ctime, times.st_mtime))  # reapply original times
+        if self.file_table.isVisible():
+            self.on_file_table_itemClicked(self.file_table.item(self.sel_idx.row(), 0),
+                                           reset=False)
+
+    # noinspection PyUnusedLocal
+    def high_list_selection_update(self, selected, deselected):
+        """ When a highlight in gets selected
+
+        :type selected: QModelIndex
+        :parameter selected: The selected highlight
+        :type deselected: QModelIndex
+        :parameter deselected: The deselected highlight
+        """
+        self.sel_highlights = self.high_list_selection.selectedRows()
+
+    def set_highlight_sort(self):
+        """ Sets the sorting method of displayed highlights
+        """
+        self.high_by_page = self.sender().data()
+        try:
+            row = self.sel_idx.row()
+            self.on_file_table_itemClicked(self.file_table.item(row, 0), False)
+        except AttributeError:  # no book selected
+            pass
+
+    def sort_high4view(self, data):
+        """ Sets the sorting method of displayed highlights
+
+        :type data: tuple
+        param: data: The highlight's data
+        """
+        return int(data[PAGE]) if self.high_by_page else data[DATE]
+
+    def sort_high4write(self, data):
+        """ Sets the sorting method of written highlights
+
+        :type data: tuple
+        param: data: The highlight's data
+        """
+        return int(data[3][5:]) if self.high_by_page else data[0]
+
     # ___ ___________________ MERGING - SYNCING STUFF _______________
 
     def check4merge(self):
@@ -746,6 +1172,8 @@ class Base(QMainWindow, Ui_Base):
 
         :type sync: bool
         :param sync: Sync reading position too
+        :type merge: bool
+        :param merge: Merge the highlights
         """
         idx1, idx2 = self.sel_indexes
         data1, data2 = [self.file_table.item(idx.row(), TITLE).data(Qt.UserRole)
@@ -872,450 +1300,6 @@ class Base(QMainWindow, Ui_Base):
             bookmarks[counter] = extra_bookmarks[key]
             counter += 1
 
-    # ___ ___________________ HIGHLIGHT TABLE STUFF _________________
-
-    @Slot(QTableWidgetItem)
-    def on_highlight_table_itemClicked(self, item):
-        """ When an item of the highlight_table is clicked
-
-        :type item: QTableWidgetItem
-        :param item: The item (cell) that is clicked
-        """
-        row = item.row()
-        data = self.highlight_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)
-
-        if isfile(data["path"]):
-            self.toolbar.open_btn.setEnabled(True)
-        else:
-            self.toolbar.open_btn.setEnabled(False)
-
-        # needed for edit "Comments" or "Find in Books" in Highlight View
-        for row in range(self.file_table.rowCount()):  # 2check: need to optimize?
-            if data["path"] == self.file_table.item(row, TYPE).data(Qt.UserRole)[0]:
-                self.sel_book_data = self.file_table.item(row, TITLE).data(Qt.UserRole)
-                break
-
-    @Slot(QModelIndex)
-    def on_highlight_table_doubleClicked(self, index):
-        """ When an item of the highlight_table is double-clicked
-
-        :type index: QTableWidgetItem
-        :param index: The item (cell) that is clicked
-        """
-        column = index.column()
-        if column == COMMENT_H:
-            self.on_edit_highlight()
-
-    # noinspection PyUnusedLocal
-    def on_high_view_right_clicked(self, point):
-        """ When an item of the highlight_table is right-clicked
-
-        :type point: QPoint
-        :param point: The point where the right-click happened
-        """
-        if not len(self.sel_high_view):  # no items selected
-            return
-
-        menu = QMenu(self.highlight_table)
-
-        row = self.highlight_table.itemAt(point).row()
-        self.act_view_book.setData(row)
-        self.act_view_book.setEnabled(self.toolbar.open_btn.isEnabled())
-        menu.addAction(self.act_view_book)
-
-        highlights = ""
-        comments = ""
-        for idx in self.sel_high_view:
-            item_row = idx.row()
-            data = self.highlight_table.item(item_row, HIGHLIGHT_H).data(Qt.UserRole)
-            highlight = data["text"]
-            if highlight:
-                highlights += highlight + "\n\n"
-            comment = data["comment"]
-            if comment:
-                comments += comment + "\n\n"
-
-        highlights = highlights.rstrip("\n").replace("\n", os.linesep)
-        comments = comments.rstrip("\n").replace("\n", os.linesep)
-
-        high_text = _("Copy Highlights")
-        com_text = _("Copy Comments")
-        if len(self.sel_high_view) == 1:  # single selection
-            high_text = _("Copy Highlight")
-            com_text = _("Copy Comment")
-
-            action = QAction(_("Find in Books"), menu)
-            action.triggered.connect(partial(self.find_in_books, highlights))
-            action.setIcon(self.ico_view_books)
-            menu.addAction(action)
-
-            action = QAction(_("Comments"), menu)
-            action.triggered.connect(self.on_edit_highlight)
-            action.setIcon(self.ico_file_edit)
-            menu.addAction(action)
-
-        action = QAction(high_text, menu)
-        action.triggered.connect(partial(self.copy_text_2clip, highlights))
-        action.setIcon(self.ico_copy)
-        menu.addAction(action)
-
-        action = QAction(com_text, menu)
-        action.triggered.connect(partial(self.copy_text_2clip, comments))
-        action.setIcon(self.ico_copy)
-        menu.addAction(action)
-
-        action = QAction(_("Save to text file"), menu)
-        action.triggered.connect(self.on_save_actions)
-        action.setData(2)
-        action.setIcon(self.ico_file_save)
-        menu.addAction(action)
-
-        # noinspection PyArgumentList
-        menu.exec_(QCursor.pos())
-
-    def scan_highlights_thread(self):
-        """ Gets all the loaded highlights
-        """
-        self.highlight_table.model().removeRows(0, self.highlight_table.rowCount())
-        self.highlight_table.setSortingEnabled(False)  # need this before populating table
-
-        scanner = HighlightScanner()
-        scanner.moveToThread(self.highlight_scan_thread)
-        scanner.found.connect(self.create_highlight_row)
-        scanner.finished.connect(self.scan_highlights_finished)
-        scanner.finished.connect(self.highlight_scan_thread.quit)
-        self.highlight_scan_thread.scanner = scanner
-        self.highlight_scan_thread.started.connect(scanner.process)
-        self.highlight_scan_thread.start(QThread.IdlePriority)
-
-    def create_highlight_row(self, data):
-        """ Creates a highlight table row from the given data
-
-        :type data: dict
-        :param data: The highlight data
-        """
-        self.highlight_table.setSortingEnabled(False)
-        self.highlight_table.insertRow(0)
-
-        item = QTableWidgetItem(data["text"])
-        item.setToolTip("<p>{}</p>".format(data["text"]))
-        item.setData(Qt.UserRole, data)
-        self.highlight_table.setItem(0, HIGHLIGHT_H, item)
-
-        comment = data["comment"]
-        item = QTableWidgetItem(comment)
-        if comment:
-            item.setToolTip("<p>{}</p>".format(comment))
-        self.highlight_table.setItem(0, COMMENT_H, item)
-
-        item = QTableWidgetItem(data["date"])
-        item.setToolTip(data["date"])
-        item.setTextAlignment(Qt.AlignRight)
-        self.highlight_table.setItem(0, DATE_H, item)
-
-        item = QTableWidgetItem(data["title"])
-        item.setToolTip(data["title"])
-        self.highlight_table.setItem(0, TITLE_H, item)
-
-        page = data["page"]
-        item = XTableWidgetItem(page)
-        item.setToolTip(page)
-        item.setTextAlignment(Qt.AlignRight)
-        item.setData(Qt.UserRole, int(page))
-        self.highlight_table.setItem(0, PAGE_H, item)
-
-        item = QTableWidgetItem(data["authors"])
-        item.setToolTip(data["authors"])
-        self.highlight_table.setItem(0, PATH, item)
-
-        self.highlight_table.setSortingEnabled(True)
-
-    def scan_highlights_finished(self):
-        """ What will happen after the scanning for history files ends
-        """
-        for col in [PAGE_H, DATE_H, AUTHOR_H, TITLE_H]:
-            self.highlight_table.resizeColumnToContents(col)
-
-        self.highlight_table.setSortingEnabled(True)  # re-enable, after populating table
-        order = Qt.AscendingOrder if self.col_sort_asc_h else Qt.DescendingOrder
-        self.highlight_table.sortByColumn(self.col_sort_h, order)
-
-    # noinspection PyUnusedLocal
-    def high_view_selection_update(self, selected, deselected):
-        """ When a row in highlight_table gets selected
-
-        :type selected: QModelIndex
-        :parameter selected: The selected row
-        :type deselected: QModelIndex
-        :parameter deselected: The deselected row
-        """
-        try:
-            self.sel_high_view = self.high_view_selection.selectedRows()
-        except IndexError:  # empty table
-            pass
-
-    def on_highlight_column_clicked(self, column):
-        """ Sets the current sorting column
-
-        :type column: int
-        :parameter column: The column where the filtering is applied
-        """
-        if column == self.col_sort_h:
-            self.col_sort_asc_h = not self.col_sort_asc_h
-        else:
-            self.col_sort_asc_h = True
-        self.col_sort_h = column
-
-    # noinspection PyUnusedLocal
-    def on_highlight_column_resized(self, column, oldSize, newSize):
-        """ Gets the column size
-
-        :type column: int
-        :parameter column: The resized column
-        :type oldSize: int
-        :parameter oldSize: The old size
-        :type newSize: int
-        :parameter newSize: The new size
-        """
-        if column == HIGHLIGHT_H:
-            self.highlight_width = newSize
-        elif column == COMMENT_H:
-            self.comment_width = newSize
-
-    def find_in_books(self, highlight):
-        """ Finds the current highlight in the "Books View"
-
-        :type highlight: str|unicode
-        :parameter highlight: The highlight we searching for
-        """
-        data = self.sel_book_data
-        for row in range(self.file_table.rowCount()):
-            item = self.file_table.item(row, TITLE)
-            row_data = item.data(Qt.UserRole)
-            if data["stats"]["title"] == row_data["stats"]["title"]:  # find the book row
-                self.on_file_table_itemClicked(item)
-                self.toolbar.books_btn.click()
-                self.file_table.selectRow(row)
-                for hi_row in range(self.highlights_list.count()):  # find the highlight
-                    if (self.highlights_list.item(hi_row)
-                            .data(Qt.UserRole)[HIGHLIGHT_TEXT] == highlight):
-                        self.highlights_list.setCurrentRow(hi_row)
-                        break
-                break
-
-    # ___ ___________________ HIGHLIGHTS LIST STUFF _________________
-
-    # noinspection PyUnusedLocal
-    def on_highlight_right_clicked(self, point):
-        """ When a highlight is right-clicked
-
-        :type point: QPoint
-        :param point: The point where the right-click happened
-        """
-        if self.sel_highlights:
-            menu = QMenu(self.highlights_list)
-
-            action = QAction(_("Comments"), menu)
-            action.triggered.connect(self.on_edit_highlight)
-            action.setIcon(self.ico_file_edit)
-            menu.addAction(action)
-
-            action = QAction(_("Copy"), menu)
-            action.triggered.connect(self.on_copy_highlights)
-            action.setIcon(self.ico_copy)
-            menu.addAction(action)
-
-            action = QAction(_("Delete"), menu)
-            action.triggered.connect(self.on_delete_highlights)
-            action.setIcon(self.ico_delete)
-            menu.addAction(action)
-
-            # noinspection PyArgumentList
-            menu.exec_(QCursor.pos())
-
-    @Slot()
-    def on_highlights_list_itemDoubleClicked(self):
-        """ An item on the Highlight List is double-clicked
-        """
-        self.on_edit_highlight()
-
-    def on_edit_highlight(self):
-        """ Opens a window to edit the selected highlight's comment
-        """
-        if self.file_table.isVisible():  # edit comments from Book View
-            row = self.sel_highlights[-1].row()
-            comment = self.highlights_list.item(row).data(Qt.UserRole)[COMMENT]
-        elif self.highlight_table.isVisible():  # edit comments from Highlights View
-            row = self.sel_high_view[-1].row()
-            high_data = self.highlight_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)
-            comment = high_data["comment"]
-        else:
-            return
-        self.edit_high.high_edit_txt.setText(comment)
-        # self.edit_high.high_edit_txt.setFocus()
-        self.edit_high.exec_()
-
-    def edit_highlight_ok(self):
-        """ Change the selected highlight's comment
-        """
-        text = self.edit_high.high_edit_txt.toPlainText()
-        if self.file_table.isVisible():
-            high_index = self.sel_highlights[-1]
-            high_row = high_index.row()
-            high_data = self.highlights_list.item(high_row).data(Qt.UserRole)
-            high_text = high_data[HIGHLIGHT_TEXT]
-
-            row = self.sel_idx.row()
-            data = self.file_table.item(row, TITLE).data(Qt.UserRole)
-
-            for bookmark in data["bookmarks"].keys():
-                if high_text == data["bookmarks"][bookmark]["notes"]:
-                    data["bookmarks"][bookmark]["text"] = text.replace("\n", "\\\n")
-                    break
-            self.file_table.item(row, TITLE).setData(Qt.UserRole, data)
-            path = self.file_table.item(row, PATH).text()
-        elif self.highlight_table.isVisible():
-            data = self.sel_book_data
-            row = self.sel_high_view[-1].row()
-            high_data = self.highlight_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)
-            high_text = high_data["text"]
-
-            for bookmark in data["bookmarks"].keys():
-                if high_text == data["bookmarks"][bookmark]["notes"]:
-                    data["bookmarks"][bookmark]["text"] = text.replace("\n", "\\\n")
-                    break
-            self.highlight_table.item(row, HIGHLIGHT_H).setData(Qt.UserRole, high_data)
-            self.highlight_table.item(row, COMMENT_H).setText(text)
-            book_path, ext = splitext(high_data["path"])
-            path = join(book_path + ".sdr", "metadata{}.lua".format(ext))
-        else:
-            return
-        self.save_book_data(path, data)
-
-    def on_copy_highlights(self):
-        """ Copy the selected highlights to clipboard
-        """
-        clipboard_text = ""
-        for highlight in sorted(self.sel_highlights):
-            row = highlight.row()
-            text = self.highlights_list.item(row).text()
-            clipboard_text += text + "\n"
-
-        data = QMimeData()
-        data.setText(clipboard_text)
-        self.clip.setMimeData(data)
-
-    def on_delete_highlights(self):
-        """ The delete highlights action was invoked
-        """
-        if self.edit_lua_file_warning:
-            text = _("This is an one-time warning!\n\nIn order to delete highlights "
-                     "from a book, its \"metadata\" file must be edited. This contains "
-                     "a small risk of corrupting that file and lose all the settings "
-                     "and info of that book.\n\nDo you still want to do it?")
-            popup = self.popup(_("Warning!"), text, buttons=3)
-            if popup.buttonRole(popup.clickedButton()) == QMessageBox.RejectRole:
-                return
-            else:
-                self.edit_lua_file_warning = False
-        text = _("This will delete the selected highlights!\nAre you sure?")
-        popup = self.popup(_("Warning!"), text, buttons=3)
-        if popup.buttonRole(popup.clickedButton()) == QMessageBox.RejectRole:
-            return
-        self.delete_highlights()
-
-    def delete_highlights(self):
-        """ Delete the selected highlights
-        """
-        row = self.sel_idx.row()
-        data = self.file_table.item(row, TITLE).data(Qt.UserRole)
-        for highlight in self.sel_highlights:
-            high_row = highlight.row()
-            page = self.highlights_list.item(high_row).data(Qt.UserRole)[PAGE]
-            page_id = self.highlights_list.item(high_row).data(Qt.UserRole)[PAGE_ID]
-            del data["highlight"][page][page_id]  # delete the highlight
-
-            # delete the associated bookmark
-            text = self.highlights_list.item(high_row).data(Qt.UserRole)[HIGHLIGHT_TEXT]
-            for bookmark in data["bookmarks"].keys():
-                if text == data["bookmarks"][bookmark]["notes"]:
-                    del data["bookmarks"][bookmark]
-
-        for i in data["highlight"].keys():
-            if not data["highlight"][i]:  # delete page dicts with no highlights
-                del data["highlight"][i]
-            else:  # renumbering the highlight keys
-                contents = [data["highlight"][i][j] for j in sorted(data["highlight"][i])]
-                if contents:
-                    for l in data["highlight"][i].keys():  # delete all the items and
-                        del data["highlight"][i][l]
-                    for k in range(len(contents)):      # rewrite them with the new keys
-                        data["highlight"][i][k + 1] = contents[k]
-
-        contents = [data["bookmarks"][bookmark] for bookmark in sorted(data["bookmarks"])]
-        if contents:  # renumbering the bookmarks keys
-            for bookmark in data["bookmarks"].keys():  # delete all the items and
-                del data["bookmarks"][bookmark]
-            for content in range(len(contents)):  # rewrite them with the new keys
-                data["bookmarks"][content + 1] = contents[content]
-        if not data["highlight"]:  # change icon if no highlights
-            item = self.file_table.item(0, 0)
-            item.setIcon(self.ico_empty)
-        path = self.file_table.item(row, PATH).text()
-        self.save_book_data(path, data)
-
-    def save_book_data(self, path, data):
-        """ Saves the data of a book to its lua file
-
-        :type path: str|unicode
-        :param path: The path to the book's data file
-        :type data: dict
-        :param data: The book's data
-        """
-        times = os.stat(path)  # read the file's created/modified times
-        encode_data(path, data)
-        os.utime(path, (times.st_ctime, times.st_mtime))  # reapply original times
-        if self.file_table.isVisible():
-            self.on_file_table_itemClicked(self.file_table.item(self.sel_idx.row(), 0),
-                                           reset=False)
-
-    # noinspection PyUnusedLocal
-    def highlights_selection_update(self, selected, deselected):
-        """ When a highlight in gets selected
-
-        :type selected: QModelIndex
-        :parameter selected: The selected highlight
-        :type deselected: QModelIndex
-        :parameter deselected: The deselected highlight
-        """
-        self.sel_highlights = self.highlights_selection.selectedRows()
-
-    def set_highlight_sort(self):
-        """ Sets the sorting method of displayed highlights
-        """
-        self.high_by_page = bool(self.sender().data())
-        try:
-            row = self.sel_idx.row()
-            self.on_file_table_itemClicked(self.file_table.item(row, 0), False)
-        except AttributeError:  # no book selected
-            pass
-
-    def sort_high4view(self, data):
-        """ Sets the sorting method of displayed highlights
-
-        :type data: tuple
-        param: data: The highlight's data
-        """
-        return int(data[PAGE]) if self.high_by_page else data[DATE]
-
-    def sort_high4write(self, data):
-        """ Sets the sorting method of written highlights
-
-        :type data: tuple
-        param: data: The highlight's data
-        """
-        return int(data[3][5:]) if self.high_by_page else data[0]
-
     # ___ ___________________ DELETING STUFF ________________________
 
     def delete_menu(self):
@@ -1441,6 +1425,7 @@ class Base(QMainWindow, Ui_Base):
         idx = self.sender().data()
         self.save_actions(idx)
 
+    # noinspection PyCallByClass
     def save_actions(self, idx):
         """ Execute the selected `Save action`
 
@@ -1451,37 +1436,26 @@ class Base(QMainWindow, Ui_Base):
         if not self.sel_indexes:
             return
 
-        if idx in [MANY_TEXT, MANY_HTML]:  # Save from the file_table to different files
+        if idx in [MANY_TEXT, MANY_HTML]:  # Save from file_table to different files
             text = _("Select destination folder for the saved file(s)")
             dir_path = QFileDialog.getExistingDirectory(self, text, self.last_dir,
                                                         QFileDialog.ShowDirsOnly)
-            if dir_path:
-                self.last_dir = dir_path
-            else:
+            if not dir_path:
                 return
+            self.last_dir = dir_path
             saved = self.save_multi_files(dir_path, idx == MANY_HTML)
-        elif idx == ONE_TEXT:  # Save from the file_table, combined to one text file
-            filename = QFileDialog.getSaveFileName(self, _("Save to Text file"),
-                                                   self.last_dir,
-                                                   _("Text files") + " (*.txt)")[0]
-            if filename:
-                filename = filename
-                self.last_dir = dirname(filename)
-            else:
+        elif idx in [ONE_TEXT, ONE_HTML]:  # Save from file_table, combine to one file
+            html = idx == ONE_HTML
+            ext = " (*.html)" if html else " (*.txt)"
+            title = _("Save to HTML file") if html else _("Save to Text file")
+            filename = QFileDialog.getSaveFileName(self, title, self.last_dir,
+                                                   _("Text files") + ext)[0]
+            if not filename:
                 return
-            saved = self.save_merged_text(filename)
-        elif idx == ONE_HTML:  # Save from the file_table, combined to one html file
-            filename = QFileDialog.getSaveFileName(self, _("Save to Html file"),
-                                                   self.last_dir,
-                                                   _("Html files") + " (*.html)")[0]
-            if filename:
-                filename = filename
-                self.last_dir = dirname(filename)
-            else:
-                return
-            saved = self.save_merged_html(filename)
-        elif idx == MERGED_HIGH:  # Save from the highlight_table
-            return self.save_sel_highlights()  # no popup
+            self.last_dir = dirname(filename)
+            saved = self.save_merged_file(filename, html=html)
+        elif idx == MERGED_HIGH:  # Save from high_table, combine to one file
+            return self.save_sel_highlights()  # exit without info popup
 
         self.status.animation("stop")
         all_files = len(self.file_table.selectionModel().selectedRows())
@@ -1490,21 +1464,23 @@ class Base(QMainWindow, Ui_Base):
                    .format(saved, all_files, all_files - saved),
                    icon=QMessageBox.Information)
 
-    def save_multi_files(self, dir_path, html=False):
+    def save_multi_files(self, dir_path, html):
         """ Save each selected book's highlights to a different file
 
         :type dir_path: str|unicode
         :param dir_path: The directory where the files will be saved
+        :type html: bool
+        :param html: The output is html
         """
         self.status.animation("start")
         saved = 0
         title_counter = 0
-        extra = (" " if self.status.act_page.isChecked() and
+        space = (" " if self.status.act_page.isChecked() and
                  self.status.act_date.isChecked() else "")
         line_break = (":" + os.linesep if self.status.act_page.isChecked() or
                       self.status.act_date.isChecked() else "")
-        for i in self.sel_indexes:
-            row = i.row()
+        for idx in self.sel_indexes:
+            row = idx.row()
             data = self.file_table.item(row, 0).data(Qt.UserRole)
             highlights = []
             for page in data["highlight"]:
@@ -1533,7 +1509,7 @@ class Base(QMainWindow, Ui_Base):
                 for highlight in sorted(highlights, key=self.sort_high4write):
                     date_text, high_comment, high_text, page_text = highlight
                     if not html:
-                        text += (page_text + extra + date_text + line_break +
+                        text += (page_text + space + date_text + line_break +
                                  high_text + high_comment)
                         text += 2 * os.linesep
                     else:
@@ -1547,61 +1523,22 @@ class Base(QMainWindow, Ui_Base):
                 saved += 1
         return saved
 
-    def save_merged_text(self, filename):
-        """ Save the selected book's highlights to a single text file
-
-        :type filename: str|unicode
-        :param filename: The name of the text file with the highlights
-        """
-        self.status.animation("start")
-        saved = 0
-        title_counter = 0
-        extra = (" " if self.status.act_page.isChecked() and
-                 self.status.act_date.isChecked() else "")
-        line_break = (":" + os.linesep if self.status.act_page.isChecked() or
-                      self.status.act_date.isChecked() else "")
-        blocks = []
-        for i in sorted(self.sel_indexes):
-            row = i.row()
-            data = self.file_table.item(row, 0).data(Qt.UserRole)
-            highlights = []
-            for page in data["highlight"]:
-                for page_id in data["highlight"][page]:
-                    highlights.append(self.analyze_high(data, page, page_id, html=False))
-            highlights = [i[3] + extra + i[0] + line_break + i[2] + i[1] for i in
-                          sorted(highlights, key=self.sort_high4write)]
-            if not highlights:  # no highlights
-                continue
-            title = self.file_table.item(row, 0).data(0)
-            if title == _("NO TITLE FOUND"):
-                title += str(title_counter)
-                title_counter += 1
-            authors = self.file_table.item(row, 1).data(0)
-            if authors in ["OLD TYPE FILE", "NO AUTHOR FOUND"]:
-                authors = ""
-            name = title
-            if authors:
-                name = "{} - {}".format(authors, title)
-            # noinspection PyUnresolvedReferences
-            blocks.append((name, (2 * os.linesep).join(highlights)))
-            saved += 1
-        line = "-" * 80
-        with codecs.open(filename, "w+", encoding="utf-8") as text_file:
-            for block in blocks:
-                text_file.write("{0}{3}{1}{3}{0}{3}{2}{3}{3}"
-                                .format(line, block[0], block[1], os.linesep))
-        return saved
-
-    def save_merged_html(self, filename):
+    def save_merged_file(self, filename, html):
         """ Save the selected book's highlights to a single html file
 
         :type filename: str|unicode
         :param filename: The name of the html file with the highlights
+        :type html: bool
+        :param html: The output is html
         """
         self.status.animation("start")
         saved = 0
         title_counter = 0
-        text = HTML_HEAD
+        space = (" " if self.status.act_page.isChecked() and
+                 self.status.act_date.isChecked() else "")
+        line_break = (":" + os.linesep if self.status.act_page.isChecked() or
+                      self.status.act_date.isChecked() else "")
+        text = HTML_HEAD if html else ""
         for i in sorted(self.sel_indexes):
             row = i.row()
             data = self.file_table.item(row, 0).data(Qt.UserRole)
@@ -1617,28 +1554,40 @@ class Base(QMainWindow, Ui_Base):
             highlights = []
             for page in data["highlight"]:
                 for page_id in data["highlight"][page]:
-                    highlights.append(self.analyze_high(data, page, page_id, html=True))
+                    highlights.append(self.analyze_high(data, page, page_id, html=html))
             if not highlights:  # no highlights
                 continue
 
-            text += BOOK_BLOCK % {"title": title, "authors": authors}
-            for high in sorted(highlights, key=self.sort_high4write):
-                date_text, high_comment, high_text, page_text = high
-                text += HIGH_BLOCK % {"page": page_text, "date": date_text,
-                                      "highlight": high_text, "comment": high_comment}
-            text += "</div>\n"
+            if html:
+                text += BOOK_BLOCK % {"title": title, "authors": authors}
+                for high in sorted(highlights, key=self.sort_high4write):
+                    date_text, high_comment, high_text, page_text = high
+                    text += HIGH_BLOCK % {"page": page_text, "date": date_text,
+                                          "highlight": high_text, "comment": high_comment}
+                text += "</div>\n"
+            else:
+                name = title
+                if authors:
+                    name = "{} - {}".format(authors, title)
+                line = "-" * 80
+                text += line + os.linesep + name + os.linesep + line + os.linesep
+                highlights = [i[3] + space + i[0] + line_break + i[2] + i[1] for i in
+                              sorted(highlights, key=self.sort_high4write)]
+
+                text += (os.linesep * 2).join(highlights) + os.linesep * 2
             saved += 1
-        text += "\n</body>\n</html>"
+        text += "\n</body>\n</html>" if html else ""
 
         with codecs.open(filename, "w+", encoding="utf-8") as text_file:
             text_file.write(text)
         return saved
 
     def save_sel_highlights(self):
-        """ Save the selected highlights to a text file (from highlight_table)
+        """ Save the selected highlights to a text file (from high_table)
         """
         if not self.sel_high_view:
             return
+        # noinspection PyCallByClass
         filename = QFileDialog.getSaveFileName(self, "Save to Text file", self.last_dir,
                                                "text files (*.txt);;"
                                                "all files (*.*)")[0]
@@ -1649,7 +1598,7 @@ class Base(QMainWindow, Ui_Base):
         text = ""
         for i in sorted(self.sel_high_view):
             row = i.row()
-            data = self.highlight_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)
+            data = self.high_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)
             comment = "\n● " + data["comment"] if data["comment"] else ""
             txt = ("{} [{}]\nPage {} [{}]\n{}{}".format(data["title"], data["authors"],
                                                         data["page"], data["date"],
@@ -1986,6 +1935,7 @@ class Base(QMainWindow, Ui_Base):
                     pass
 
     def on_check_btn(self):
+        # noinspection PyCallByClass
         QMessageBox.information(self, _("Info"), _("Tool button is pressed"))
 
 
@@ -2133,9 +2083,12 @@ class ToolBar(QWidget, Ui_ToolBar):
         self.check_btn.clicked.connect(parent.on_check_btn)
         self.check_btn.hide()
 
-    @Slot()
-    def on_tool_frame_customContextMenuRequested(self):
+    @Slot(QPoint)
+    def on_tool_frame_customContextMenuRequested(self, point):
         """ The Toolbar is right-clicked
+
+        :type point: QPoint
+        :param point: The point where the right-click happened
         """
         sizes = (_("Tiny"), 16), (_("Small"), 32), (_("Medium"), 48), (_("Big"), 64),
         menu = QMenu(self)
@@ -2148,8 +2101,8 @@ class ToolBar(QWidget, Ui_ToolBar):
             action.triggered.connect(partial(self.set_btn_size, size))
             group.addAction(action)
             menu.addAction(action)
-        # noinspection PyArgumentList
-        menu.exec_(QCursor.pos())
+
+        menu.exec_(self.tool_frame.mapToGlobal(point))
 
     def set_btn_size(self, size):
         """ Changes the Toolbar's icons size
@@ -2178,7 +2131,7 @@ class ToolBar(QWidget, Ui_ToolBar):
         if path:
             self.base.last_dir = path
             # self.base.file_table.model().removeRows(0, self.base.file_table.rowCount())
-            self.base.highlights_list.clear()
+            self.base.high_list.clear()
             self.base.scan_files_thread(path)
 
     @Slot()
@@ -2206,8 +2159,7 @@ class ToolBar(QWidget, Ui_ToolBar):
                 idx = self.base.sel_high_view[-1]
             except IndexError:  # nothing selected
                 return
-            data = self.base.highlight_table.item(idx.row(),
-                                                  HIGHLIGHT_H).data(Qt.UserRole)
+            data = self.base.high_table.item(idx.row(), HIGHLIGHT_H).data(Qt.UserRole)
             self.base.open_file(data["path"])
 
     @Slot()
@@ -2260,8 +2212,8 @@ class ToolBar(QWidget, Ui_ToolBar):
         """ The `Clear List` button is pressed
         """
         if self.base.current_view == 1:  # highlights view
-            (self.base.highlight_table.model()
-             .removeRows(0, self.base.highlight_table.rowCount()))
+            (self.base.high_table.model()
+             .removeRows(0, self.base.high_table.rowCount()))
         self.base.loaded_paths.clear()
         self.base.file_table.model().removeRows(0, self.base.file_table.rowCount())
 
@@ -2339,7 +2291,7 @@ class Status(QWidget, Ui_Status):
         action.setCheckable(True)
         action.setChecked(not self.base.high_by_page)
         action.triggered.connect(self.base.set_highlight_sort)
-        action.setData(0)
+        action.setData(False)
         group.addAction(action)
         sort_menu.addAction(action)
 
@@ -2347,7 +2299,7 @@ class Status(QWidget, Ui_Status):
         action.setCheckable(True)
         action.setChecked(self.base.high_by_page)
         action.triggered.connect(self.base.set_highlight_sort)
-        action.setData(1)
+        action.setData(True)
         group.addAction(action)
         sort_menu.addAction(action)
 
@@ -2610,7 +2562,7 @@ class KoHighlights(QApplication):
                                       "single file, otherwise save every book's "
                                       "highlights to a different file")
         self.parser.add_argument("-f", "--html", action="store_true", default=False,
-                                 help="Saves highlights in html format instead of txt")
+                                 help="Saves highlights in .html format instead of .txt")
 
         self.parser.add_argument("-np", "--no_page", action="store_true", default=False,
                                  help="Exclude the page number of the highlight")
@@ -2624,8 +2576,8 @@ class KoHighlights(QApplication):
                                  help="Exclude the comment of the highlight")
 
         self.parser.add_argument("-o", "--output", required="-x" in sys.argv,
-                                 help="The filename of the text file (in merge mode) or "
-                                 "the directory for saving the highlight text files")
+                                 help="The filename of the file (in merge mode) or "
+                                 "the directory for saving the highlight files")
 
         # args, paths = self.parser.parse_known_args()
         args = self.parser.parse_args()
@@ -2658,10 +2610,7 @@ class KoHighlights(QApplication):
                 self.parser.error("The output path (-o/--output) must be {} filename "
                                   "not a directory!".format(ext))
                 return
-            if args.html:
-                saved = self.cli_save_merged_html(args, files)
-            else:
-                saved = self.cli_save_merged_text(args, files)
+            saved = self.cli_save_merged_file(args, files)
 
         all_files = len(files)
         sys.stdout.write(_("\n{} files were saved from the {} processed.\n"
@@ -2678,7 +2627,7 @@ class KoHighlights(QApplication):
         """
         saved = 0
         title_counter = 0
-        extra = " " if not args.no_page and not args.no_date else ""
+        space = " " if not args.no_page and not args.no_date else ""
         line_break = ":" + os.linesep if not args.no_page or not args.no_date else ""
         path = abspath(args.output)
         for file_ in files:
@@ -2722,7 +2671,7 @@ class KoHighlights(QApplication):
                 for highlight in sorted(highlights, key=partial(self.cli_sort, args)):
                     date_text, high_comment, high_text, page_text = highlight
                     if not args.html:
-                        text += (page_text + extra + date_text +
+                        text += (page_text + space + date_text +
                                  line_break + high_text + high_comment)
                         text += 2 * os.linesep
                     else:
@@ -2737,69 +2686,7 @@ class KoHighlights(QApplication):
                 saved += 1
         return saved
 
-    def cli_save_merged_text(self, args, files):
-        """ Save the selected book's highlights to a single text file
-
-        :type args: argparse.Namespace
-        :param args: The parsed cli args
-        :type files: list
-        :param files: A list with the metadata files to get converted
-        """
-        saved = 0
-        title_counter = 0
-        extra = " " if not args.no_page and not args.no_date else ""
-        line_break = ":" + os.linesep if not args.no_page or not args.no_date else ""
-        path = abspath(args.output)
-        blocks = []
-        for file_ in files:
-            data = decode_data(file_)
-            highlights = []
-            for page in data["highlight"]:
-                for page_id in data["highlight"][page]:
-                    highlights.append(self.cli_analyze_high(data, page, page_id, args))
-            # noinspection PyTypeChecker
-            highlights = [i[3] + extra + i[0] + line_break + i[2] + i[1] for i in
-                          sorted(highlights, key=partial(self.cli_sort, args))]
-            if not highlights:  # no highlights
-                continue
-            authors = ""
-            try:
-                title = data["stats"]["title"]
-                authors = data["stats"]["authors"]
-            except KeyError:  # older type file
-                title = splitext(basename(file_))[0]
-                try:
-                    name = title.split("#] ")[1]
-                    title = splitext(name)[0]
-                except IndexError:  # no "#] " in filename
-                    pass
-            if not title:
-                try:
-                    name = file_.split("#] ")[1]
-                    title = splitext(name)[0]
-                except IndexError:  # no "#] " in filename
-                    title = _("NO TITLE FOUND") + str(title_counter)
-                    title_counter += 1
-            name = title
-            if authors:
-                name = "{} - {}".format(authors, title)
-            # noinspection PyUnresolvedReferences
-            blocks.append((name, (2 * os.linesep).join(highlights)))
-            saved += 1
-        line = "-" * 80
-        # path = sanitize_filename(path)
-        name, ext = splitext(path)
-        if ext.lower() != ".txt":
-            path = name + ".txt"
-        with codecs.open(path, "w+", encoding="utf-8") as text_file:
-            for block in blocks:
-                text_file.write(
-                    "{0}{3}{1}{3}{0}{3}{2}{3}{3}".format(line, block[0], block[1],
-                                                         os.linesep))
-            sys.stdout.write("Created {}\n\n".format(path))
-        return saved
-
-    def cli_save_merged_html(self, args, files):
+    def cli_save_merged_file(self, args, files):
         """ Save the selected book's highlights to a single html file
 
         :type args: argparse.Namespace
@@ -2809,7 +2696,9 @@ class KoHighlights(QApplication):
         """
         saved = 0
         title_counter = 0
-        text = HTML_HEAD
+        space = " " if not args.no_page and not args.no_date else ""
+        line_break = ":" + os.linesep if not args.no_page or not args.no_date else ""
+        text = HTML_HEAD if args.html else ""
         for file_ in files:
             data = decode_data(file_)
             authors = ""
@@ -2836,19 +2725,32 @@ class KoHighlights(QApplication):
                     highlights.append(self.cli_analyze_high(data, page, page_id, args))
             if not highlights:  # no highlights
                 continue
-            text += BOOK_BLOCK % {"title": title, "authors": authors}
-            # noinspection PyTypeChecker
-            for high in sorted(highlights, key=partial(self.cli_sort, args)):
-                date_text, high_comment, high_text, page_text = high
-                text += HIGH_BLOCK % {"page": page_text, "date": date_text,
-                                      "highlight": high_text, "comment": high_comment}
-            text += "</div>\n"
+            if args.html:
+                text += BOOK_BLOCK % {"title": title, "authors": authors}
+                # noinspection PyTypeChecker
+                for high in sorted(highlights, key=partial(self.cli_sort, args)):
+                    date_text, high_comment, high_text, page_text = high
+                    text += HIGH_BLOCK % {"page": page_text, "date": date_text,
+                                          "highlight": high_text, "comment": high_comment}
+                text += "</div>\n"
+            else:
+                name = title
+                if authors:
+                    name = "{} - {}".format(authors, title)
+                line = "-" * 80
+                text += line + os.linesep + name + os.linesep + line + os.linesep
+                # noinspection PyTypeChecker
+                highlights = [i[3] + space + i[0] + line_break + i[2] + i[1] for i in
+                              sorted(highlights, key=partial(self.cli_sort, args))]
+
+                text += (os.linesep * 2).join(highlights) + os.linesep * 2
             saved += 1
-        text += "\n</body>\n</html>"
+        text += "\n</body>\n</html>" if args.html else ""
         path = abspath(args.output)
         name, ext = splitext(path)
-        if ext.lower() != ".html":
-            path = name + ".html"
+        new_ext = ".html" if args.html else ".txt"
+        if ext.lower() != new_ext:
+            path = name + new_ext
         with codecs.open(path, "w+", encoding="utf-8") as text_file:
             text_file.write(text)
             sys.stdout.write("Created {}\n\n".format(path))
@@ -2915,6 +2817,8 @@ class KoHighlights(QApplication):
         :param page The page where the highlight starts
         :type page_id: int
         :param page_id The count of this page's highlight
+        :type args: argparse.Namespace
+        :param args: The parsed cli args
         """
         date = data["highlight"][page][page_id]["datetime"]
         text = data["highlight"][page][page_id]["text"]
@@ -2948,13 +2852,13 @@ class KoHighlights(QApplication):
         return date_text, high_comment, high_text, page_text
 
     @staticmethod
-    def get_name(data, filename, title_counter):
+    def get_name(data, meta_path, title_counter):
         """ Return the name of the book entry
 
         :type data: dict
         :param data: The book's metadata
-        :type filename: str|unicode
-        :param filename: The book's metadata path
+        :type meta_path: str|unicode
+        :param meta_path: The book's metadata path
         :type title_counter: list
         :param title_counter: A list with the current NO TITLE counter
         """
@@ -2963,7 +2867,7 @@ class KoHighlights(QApplication):
             title = data["stats"]["title"]
             authors = data["stats"]["authors"]
         except KeyError:  # older type file
-            title = splitext(basename(filename))[0]
+            title = splitext(basename(meta_path))[0]
             try:
                 name = title.split("#] ")[1]
                 title = splitext(name)[0]
@@ -2971,7 +2875,7 @@ class KoHighlights(QApplication):
                 pass
         if not title:
             try:
-                name = filename.split("#] ")[1]
+                name = meta_path.split("#] ")[1]
                 title = splitext(name)[0]
             except IndexError:  # no "#] " in filename
                 title = _("NO TITLE FOUND") + str(title_counter[0])
