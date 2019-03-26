@@ -4,6 +4,7 @@ from __future__ import (absolute_import, division, print_function, unicode_liter
 import time
 import sys, os
 import traceback
+import gzip, json
 from os.path import dirname, join, isdir, expanduser
 
 APP_NAME = "KoHighlights"
@@ -30,13 +31,13 @@ def except_hook(class_type, value, trace_back):
 
 sys.excepthook = except_hook
 
-import gzip, json
 
-PYTHON2 = True
+PYTHON2 = True if not sys.version_info >= (3, 0) else False
 FIRST_RUN = False
 try:
     with gzip.GzipFile(join(SETTINGS_DIR, "settings.json.gz"), "rb") as settings:
-        app_config = json.loads(settings.read())
+        j_text = settings.read() if PYTHON2 else settings.read().decode("utf8")
+        app_config = json.loads(j_text)
 except IOError:  # on first run
     app_config = {}
     FIRST_RUN = True
