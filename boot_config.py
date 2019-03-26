@@ -35,7 +35,7 @@ sys.excepthook = except_hook
 PYTHON2 = True if not sys.version_info >= (3, 0) else False
 FIRST_RUN = False
 try:
-    with gzip.GzipFile(join(SETTINGS_DIR, "settings.json.gz"), "rb") as settings:
+    with gzip.GzipFile(join(SETTINGS_DIR, "settings.json.gz")) as settings:
         j_text = settings.read() if PYTHON2 else settings.read().decode("utf8")
         app_config = json.loads(j_text)
 except IOError:  # on first run
