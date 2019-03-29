@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_status.ui'
 #
-# Created: Sun Mar  3 11:56:15 2019
+# Created: Sat Mar 30 00:34:32 2019
 #      by: pyside-uic 0.2.15 running on PySide 1.2.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -57,9 +57,9 @@ class Ui_Status(object):
         QtCore.QMetaObject.connectSlotsByName(Status)
 
     def retranslateUi(self, Status):
-        self.show_items_btn.setToolTip(QtGui.QApplication.translate("Status", "Show/Hide elements of Highlights.\n"
-"It also affects the saved text files.", None, QtGui.QApplication.UnicodeUTF8))
-        self.show_items_btn.setStatusTip(QtGui.QApplication.translate("Status", "Show/Hide elements of Highlights. It also affects the saved text files.", None, QtGui.QApplication.UnicodeUTF8))
+        self.show_items_btn.setToolTip(QtGui.QApplication.translate("Status", "Show/Hide elements of Highlights. Also affects\n"
+"what will be saved to the text/html files.", None, QtGui.QApplication.UnicodeUTF8))
+        self.show_items_btn.setStatusTip(QtGui.QApplication.translate("Status", "Show/Hide elements of Highlights. Also affects what will be saved to the text/html files.", None, QtGui.QApplication.UnicodeUTF8))
         self.show_items_btn.setText(QtGui.QApplication.translate("Status", "Show in Highlights", None, QtGui.QApplication.UnicodeUTF8))
         self.act_page.setText(QtGui.QApplication.translate("Status", "Page", None, QtGui.QApplication.UnicodeUTF8))
         self.act_date.setText(QtGui.QApplication.translate("Status", "Date", None, QtGui.QApplication.UnicodeUTF8))

@@ -34,19 +34,25 @@ sys.excepthook = except_hook
 
 PYTHON2 = True if not sys.version_info >= (3, 0) else False
 FIRST_RUN = False
+# noinspection PyBroadException
 try:
     with gzip.GzipFile(join(SETTINGS_DIR, "settings.json.gz")) as settings:
         j_text = settings.read() if PYTHON2 else settings.read().decode("utf8")
         app_config = json.loads(j_text)
-except IOError:  # on first run
+except Exception:  # IOError on first run or everything else
     app_config = {}
     FIRST_RUN = True
 
-PAGE, HIGHLIGHT_TEXT, DATE, PAGE_ID, COMMENT = range(5)  # highlights_list item data
-TITLE, AUTHOR, TYPE, PERCENT, MODIFIED, PATH = range(6)  # highlight_table columns
-HIGHLIGHT_H, COMMENT_H, DATE_H, TITLE_H, PAGE_H, AUTHOR_H = range(6)  # -//- item data
-MANY_TEXT, ONE_TEXT, MANY_HTML, ONE_HTML, MERGED_HIGH = range(5)  # save actions
 
+TITLE, AUTHOR, TYPE, PERCENT, MODIFIED, PATH = range(6)  # file_table columns
+PAGE, HIGHLIGHT_TEXT, DATE, PAGE_ID, COMMENT = range(5)  # high_list item data
+(HIGHLIGHT_H, COMMENT_H,
+ DATE_H, TITLE_H, PAGE_H, AUTHOR_H, PATH_H) = range(7)  # high_table columns
+MANY_TEXT, ONE_TEXT, MANY_HTML, ONE_HTML, MERGED_HIGH = range(5)  # save_actions
+DB_MD5, DB_DATE, DB_PATH, DB_DATA = range(4)  # db data (columns)
+
+DB_VERSION = 0
+DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 HTML_HEAD = """<!DOCTYPE html>
 <html lang="en">
 <head>

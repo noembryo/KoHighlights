@@ -12,27 +12,22 @@ from datetime import datetime
 from functools import partial
 from collections import defaultdict
 from distutils.version import LooseVersion
-from os.path import (isdir, isfile, join, basename, splitext, dirname, split, exists,
+from os.path import (isdir, isfile, join, basename, splitext, dirname, split,
                      getmtime, abspath)
 
 
-import mechanize  # ___ _______________ DEPENDENCIES ________________
-from bs4 import BeautifulSoup
-from PySide.QtCore import (Qt, QTimer, Slot, QObject, Signal, QThread, QMimeData,
-                           QModelIndex, QByteArray, QSize, QPoint)
+# ___ _____________ DEPENDENCIES ____________________________________
+from PySide.QtSql import QSqlDatabase, QSqlQuery
+from PySide.QtCore import (Qt, QTimer, Slot,QThread, QMimeData, QModelIndex, QByteArray,
+                           QPoint)
 from PySide.QtGui import (QMainWindow, QApplication, QMessageBox, QIcon, QFileDialog,
-                          QTableWidgetItem, QTextCursor, QDialog, QWidget, QMovie, QFont,
-                          QMenu, QAction, QTableWidget, QCheckBox, QHeaderView, QPixmap,
-                          QListWidgetItem, QToolButton, QActionGroup)
+                          QTableWidgetItem, QTextCursor, QMenu, QAction, QHeaderView,
+                          QPixmap, QListWidgetItem)
 
 
+from secondary import *
+from gui_main import Ui_Base
 from slppu import slppu as lua  # https://github.com/noembryo/slppu
-from gui_main import Ui_Base  # ___ ______ GUI STUFF ________________
-from gui_about import Ui_About
-from gui_auto_info import Ui_AutoInfo
-from gui_toolbar import Ui_ToolBar
-from gui_status import Ui_Status
-from gui_edit import Ui_TextDialog
 
 
 try:  # ___ _______ PYTHON 2/3 COMPATIBILITY ________________________
@@ -41,8 +36,6 @@ except ImportError:  # python 3.x
     import pickle
     # noinspection PyShadowingBuiltins
     unicode = str
-    PYTHON2 = False
-from future.moves.urllib.request import Request
 from pprint import pprint
 
 
@@ -50,7 +43,7 @@ __author__ = "noEmbryo"
 __version__ = "0.9.1.0"
 
 
-def _(text):
+def _(text):  # for future gettext support
     return text
 
 
@@ -117,26 +110,18 @@ class Base(QMainWindow, Ui_Base):
     def __init__(self, parent=None):
         super(Base, self).__init__(parent)
 
-        self.scan_thread = QThread()
-        self.highlight_scan_thread = QThread()
+        self.scan_thread = None
+        # self.highlight_scan_thread = QThread()
         self.setupUi(self)
         self.version = __version__
-        self.file_selection = None
-        self.sel_idx = None
-        self.sel_indexes = []
-        self.high_list_selection = None
-        self.sel_highlights = []
-        self.sel_book_data = {}
-        self.high_view_selection = None
-        self.sel_high_view = []
+
+        # ___ ________ SAVED SETTINGS ___________
         self.col_sort = MODIFIED
         self.col_sort_asc = False
         self.col_sort_h = DATE_H
         self.col_sort_asc_h = False
         self.highlight_width = None
         self.comment_width = None
-        self.loaded_paths = set()
-
         self.skip_version = "0.0.0.0"
         self.opened_times = 0
         self.last_dir = os.getcwd()
@@ -146,6 +131,27 @@ class Base(QMainWindow, Ui_Base):
         self.toolbar_size = 48
         self.high_by_page = False
         self.exit_msg = True
+        self.date_vacuumed = datetime.now().strftime(DATE_FORMAT)
+        # ___ ___________________________________
+
+        self.file_selection = None
+        self.sel_idx = None
+        self.sel_indexes = []
+        self.high_view_selection = None
+        self.sel_high_view = []
+        self.high_list_selection = None
+        self.sel_high_list = []
+
+        self.loaded_paths = set()
+        self.books2reload = set()
+        self.parent_book_data = {}
+        self.reload_highlights = True
+        self.threads = []
+
+        self.query = None
+        self.db = None
+        self.db_view = False
+        self.books = []
 
         self.file_table.verticalHeader().setResizeMode(QHeaderView.Fixed)
         self.header_main = self.file_table.horizontalHeader()
@@ -172,6 +178,7 @@ class Base(QMainWindow, Ui_Base):
         self.ico_delete = QIcon(":/stuff/delete.png")
         self.ico_label_green = QIcon(":/stuff/label_green.png")
         self.ico_view_books = QIcon(":/stuff/view_books.png")
+        self.ico_db_add = QIcon(":/stuff/db_add.png")
         self.ico_empty = QIcon(":/stuff/trans32.png")
 
         self.about = About(self)
@@ -208,14 +215,19 @@ class Base(QMainWindow, Ui_Base):
         # noinspection PyTypeChecker,PyCallByClass
         QTimer.singleShot(30000, self.auto_check4update)  # check for updates
 
+        main_timer = QTimer(self)  # cleanup threads for ever
+        main_timer.timeout.connect(self.thread_cleanup)
+        main_timer.start(2000)
+
     def on_load(self):
         """ Things that must be done after the initialization
         """
+        self.init_db()
         self.settings_load()
         if FIRST_RUN:  # on first run
             self.toolbar.books_btn.click()
             self.splitter.setSizes((500, 250))
-        self.toolbar.save_btn.setMenu(self.save_menu())  # assign/create menu
+        self.toolbar.export_btn.setMenu(self.save_menu())  # assign/create menu
         self.toolbar.merge_btn.setMenu(self.merge_menu())  # assign/create menu
         self.toolbar.delete_btn.setMenu(self.delete_menu())  # assign/create menu
         self.connect_gui()
@@ -255,20 +267,23 @@ class Base(QMainWindow, Ui_Base):
         key, mod = event.key(), event.modifiers()
         # print(key, mod, QKeySequence(key).toString())
         if mod == Qt.ControlModifier:  # if control is pressed
-            if key == Qt.Key_Backspace:  # ctrl+Backspace
+            if key == Qt.Key_Backspace:
                 self.toolbar.on_clear_btn_clicked()
                 return True
-            if key == Qt.Key_L:  # ctrl+L
+            if key == Qt.Key_L:
                 self.toolbar.on_select_btn_clicked()
                 return True
-            if key == Qt.Key_S:  # ctrl+S
+            if key == Qt.Key_S:
                 self.save_actions(MANY_TEXT)
                 return True
-            if key == Qt.Key_O:  # ctrl+O
+            if key == Qt.Key_O:
                 self.toolbar.on_info_btn_clicked()
                 return True
-            if key == Qt.Key_Q:  # ctrl+Q
+            if key == Qt.Key_Q:
                 self.close()
+        if mod == Qt.AltModifier:  # if alt is pressed
+            if key == Qt.Key_A:
+                self.on_archive()
 
         if key == Qt.Key_Escape:
             self.close()
@@ -301,6 +316,114 @@ class Base(QMainWindow, Ui_Base):
         self.settings_save()
         self.delete_logs()
 
+    # ___ ____________________ DATABASE STUFF __________________________
+
+    def init_db(self):
+        """ Initialize the database tables
+        """
+        db_exists = isfile(join(SETTINGS_DIR, "data.db"))
+        # noinspection PyTypeChecker,PyCallByClass
+        self.db = QSqlDatabase.addDatabase("QSQLITE")
+        self.db.setDatabaseName(join(SETTINGS_DIR, "data.db"))
+        if not self.db.open():
+            print("Could not open database!")
+            return
+        self.query = QSqlQuery()
+        self.set_db_version() if not db_exists else None
+        self.create_feeds_table()
+        if app_config:
+            self.query.exec_("""PRAGMA user_version""")
+            while self.query.next():
+                self.check_db_version(self.query.value(0))  # check the db version
+                # self.query.exec_("""PRAGMA user_version = 1""")
+
+    def create_feeds_table(self):
+        """ Create the feeds table
+        """
+        self.query.exec_("""CREATE TABLE IF NOT EXISTS books (id INTEGER PRIMARY KEY, 
+                         md5 TEXT UNIQUE NOT NULL, date TEXT, path TEXT, data TEXT)""")
+
+    def check_db_version(self, version):
+        """ Updates the db to the last version
+
+        :type version: int
+        :param version: The db file version
+        """
+        if version == DB_VERSION or not isfile(join(SETTINGS_DIR, "data.db")):
+            return  # the db is up to date or does not exists yet
+        self.ask_upgrade(version)
+
+    def set_db_version(self):
+        """ Set the database version as current
+        """
+        self.query.exec_("""PRAGMA user_version = {}""".format(DB_VERSION))
+
+    def add_books2db(self, books):
+        """ Add some books to the books db table
+
+        :type books: list
+        :param books: The books to add in the db
+        """
+        self.db.transaction()
+        self.query.prepare("""INSERT OR REPLACE into books (md5, date, path, data) 
+                           VALUES (:md5, :date, :path, :data)""")
+        for book in books:
+            self.query.bindValue(":md5", book["md5"])
+            self.query.bindValue(":date", book["date"])
+            self.query.bindValue(":path", book["path"])
+            self.query.bindValue(":data", book["data"])
+            self.query.exec_()
+        self.db.commit()
+
+    def read_books_from_db(self):
+        """ Reads the contents of the books' db table
+        """
+        del self.books[:]
+        self.query.setForwardOnly(True)
+        self.query.exec_("""SELECT * FROM books""")
+        while self.query.next():
+            book = [self.query.value(i) for i in range(1, 5)]  # don't read the id
+            self.books.append({"md5": book[DB_MD5], "date": book[DB_DATE],
+                               "path": book[DB_PATH], "data": json.loads(book[DB_DATA])})
+
+    def update_book2db(self, data):
+        """ Updates the data of a book in the db
+
+        :type data: dict
+        :param data: The changed data
+        """
+        self.query.prepare("""UPDATE books SET data = :data WHERE md5 = :md5""")
+        self.query.bindValue(":md5", data["partial_md5_checksum"])
+        self.query.bindValue(":data", json.dumps(data))
+        self.query.exec_()
+
+    def delete_books_from_db(self, ids):
+        """ Deletes multiple books from the db
+
+        :type ids: list
+        :param ids: The md5s of the books to be deleted
+        """
+        if ids:
+            self.db.transaction()
+            self.query.prepare("""DELETE FROM books WHERE md5 = :md5""")
+            for md5 in ids:
+                self.query.bindValue(":md5", md5)
+                self.query.exec_()
+            self.db.commit()
+
+    def get_db_book_count(self):
+        """ Get the count of the books in the db
+        """
+        self.query.exec_("""SELECT Count(*) FROM books""")
+        self.query.next()
+        return self.query.value(0)
+
+    def vacuum_db(self, info=True):
+        self.query.exec_("""VACUUM""")
+        if info:
+            self.popup(_("Information"), _("The database is compacted!"),
+                       QMessageBox.Information)
+
     # ___ ___________________ FILE TABLE STUFF ______________________
 
     @Slot(list)
@@ -310,12 +433,16 @@ class Base(QMainWindow, Ui_Base):
         :type dropped: list
         :param dropped: The items dropped
         """
+        self.file_table.setSortingEnabled(False)
         for i in dropped:
             if splitext(i)[1] == ".lua":
                 self.create_row(i)
+        self.file_table.setSortingEnabled(True)
         folders = [j for j in dropped if isdir(j)]
         for folder in folders:
-            self.scan_files_thread(folder)
+            # self.scan_files_thread(folder)
+            text = _("Scanning for KoReader metadata files")
+            self.loading_thread(Scanner, folder, text, clear=False)
 
     # @Slot(QTableWidgetItem)  # its called indirectly from self.file_selection_update
     def on_file_table_itemClicked(self, item, reset=True):
@@ -330,19 +457,13 @@ class Base(QMainWindow, Ui_Base):
             return
         row = item.row()
         data = self.file_table.item(row, TITLE).data(Qt.UserRole)
-        self.sel_book_data = data
-
-        book_exists = self.file_table.item(row, TYPE).data(Qt.UserRole)[1]
-        self.toolbar.open_btn.setEnabled(book_exists)
-        self.toolbar.merge_btn.setEnabled(self.check4merge())
-        self.toolbar.delete_btn.setEnabled(bool(self.sel_indexes))
 
         self.high_list.clear()
         self.populate_high_list(data)
         self.populate_book_info(data, row)
 
         description_state = False
-        if "doc_props" in self.sel_book_data and "description" in data["doc_props"]:
+        if "doc_props" in data and "description" in data["doc_props"]:
             description_state = bool(data["doc_props"]["description"])
         self.description_btn.setEnabled(description_state)
 
@@ -387,7 +508,10 @@ class Base(QMainWindow, Ui_Base):
 
     @Slot()
     def on_description_btn_clicked(self):
-        description = self.sel_book_data["doc_props"]["description"]
+        """ The book's `Description` button is pressed
+        """
+        data = self.file_table.item(self.sel_idx.row(), TITLE).data(Qt.UserRole)
+        description = data["doc_props"]["description"]
         self.description.high_edit_txt.setHtml(description)
         self.description.show()
 
@@ -411,25 +535,36 @@ class Base(QMainWindow, Ui_Base):
         if len(self.file_selection.selectedRows()) > 1:  # many items selected
             save_menu = self.save_menu()
             save_menu.setIcon(self.ico_file_save)
-            save_menu.setTitle(_("Save selected"))
+            save_menu.setTitle(_("Export"))
             menu.addMenu(save_menu)
         else:  # only one item selected
-            action = QAction(_("Save to text file"), menu)
+            action = QAction(_("Export to text"), menu)
+            action.setIcon(self.ico_file_save)
             action.triggered.connect(self.on_save_actions)
             action.setData(MANY_TEXT)
-            action.setIcon(self.ico_file_save)
             menu.addAction(action)
 
-            action = QAction(_("Save to html file"), menu)
+            action = QAction(_("Export to html"), menu)
+            action.setIcon(self.ico_file_save)
             action.triggered.connect(self.on_save_actions)
             action.setData(MANY_HTML)
-            action.setIcon(self.ico_file_save)
             menu.addAction(action)
 
-        delete_menu = self.delete_menu()
-        delete_menu.setIcon(self.ico_files_delete)
-        delete_menu.setTitle(_("Delete\tDel"))
-        menu.addMenu(delete_menu)
+        if not self.db_view:
+            action = QAction(_("Archive\tAlt+A"), menu)
+            action.setIcon(self.ico_db_add)
+            action.triggered.connect(self.on_archive)
+            menu.addAction(action)
+
+            delete_menu = self.delete_menu()
+            delete_menu.setIcon(self.ico_files_delete)
+            delete_menu.setTitle(_("Delete\tDel"))
+            menu.addMenu(delete_menu)
+        else:
+            action = QAction(_("Delete\tDel"), menu)
+            action.setIcon(self.ico_files_delete)
+            action.triggered.connect(partial(self.delete_actions, 0))
+            menu.addAction(action)
 
         # # noinspection PyArgumentList
         # menu.exec_(QCursor.pos())
@@ -483,7 +618,8 @@ class Base(QMainWindow, Ui_Base):
             self.sel_indexes = self.file_selection.selectedRows()
             self.sel_idx = self.sel_indexes[-1]
         except IndexError:  # empty table
-            pass
+            self.sel_indexes = []
+            self.sel_idx = None
         # if self.file_selection.selectedRows():
         #     idx = selected.indexes()[0]
         if self.sel_indexes:
@@ -494,6 +630,7 @@ class Base(QMainWindow, Ui_Base):
             self.description_btn.setEnabled(False)
             for field in self.info_fields:
                 field.setText("")
+        self.toolbar.activate_buttons()
 
     def on_column_clicked(self, column):
         """ Sets the current sorting column
@@ -522,99 +659,164 @@ class Base(QMainWindow, Ui_Base):
             self.fold_btn.setArrowType(Qt.DownArrow)
         self.book_info.setHidden(pressed)
 
-    def scan_files_thread(self, path):
-        """ Gets all the history files that are inside
-        this path and its sub-directories
-
-        :type path: str|unicode
-        :param path: The root path
+    def on_archive(self):
+        """ Add the selected books to the archive db
         """
-        self.file_table.setSortingEnabled(False)  # need this before populating table
+        if not self.sel_indexes:
+            return
+        empty = 0
+        older = 0
+        added = 0
+        books = []
+        for idx in self.sel_indexes:
+            row = idx.row()
+            path = self.file_table.item(row, PATH).text()
+            date = self.file_table.item(row, MODIFIED).text()
+            data = self.file_table.item(row, TITLE).data(Qt.UserRole)
+            if not data["highlight"]:  # no highlights, don't add
+                empty += 1
+                continue
+            try:
+                md5 = data["partial_md5_checksum"]
+            except KeyError:  # older metadata, don't add
+                older += 1
+                continue
+            data["stats"]["performance_in_pages"] = {}  # can be cluttered
+            data["page_positions"] = {}  # can be cluttered
+            books.append({"md5": md5, "path": path, "date": date,
+                          "data": json.dumps(data)})
+            added += 1
+        self.add_books2db(books)
 
-        scanner = Scanner(path)
-        scanner.moveToThread(self.scan_thread)
-        scanner.found.connect(self.create_row)
-        scanner.finished.connect(self.scan_finished)
-        scanner.finished.connect(self.scan_thread.quit)
-        self.scan_thread.downer = scanner
-        self.scan_thread.started.connect(scanner.process)
-        self.scan_thread.start(QThread.IdlePriority)
+        extra = ""
+        if empty:
+            extra += _("\nNot added {} books with no highlights.").format(empty)
+        if older:
+            extra += _("\nNot added {} books with old type metadata.").format(older)
+
+        self.popup(_("Added!"),
+                   _("{} books were added/updated to the Archive from the {} processed.")
+                   .format(added, len(self.sel_indexes)) + extra,
+                   icon=QMessageBox.Information)
+
+    def loading_thread(self, worker, args, text, clear=True):
+        """ Populates the file_table with different contents
+        """
+        if clear:
+            self.toolbar.on_clear_btn_clicked()
+        self.file_table.setSortingEnabled(False)  # re-enable it after populating table
 
         self.status.animation("start")
-
-        self.auto_info.set_text(_("Scanning for KoReader metadata files.\n"
-                                  "Please Wait..."))
+        self.auto_info.set_text(_("{}.\nPlease Wait...").format(text))
         self.auto_info.show()
 
-    def scan_finished(self):
-        """ What will happen after the scanning for history files ends
-        """
-        self.status.animation("stop")
-        self.auto_info.hide()
-        self.file_table.resizeColumnsToContents()
+        scan_thread = QThread()
+        loader = worker(args)
+        loader.moveToThread(scan_thread)
+        loader.found.connect(self.create_row)
+        loader.finished.connect(self.scan_finished)
+        loader.finished.connect(scan_thread.quit)
+        loader.finished.connect(self.thread_cleanup)
+        scan_thread.loader = loader
+        scan_thread.started.connect(loader.process)
+        scan_thread.start(QThread.IdlePriority)
+        self.threads.append(scan_thread)
 
-        self.file_table.setSortingEnabled(True)  # re-enable it after populating table
+    def scan_finished(self):
+        """ What will happen after the populating of the file_table ends
+        """
+        if self.current_view == 1:  # loading books from highlights view
+            self.scan_highlights_thread()
+        else:
+            self.status.animation("stop")
+            self.auto_info.hide()
+
+        self.file_table.clearSelection()
+        self.sel_idx = None
+        self.sel_indexes = []
+        self.file_table.resizeColumnsToContents()
+        self.toolbar.activate_buttons()
+
+        self.file_table.setSortingEnabled(True)
         order = Qt.AscendingOrder if self.col_sort_asc else Qt.DescendingOrder
         self.file_table.sortByColumn(self.col_sort, order)
 
-        if self.current_view == 1:  # highlights view
-            self.scan_highlights_thread()
-
-    def create_row(self, filename):
+    def create_row(self, filename, data=None, date=None):
         """ Creates a table row from the given file
 
         :type filename: str|unicode
-        :param filename: The file to be read
+        :param filename: The metadata file to be read
         """
-        if exists(filename) and splitext(filename)[1].lower() == '.lua':
+        if not self.db_view:
+            # if exists(filename) and splitext(filename)[1].lower() == '.lua':
             if filename in self.loaded_paths:
                 return  # already loaded file
             self.loaded_paths.add(filename)
-            self.file_table.setSortingEnabled(False)
-            self.file_table.insertRow(0)
             data = decode_data(filename)
             if not data:
                 print("No data here!", filename)
                 return
-            icon, title, authors, percent = self.get_item_stats(filename, data)
-
-            title_item = QTableWidgetItem(icon, title)
-            title_item.setToolTip(title)
-            title_item.setData(Qt.UserRole, data)
-            self.file_table.setItem(0, TITLE, title_item)
-
-            author_item = QTableWidgetItem(authors)
-            author_item.setToolTip(authors)
-            self.file_table.setItem(0, AUTHOR, author_item)
-
-            ext = splitext(splitext(filename)[0])[1][1:]
-            book_path = splitext(self.get_book_path(filename))[0] + "." + ext
-            book_exists = isfile(book_path)
-            book_icon = self.ico_file_exists if book_exists else self.ico_file_missing
-            type_item = QTableWidgetItem(book_icon, ext)
-            type_item.setToolTip(book_path if book_exists else
-                                 _("The {} file is missing!").format(ext))
-            type_item.setData(Qt.UserRole, (book_path, book_exists))
-            self.file_table.setItem(0, TYPE, type_item)
-
-            percent_item = QTableWidgetItem(percent)
-            percent_item.setToolTip(percent)
-            percent_item.setTextAlignment(Qt.AlignRight)
-            self.file_table.setItem(0, PERCENT, percent_item)
-
             date = str(datetime.fromtimestamp(getmtime(filename)))
-            date_item = QTableWidgetItem(date)
-            date_item.setToolTip(date)
-            self.file_table.setItem(0, MODIFIED, date_item)
+            icon, title, authors, percent = self.get_item_stats(filename, data)
+        else:
+            icon, title, authors, percent = self.get_item_db_stats(data)
 
-            path_item = QTableWidgetItem(filename)
-            path_item.setToolTip(filename)
-            self.file_table.setItem(0, PATH, path_item)
+        self.file_table.insertRow(0)
 
-            self.file_table.setSortingEnabled(True)
+        title_item = QTableWidgetItem(icon, title)
+        title_item.setToolTip(title)
+        title_item.setData(Qt.UserRole, data)
+        self.file_table.setItem(0, TITLE, title_item)
+
+        author_item = QTableWidgetItem(authors)
+        author_item.setToolTip(authors)
+        self.file_table.setItem(0, AUTHOR, author_item)
+
+        ext = splitext(splitext(filename)[0])[1][1:]
+        book_path = splitext(self.get_book_path(filename))[0] + "." + ext
+        book_exists = isfile(book_path)
+        book_icon = self.ico_file_exists if book_exists else self.ico_file_missing
+        type_item = QTableWidgetItem(book_icon, ext)
+        type_item.setToolTip(book_path if book_exists else
+                             _("The {} file is missing!").format(ext))
+        type_item.setData(Qt.UserRole, (book_path, book_exists))
+        self.file_table.setItem(0, TYPE, type_item)
+
+        percent_item = QTableWidgetItem(percent)
+        percent_item.setToolTip(percent)
+        percent_item.setTextAlignment(Qt.AlignRight)
+        self.file_table.setItem(0, PERCENT, percent_item)
+
+        date_item = QTableWidgetItem(date)
+        date_item.setToolTip(date)
+        self.file_table.setItem(0, MODIFIED, date_item)
+
+        path_item = QTableWidgetItem(filename)
+        path_item.setToolTip(filename)
+        self.file_table.setItem(0, PATH, path_item)
+
+    def get_item_db_stats(self, data):
+        """ Returns the title and authors of a history file
+
+        :type data: dict
+        :param data: The dict converted lua file
+        """
+        title = data["stats"]["title"]
+        authors = data["stats"]["authors"]
+        title = title if title else _("NO TITLE FOUND")
+        authors = authors if authors else _("NO AUTHOR FOUND")
+        try:
+            percent = data["percent_finished"]
+            percent = str(int(percent * 100)) + "%"
+            percent = "Complete" if percent == "100%" else percent
+        except KeyError:
+            percent = None
+
+        icon = self.ico_label_green if data["highlight"] else self.ico_empty
+        return icon, title, authors, percent
 
     def get_item_stats(self, filename, data):
-        """ Returns the title and authors of a history file
+        """ Returns the title and authors of a metadata file
 
         :type filename: str|unicode
         :param filename: The filename to get the stats for
@@ -661,15 +863,10 @@ class Base(QMainWindow, Ui_Base):
         row = item.row()
         data = self.high_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)
 
-        if isfile(data["path"]):
-            self.toolbar.open_btn.setEnabled(True)
-        else:
-            self.toolbar.open_btn.setEnabled(False)
-
         # needed for edit "Comments" or "Find in Books" in Highlight View
         for row in range(self.file_table.rowCount()):  # 2check: need to optimize?
             if data["path"] == self.file_table.item(row, TYPE).data(Qt.UserRole)[0]:
-                self.sel_book_data = self.file_table.item(row, TITLE).data(Qt.UserRole)
+                self.parent_book_data = self.file_table.item(row, TITLE).data(Qt.UserRole)
                 break
 
     @Slot(QModelIndex)
@@ -721,7 +918,8 @@ class Base(QMainWindow, Ui_Base):
             high_text = _("Copy Highlight")
             com_text = _("Copy Comment")
 
-            action = QAction(_("Find in Books"), menu)
+            text = _("Find in Archive") if self.db_view else _("Find in Books")
+            action = QAction(text, menu)
             action.triggered.connect(partial(self.find_in_books, highlights))
             action.setIcon(self.ico_view_books)
             menu.addAction(action)
@@ -753,16 +951,36 @@ class Base(QMainWindow, Ui_Base):
         """ Gets all the loaded highlights
         """
         self.high_table.model().removeRows(0, self.high_table.rowCount())
-        self.high_table.setSortingEnabled(False)  # need this before populating table
 
+        self.status.animation("start")
+        self.auto_info.set_text(_("Creating Highlights table.\n"
+                                  "Please Wait..."))
+        self.auto_info.show()
+
+        scan_thread = QThread()
         scanner = HighlightScanner()
-        scanner.moveToThread(self.highlight_scan_thread)
+        scanner.moveToThread(scan_thread)
         scanner.found.connect(self.create_highlight_row)
         scanner.finished.connect(self.scan_highlights_finished)
-        scanner.finished.connect(self.highlight_scan_thread.quit)
-        self.highlight_scan_thread.scanner = scanner
-        self.highlight_scan_thread.started.connect(scanner.process)
-        self.highlight_scan_thread.start(QThread.IdlePriority)
+        scanner.finished.connect(scan_thread.quit)
+        scan_thread.scanner = scanner
+        scan_thread.started.connect(scanner.process)
+        scan_thread.start(QThread.IdlePriority)
+        self.threads.append(scan_thread)
+
+    def scan_highlights_finished(self):
+        """ What will happen after the scanning for history files ends
+        """
+        self.auto_info.hide()
+        self.status.animation("stop")
+        for col in [PAGE_H, DATE_H, AUTHOR_H, TITLE_H, PATH_H]:
+            self.high_table.resizeColumnToContents(col)
+        self.toolbar.activate_buttons()
+        self.reload_highlights = False
+
+        self.high_table.setSortingEnabled(True)  # re-enable, after populating table
+        order = Qt.AscendingOrder if self.col_sort_asc_h else Qt.DescendingOrder
+        self.high_table.sortByColumn(self.col_sort_h, order)
 
     def create_highlight_row(self, data):
         """ Creates a highlight table row from the given data
@@ -773,8 +991,9 @@ class Base(QMainWindow, Ui_Base):
         self.high_table.setSortingEnabled(False)
         self.high_table.insertRow(0)
 
-        item = QTableWidgetItem(data["text"])
-        item.setToolTip("<p>{}</p>".format(data["text"]))
+        text = data["text"]
+        item = QTableWidgetItem(text)
+        item.setToolTip("<p>{}</p>".format(text))
         item.setData(Qt.UserRole, data)
         self.high_table.setItem(0, HIGHLIGHT_H, item)
 
@@ -784,13 +1003,15 @@ class Base(QMainWindow, Ui_Base):
             item.setToolTip("<p>{}</p>".format(comment))
         self.high_table.setItem(0, COMMENT_H, item)
 
-        item = QTableWidgetItem(data["date"])
-        item.setToolTip(data["date"])
+        date = data["date"]
+        item = QTableWidgetItem(date)
+        item.setToolTip(date)
         item.setTextAlignment(Qt.AlignRight)
         self.high_table.setItem(0, DATE_H, item)
 
-        item = QTableWidgetItem(data["title"])
-        item.setToolTip(data["title"])
+        title = data["title"]
+        item = QTableWidgetItem(title)
+        item.setToolTip(title)
         self.high_table.setItem(0, TITLE_H, item)
 
         page = data["page"]
@@ -800,21 +1021,17 @@ class Base(QMainWindow, Ui_Base):
         item.setData(Qt.UserRole, int(page))
         self.high_table.setItem(0, PAGE_H, item)
 
-        item = QTableWidgetItem(data["authors"])
-        item.setToolTip(data["authors"])
-        self.high_table.setItem(0, PATH, item)
+        authors = data["authors"]
+        item = QTableWidgetItem(authors)
+        item.setToolTip(authors)
+        self.high_table.setItem(0, AUTHOR_H, item)
+
+        path = data["path"]
+        item = QTableWidgetItem(path)
+        item.setToolTip(path)
+        self.high_table.setItem(0, PATH_H, item)
 
         self.high_table.setSortingEnabled(True)
-
-    def scan_highlights_finished(self):
-        """ What will happen after the scanning for history files ends
-        """
-        for col in [PAGE_H, DATE_H, AUTHOR_H, TITLE_H]:
-            self.high_table.resizeColumnToContents(col)
-
-        self.high_table.setSortingEnabled(True)  # re-enable, after populating table
-        order = Qt.AscendingOrder if self.col_sort_asc_h else Qt.DescendingOrder
-        self.high_table.sortByColumn(self.col_sort_h, order)
 
     # noinspection PyUnusedLocal
     def high_view_selection_update(self, selected, deselected):
@@ -828,7 +1045,8 @@ class Base(QMainWindow, Ui_Base):
         try:
             self.sel_high_view = self.high_view_selection.selectedRows()
         except IndexError:  # empty table
-            pass
+            self.sel_high_view = []
+        self.toolbar.activate_buttons()
 
     def on_highlight_column_clicked(self, column):
         """ Sets the current sorting column
@@ -864,14 +1082,18 @@ class Base(QMainWindow, Ui_Base):
         :type highlight: str|unicode
         :parameter highlight: The highlight we searching for
         """
-        data = self.sel_book_data
+        data = self.parent_book_data
+
         for row in range(self.file_table.rowCount()):
             item = self.file_table.item(row, TITLE)
             row_data = item.data(Qt.UserRole)
             try:  # find the book row
                 if data["stats"]["title"] == row_data["stats"]["title"]:
                     self.on_file_table_itemClicked(item)
-                    self.toolbar.books_btn.click()
+                    if not self.db_view:
+                        self.toolbar.books_btn.click()
+                    else:
+                        self.toolbar.db_btn.click()
                     self.file_table.selectRow(row)  # select the book
                     for high_row in range(self.high_list.count()):  # find the highlight
                         if (self.high_list.item(high_row)
@@ -936,7 +1158,7 @@ class Base(QMainWindow, Ui_Base):
         :type point: QPoint
         :param point: The point where the right-click happened
         """
-        if self.sel_highlights:
+        if self.sel_high_list:
             menu = QMenu(self.high_list)
 
             action = QAction(_("Comments"), menu)
@@ -966,7 +1188,7 @@ class Base(QMainWindow, Ui_Base):
         """ Opens a window to edit the selected highlight's comment
         """
         if self.file_table.isVisible():  # edit comments from Book View
-            row = self.sel_highlights[-1].row()
+            row = self.sel_high_list[-1].row()
             comment = self.high_list.item(row).data(Qt.UserRole)[COMMENT]
         elif self.high_table.isVisible():  # edit comments from Highlights View
             row = self.sel_high_view[-1].row()
@@ -983,22 +1205,29 @@ class Base(QMainWindow, Ui_Base):
         """
         text = self.edit_high.high_edit_txt.toPlainText()
         if self.file_table.isVisible():
-            high_index = self.sel_highlights[-1]
+            high_index = self.sel_high_list[-1]
             high_row = high_index.row()
             high_data = self.high_list.item(high_row).data(Qt.UserRole)
             high_text = high_data[HIGHLIGHT_TEXT].replace("\n", "\\\n")
 
             row = self.sel_idx.row()
-            data = self.file_table.item(row, TITLE).data(Qt.UserRole)
+            item = self.file_table.item
+            data = item(row, TITLE).data(Qt.UserRole)
 
             for bookmark in data["bookmarks"].keys():
                 if high_text == data["bookmarks"][bookmark]["notes"]:
                     data["bookmarks"][bookmark]["text"] = text.replace("\n", "\\\n")
                     break
-            self.file_table.item(row, TITLE).setData(Qt.UserRole, data)
-            path = self.file_table.item(row, PATH).text()
+            item(row, TITLE).setData(Qt.UserRole, data)
+
+            if not self.db_view:  # Books view
+                path = item(row, PATH).text()
+                self.save_book_data(path, data)
+            else:  # Archive view
+                self.update_book2db(data)
+                self.on_file_table_itemClicked(item(row, 0), reset=False)
         elif self.high_table.isVisible():
-            data = self.sel_book_data
+            data = self.parent_book_data
             row = self.sel_high_view[-1].row()
             high_data = self.high_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)
             high_text = high_data["text"].replace("\n", "\\\n")
@@ -1012,15 +1241,14 @@ class Base(QMainWindow, Ui_Base):
             self.high_table.item(row, COMMENT_H).setText(text)
             book_path, ext = splitext(high_data["path"])
             path = join(book_path + ".sdr", "metadata{}.lua".format(ext))
-        else:
-            return
-        self.save_book_data(path, data)
+            self.save_book_data(path, data)
+        self.reload_highlights = True
 
     def on_copy_highlights(self):
         """ Copy the selected highlights to clipboard
         """
         clipboard_text = ""
-        for highlight in sorted(self.sel_highlights):
+        for highlight in sorted(self.sel_high_list):
             row = highlight.row()
             text = self.high_list.item(row).text()
             clipboard_text += text + "\n"
@@ -1029,17 +1257,21 @@ class Base(QMainWindow, Ui_Base):
     def on_delete_highlights(self):
         """ The delete highlights action was invoked
         """
-        if self.edit_lua_file_warning:
-            text = _("This is an one-time warning!\n\nIn order to delete highlights "
-                     "from a book, its \"metadata\" file must be edited. This contains "
-                     "a small risk of corrupting that file and lose all the settings "
-                     "and info of that book.\n\nDo you still want to do it?")
-            popup = self.popup(_("Warning!"), text, buttons=3)
-            if popup.buttonRole(popup.clickedButton()) == QMessageBox.RejectRole:
-                return
-            else:
-                self.edit_lua_file_warning = False
-        text = _("This will delete the selected highlights!\nAre you sure?")
+        if not self.db_view:
+            if self.edit_lua_file_warning:
+                text = _("This is an one-time warning!\n\nIn order to delete highlights "
+                         "from a book, its \"metadata\" file must be edited. This "
+                         "contains a small risk of corrupting that file and lose all the "
+                         "settings and info of that book.\n\nDo you still want to do it?")
+                popup = self.popup(_("Warning!"), text, buttons=3)
+                if popup.buttonRole(popup.clickedButton()) == QMessageBox.RejectRole:
+                    return
+                else:
+                    self.edit_lua_file_warning = False
+            text = _("This will delete the selected highlights!\nAre you sure?")
+        else:
+            text = _("This will remove the selected highlights from the Archive!\n"
+                     "Are you sure?")
         popup = self.popup(_("Warning!"), text, buttons=3)
         if popup.buttonRole(popup.clickedButton()) == QMessageBox.RejectRole:
             return
@@ -1050,7 +1282,8 @@ class Base(QMainWindow, Ui_Base):
         """
         row = self.sel_idx.row()
         data = self.file_table.item(row, TITLE).data(Qt.UserRole)
-        for highlight in self.sel_highlights:
+
+        for highlight in self.sel_high_list:
             high_row = highlight.row()
             page = self.high_list.item(high_row).data(Qt.UserRole)[PAGE]
             page_id = self.high_list.item(high_row).data(Qt.UserRole)[PAGE_ID]
@@ -1079,11 +1312,20 @@ class Base(QMainWindow, Ui_Base):
                 del data["bookmarks"][bookmark]
             for content in range(len(contents)):  # rewrite them with the new keys
                 data["bookmarks"][content + 1] = contents[content]
+
         if not data["highlight"]:  # change icon if no highlights
-            item = self.file_table.item(0, 0)
+            item = self.file_table.item(row, 0)
             item.setIcon(self.ico_empty)
-        path = self.file_table.item(row, PATH).text()
-        self.save_book_data(path, data)
+
+        if not self.db_view:
+            path = self.file_table.item(row, PATH).text()
+            self.save_book_data(path, data)
+        else:
+            self.update_book2db(data)
+            item = self.file_table.item
+            item(row, TITLE).setData(Qt.UserRole, data)
+            self.on_file_table_itemClicked(item(row, 0), reset=False)
+        self.reload_highlights = True
 
     def save_book_data(self, path, data):
         """ Saves the data of a book to its lua file
@@ -1109,7 +1351,7 @@ class Base(QMainWindow, Ui_Base):
         :type deselected: QModelIndex
         :parameter deselected: The deselected highlight
         """
-        self.sel_highlights = self.high_list_selection.selectedRows()
+        self.sel_high_list = self.high_list_selection.selectedRows()
 
     def set_highlight_sort(self):
         """ Sets the sorting method of displayed highlights
@@ -1207,6 +1449,7 @@ class Base(QMainWindow, Ui_Base):
 
         self.save_book_data(path1, data1)
         self.save_book_data(path2, data2)
+        self.reload_highlights = True
 
     @staticmethod
     def get_unique_highlights(high1, high2, bkm1, bkm2):
@@ -1327,27 +1570,41 @@ class Base(QMainWindow, Ui_Base):
         :type idx: int
         :param idx: The action type
         """
-        if not self.sel_indexes and idx in [0, 1]:
-            return
-        text = ""
-        if idx == 0:
-            text = _("This will delete the selected books' information\n"
-                     "but will keep the equivalent books.")
-        elif idx == 1:
-            text = _("This will delete the selected books and their information.")
-        elif idx == 2:
-            text = _("This will delete all the books' information "
-                     "that refers to missing books.")
-        popup = self.popup(_("Warning!"), text, buttons=2)
-        if popup.buttonRole(popup.clickedButton()) == QMessageBox.RejectRole:
-            return
+        if not self.db_view:  # Books view
+            if not self.sel_indexes and idx in [0, 1]:
+                return
+            text = ""
+            if idx == 0:
+                text = _("This will delete the selected books' information\n"
+                         "but will keep the equivalent books.")
+            elif idx == 1:
+                text = _("This will delete the selected books and their information.")
+            elif idx == 2:
+                text = _("This will delete all the books' information "
+                         "that refers to missing books.")
+            popup = self.popup(_("Warning!"), text, buttons=2)
+            if popup.buttonRole(popup.clickedButton()) == QMessageBox.RejectRole:
+                return
 
-        if idx == 0:  # delete selected books' info
-            self.remove_sel_books()
-        elif idx == 1:  # delete selected books
-            self.remove_sel_books(delete=True)
-        elif idx == 2:  # delete all missing books info
-            self.clear_missing_info()
+            if idx == 0:  # delete selected books' info
+                self.remove_sel_books()
+            elif idx == 1:  # delete selected books
+                self.remove_sel_books(delete=True)
+            elif idx == 2:  # delete all missing books info
+                self.clear_missing_info()
+        else:  # Archive view
+            text = _("Delete the selected books from the Archive?")
+            popup = self.popup(_("Warning!"), text, buttons=2, icon=QMessageBox.Question)
+            if popup.buttonRole(popup.clickedButton()) == QMessageBox.RejectRole:
+                return
+            ids = []
+            for idx in sorted(self.sel_indexes, reverse=True):
+                data = self.file_table.item(idx.row(), TITLE).data(Qt.UserRole)
+                ids.append(data["partial_md5_checksum"])
+                self.file_table.removeRow(idx.row())
+            self.delete_books_from_db(ids)
+            self.file_table.clearSelection()
+        self.reload_highlights = True
 
     def remove_sel_books(self, delete=False):
         """ Remove the selected book entries from the file_table
@@ -1672,14 +1929,18 @@ class Base(QMainWindow, Ui_Base):
             self.opened_times = app_config.get("opened_times", 0)
             self.toolbar_size = app_config.get("toolbar_size", 48)
             self.skip_version = app_config.get("skip_version", None)
+            self.date_vacuumed = app_config.get("date_vacuumed", self.date_vacuumed)
             self.exit_msg = app_config.get("exit_msg", True)
             self.high_merge_warning = app_config.get("high_merge_warning", True)
             self.edit_lua_file_warning = app_config.get("edit_lua_file_warning", True)
 
+            if len(sys.argv) > 1:  # command arguments exist, open in Book view
+                self.current_view = 0
+            self.toolbar.view_frame.children()[self.current_view + 1].click()
+
             checked = app_config.get("show_items", (True, True, True, True))
             # noinspection PyTypeChecker
             checked = checked if len(checked) == 4 else checked + [True]  # 4compatibility
-            self.toolbar.view_frame.children()[self.current_view + 1].click()
             self.status.act_page.setChecked(checked[0])
             self.status.act_date.setChecked(checked[1])
             self.status.act_text.setChecked(checked[2])
@@ -1705,7 +1966,8 @@ class Base(QMainWindow, Ui_Base):
                   "highlight_width": self.highlight_width,
                   "comment_width": self.comment_width, "toolbar_size": self.toolbar_size,
                   "last_dir": self.last_dir, "exit_msg": self.exit_msg,
-                  "current_view": self.current_view, "high_by_page": self.high_by_page,
+                  "current_view": self.current_view,
+                  "high_by_page": self.high_by_page, "date_vacuumed": self.date_vacuumed,
                   "show_info": self.fold_btn.isChecked(),
                   "show_items": (self.status.act_page.isChecked(),
                                  self.status.act_date.isChecked(),
@@ -1764,11 +2026,18 @@ class Base(QMainWindow, Ui_Base):
                 except UnicodeDecodeError:  # settings file from Python2
                     return
         except pickle.UnpicklingError as err:
-            print(err)
+            print("While unPickling:", err)
             return
         return value
 
     # ___ ___________________ UTILITY STUFF _________________________
+
+    def thread_cleanup(self):
+        """ Deletes the finished threads
+        """
+        for thread in self.threads:
+            if thread.isFinished():
+                self.threads.remove(thread)
 
     def popup(self, title, text, icon=QMessageBox.Warning, buttons=1,
               extra_text="", check_text=""):
@@ -1866,6 +2135,14 @@ class Base(QMainWindow, Ui_Base):
     def auto_check4update(self):
         """ Checks online for an updated version
         """
+        if self.get_db_book_count():  # db has books
+            now = datetime.now()
+            vacuumed = datetime.strptime(self.date_vacuumed, DATE_FORMAT)
+            delta = now - vacuumed
+            if delta.days > 90:  # after three months
+                self.vacuum_db(info=False)  # compact db
+                self.date_vacuumed = now.strftime(DATE_FORMAT)  # reset vacuumed date
+
         self.opened_times += 1
         if self.opened_times == 20:
             text = _("Since you are using {} for some time now, perhaps you find it "
@@ -1935,571 +2212,7 @@ class Base(QMainWindow, Ui_Base):
                     pass
 
     def on_check_btn(self):
-        # noinspection PyCallByClass
-        QMessageBox.information(self, _("Info"), _("Tool button is pressed"))
-
-
-# ___ _______________________ EXTRA CLASSES _________________________
-
-
-class About(QDialog, Ui_About):
-
-    def __init__(self, parent=None):
-        super(About, self).__init__(parent)
-        self.setupUi(self)
-        # Remove the question mark widget from dialog
-        self.setWindowFlags(self.windowFlags() ^
-                            Qt.WindowContextHelpButtonHint)
-        self.base = parent
-
-    @Slot()
-    def on_about_qt_btn_clicked(self):
-        """ The `About Qt` button is pressed
-        """
-        # noinspection PyCallByClass
-        QMessageBox.aboutQt(self, title=_("About Qt"))
-
-    @Slot()
-    def on_updates_btn_clicked(self):
-        """ The `Check for Updates` button is pressed
-        """
-        self.check_for_updates()
-
-    def check_for_updates(self):
-        """ Checks the web site for the current version
-        """
-        version_new = self.get_online_version()
-        if not version_new:
-            self.base.popup(_("No response!"), _("Version info is unreachable!\n"
-                                                 "Please, try again later..."), buttons=1)
-            return
-        version = LooseVersion(self.base.version)
-        if version_new > version:
-            popup = self.base.popup(_("Newer version exists!"),
-                                    _("There is a newer version (v.{}) online.\n"
-                                      "Open the site to download it now?")
-                                    .format(version_new),
-                                    icon=QMessageBox.Information, buttons=2)
-            if popup.clickedButton().text() == "OK":
-                webbrowser.open("http://www.noembryo.com/apps.php?katalib")
-                self.close()
-        elif version_new == version:
-            self.base.popup(_("No newer version exists!"),
-                            _("{} is up to date (v.{})").format(APP_NAME, version),
-                            icon=QMessageBox.Information, buttons=1)
-        elif version_new < version:
-            self.base.popup(_("No newer version exists!"),
-                            _("It seems that you are using a newer version ({0})\n"
-                              "than the one online ({1})!").format(version, version_new),
-                            icon=QMessageBox.Question, buttons=1)
-
-    @staticmethod
-    def get_online_version():
-        header = {"User-Agent": "Mozilla/5.0 (Windows NT 5.1; rv:14.0) "
-                                "Gecko/20100101 Firefox/24.0.1",
-                  "Referer": "http://whateveritis.com"}
-        url = "http://www.noembryo.com/apps.php?kohighlights"
-
-        browser = mechanize.Browser()
-        browser.set_handle_robots(False)
-        request = Request(url, None, header)
-        html_text = browser.open(request)
-        soup_text = BeautifulSoup(html_text, "html5lib")
-        results = soup_text.findAll(name="p")
-        results = "".join([str(i) for i in results])
-        match = re.search(r"\d+\.\d+\.\d+\.\d+", results, re.DOTALL)
-        try:
-            version_new = match.group(0)
-        except AttributeError:  # no match found
-            return
-        return LooseVersion(version_new)
-
-    def create_text(self):
-        # color = self.palette().color(QPalette.WindowText).name()  # for links
-        splash = ":/stuff/logo.png"
-        paypal = ":/stuff/paypal.png"
-        info = _("""<body style="font-size:10pt; font-weight:400; font-style:normal">
-        <center>
-          <table width="100%" border="0">
-            <tr>
-                <p align="center"><img src="{0}" width="256" height ="212"></p>
-                <p align="center"><b>KoHighlights</b> is a utility for viewing
-                    <a href="https://github.com/koreader/koreader">Koreader</a>'s
-                    highlights<br/>and/or export them to simple text</p>
-                <p align="center">Version {1}</p>
-                <p align="center">Visit
-                    <a href="https://github.com/noEmbryo/KoHighlights">
-                    KoHighlights page at GitHub</a>, or</p>
-                <p align="center"><a href="http://www.noEmbryo.com"> noEmbryo's page</a>
-                    with more Apps and stuff...</p>
-                <p align="center">Use it and if you like it, consider to
-                <p align="center"><a href="https://www.paypal.com/cgi-bin/webscr?
-                    cmd=_s-xclick &hosted_button_id=RBYLVRYG9RU2S">
-                <img src="{2}" alt="PayPal Button"
-                    width="142" height="27" border="0"></a></p>
-                <p align="center">&nbsp;</p></td>
-            </tr>
-          </table>
-        </center>
-        </body>""").format(splash, self.base.version, paypal)
-        self.text_lbl.setText(info)
-
-
-class AutoInfo(QDialog, Ui_AutoInfo):
-    def __init__(self, parent=None):
-        super(AutoInfo, self).__init__(parent)
-        self.setupUi(self)
-        # Remove the question mark widget from dialog
-        # self.setWindowFlags(self.windowFlags() ^
-        #                     Qt.WindowContextHelpButtonHint)
-        self.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint)
-        self.hide()
-
-        font = QFont()
-        font.setBold(True)
-        font.setPointSize(QFont.pointSize(QFont()) + 3)
-        self.label.setFont(font)
-
-    def set_text(self, text):
-        self.label.setText(text)
-
-
-class ToolBar(QWidget, Ui_ToolBar):
-
-    def __init__(self, parent=None):
-        super(ToolBar, self).__init__(parent)
-        self.setupUi(self)
-        self.base = parent
-
-        self.buttons = (self.check_btn, self.select_btn, self.save_btn, self.open_btn,
-                        self.merge_btn, self.delete_btn, self.clear_btn, self.books_btn,
-                        self.highlights_btn, self.about_btn)
-        # for button in buttons:
-        #     button.installEventFilter(TextSizer(button))
-
-        self.books_btn.clicked.connect(partial(self.change_view, 0))
-        self.highlights_btn.clicked.connect(partial(self.change_view, 1))
-
-        self.check_btn.clicked.connect(parent.on_check_btn)
-        self.check_btn.hide()
-
-    @Slot(QPoint)
-    def on_tool_frame_customContextMenuRequested(self, point):
-        """ The Toolbar is right-clicked
-
-        :type point: QPoint
-        :param point: The point where the right-click happened
-        """
-        sizes = (_("Tiny"), 16), (_("Small"), 32), (_("Medium"), 48), (_("Big"), 64),
-        menu = QMenu(self)
-        group = QActionGroup(self)
-        for name, size in sizes:
-            action = QAction(name, menu)
-            action.setCheckable(True)
-            if size == self.base.toolbar_size:
-                action.setChecked(True)
-            action.triggered.connect(partial(self.set_btn_size, size))
-            group.addAction(action)
-            menu.addAction(action)
-
-        menu.exec_(self.tool_frame.mapToGlobal(point))
-
-    def set_btn_size(self, size):
-        """ Changes the Toolbar's icons size
-
-        :type size: int
-        :param size: The Icons' size preset
-        """
-        self.base.toolbar_size = size
-        button_size = QSize(size, size)
-
-        for btn in self.buttons:
-            btn.setMinimumWidth(size + 20)
-            btn.setIconSize(button_size)
-        # noinspection PyArgumentList
-        QApplication.processEvents()
-
-    @Slot()
-    def on_select_btn_clicked(self):
-        """ The `Scan Directory` button is pressed
-        """
-        path = QFileDialog.getExistingDirectory(self.base,
-                                                _("Select a directory with books or "
-                                                  "your eReader's drive"),
-                                                self.base.last_dir,
-                                                QFileDialog.ShowDirsOnly)
-        if path:
-            self.base.last_dir = path
-            # self.base.file_table.model().removeRows(0, self.base.file_table.rowCount())
-            self.base.high_list.clear()
-            self.base.scan_files_thread(path)
-
-    @Slot()
-    def on_save_btn_clicked(self):
-        """ The `Save Selected` button is pressed
-        """
-        if self.base.current_view == 0:  # books view
-            self.base.save_actions(MANY_TEXT)
-        elif self.base.current_view == 1:  # highlights view
-            self.base.save_actions(MERGED_HIGH)
-
-    @Slot()
-    def on_open_btn_clicked(self):
-        """ The `Open Book` button is pressed
-        """
-        if self.base.current_view == 0:  # books view
-            try:
-                idx = self.base.sel_indexes[-1]
-            except IndexError:  # nothing selected
-                return
-            item = self.base.file_table.item(idx.row(), 0)
-            self.base.on_file_table_itemDoubleClicked(item)
-        if self.base.current_view == 1:  # highlights view
-            try:
-                idx = self.base.sel_high_view[-1]
-            except IndexError:  # nothing selected
-                return
-            data = self.base.high_table.item(idx.row(), HIGHLIGHT_H).data(Qt.UserRole)
-            self.base.open_file(data["path"])
-
-    @Slot()
-    def on_merge_btn_clicked(self):
-        """ The `Merge` button is pressed
-        """
-        data = [self.base.file_table.item(idx.row(), idx.column()).data(Qt.UserRole)
-                for idx in self.base.sel_indexes]
-        if data[0]["cre_dom_version"] == data[1]["cre_dom_version"]:
-            if self.base.high_merge_warning:
-                text = _("Merging highlights from different devices is experimental so, "
-                         "always do backups ;o)\n"
-                         "Because of the different page formats and sizes, some page "
-                         "numbers in KoHighlights might be inaccurate. "
-                         "Do you want to continue?")
-                popup = self.base.popup(_("Warning!"), text, buttons=3,
-                                        check_text=_("Don't show this again"))
-                self.base.high_merge_warning = not popup.checked
-                if popup.buttonRole(popup.clickedButton()) == QMessageBox.RejectRole:
-                    return
-
-            popup = self.base.popup(_("Warning!"),
-                                    _("The highlights of the selected entries will be "
-                                      "merged.\nThis can not be undone! Continue?"),
-                                    buttons=3,
-                                    check_text=_("Try to sync the reading position too"))
-            if popup.buttonRole(popup.clickedButton()) == QMessageBox.AcceptRole:
-                self.base.merge_highlights(popup.checked)
-        else:
-            text = _("Can not merge these highlights, because they are produced with a "
-                     "different version of the reader engine!\n\n"
-                     "The reader engine and the way it renders the text is responsible "
-                     "for the positioning of highlights. Some times, code changes are "
-                     "made that change its behavior. Its version is written in the "
-                     "metadata of a book the first time is opened and can only change "
-                     "if the metadata are cleared (loosing all highlights) and open the "
-                     "book again as new.\n"
-                     "The reader's engine version is independent of the KoReader version "
-                     "and does not change that often.")
-            self.base.popup(_("Version mismatch!"), text, icon=QMessageBox.Critical)
-
-    @Slot()
-    def on_delete_btn_clicked(self):
-        """ The `Delete` button is pressed
-        """
-        self.base.delete_actions(0)
-
-    @Slot()
-    def on_clear_btn_clicked(self):
-        """ The `Clear List` button is pressed
-        """
-        if self.base.current_view == 1:  # highlights view
-            (self.base.high_table.model()
-             .removeRows(0, self.base.high_table.rowCount()))
-        self.base.loaded_paths.clear()
-        self.base.file_table.model().removeRows(0, self.base.file_table.rowCount())
-
-    def change_view(self, idx):
-        if idx == 0:  # books view
-            self.base.status.show()
-            self.base.toolbar.save_btn.setStyleSheet("")
-            self.base.toolbar.save_btn.setPopupMode(QToolButton.MenuButtonPopup)
-            self.base.toolbar.merge_btn.show()
-            self.base.toolbar.delete_btn.show()
-            sel_idx = self.base.sel_idx
-            if sel_idx:
-                item = self.base.file_table.item(sel_idx.row(), sel_idx.column())
-                self.base.on_file_table_itemClicked(item, reset=False)
-        elif idx == 1:  # highlights view
-            self.base.status.hide()
-            no_arrow = "QToolButton::menu-indicator{width:0px;}"
-            self.base.toolbar.save_btn.setStyleSheet(no_arrow)
-            self.base.toolbar.save_btn.setPopupMode(QToolButton.DelayedPopup)
-            self.base.toolbar.merge_btn.hide()
-            self.base.toolbar.delete_btn.hide()
-            self.base.scan_highlights_thread()
-        self.base.current_view = idx
-        self.base.views.setCurrentIndex(idx)
-
-    @Slot()
-    def on_about_btn_clicked(self):
-        """ The `About` button is pressed
-        """
-        self.base.about.create_text()
-        self.base.about.show()
-
-
-class TextDialog(QDialog, Ui_TextDialog):
-
-    def __init__(self, parent=None):
-        super(TextDialog, self).__init__(parent)
-        # Remove the question mark widget from dialog
-        self.setWindowFlags(self.windowFlags() ^ Qt.WindowContextHelpButtonHint)
-        self.setupUi(self)
-
-        self.base = parent
-        self.on_ok = None
-
-    @Slot()
-    def on_ok_btn_clicked(self):
-        """ The OK button is pressed
-        """
-        self.on_ok()
-
-
-class Status(QWidget, Ui_Status):
-
-    def __init__(self, parent=None):
-        super(Status, self).__init__(parent)
-        self.setupUi(self)
-        self.base = parent
-
-        self.wait_anim = QMovie(":/stuff/wait.gif")
-        self.anim_lbl.setMovie(self.wait_anim)
-        self.anim_lbl.hide()
-
-        self.show_menu = QMenu(self)
-        for i in [self.act_page, self.act_date, self.act_text, self.act_comment]:
-            self.show_menu.addAction(i)
-            # noinspection PyUnresolvedReferences
-            i.triggered.connect(self.on_show_items)
-            i.setChecked(True)
-
-        sort_menu = QMenu(self)
-        ico_sort = QIcon(":/stuff/sort.png")
-        group = QActionGroup(self)
-
-        action = QAction(_("Date"), sort_menu)
-        action.setCheckable(True)
-        action.setChecked(not self.base.high_by_page)
-        action.triggered.connect(self.base.set_highlight_sort)
-        action.setData(False)
-        group.addAction(action)
-        sort_menu.addAction(action)
-
-        action = QAction(_("Page"), sort_menu)
-        action.setCheckable(True)
-        action.setChecked(self.base.high_by_page)
-        action.triggered.connect(self.base.set_highlight_sort)
-        action.setData(True)
-        group.addAction(action)
-        sort_menu.addAction(action)
-
-        sort_menu.setIcon(ico_sort)
-        sort_menu.setTitle(_("Sort by"))
-        self.show_menu.addMenu(sort_menu)
-
-        self.show_items_btn.setMenu(self.show_menu)
-
-    def on_show_items(self):
-        """ Show/Hide elements of the highlight info
-        """
-        try:
-            idx = self.base.file_table.selectionModel().selectedRows()[-1]
-        except IndexError:  # nothing selected
-            return
-        item = self.base.file_table.item(idx.row(), 0)
-        self.base.on_file_table_itemClicked(item)
-
-    def animation(self, action):
-        """ Creates or deletes temporary files and folders
-
-        :type action: str|unicode
-        :param action: The action that must be done
-        """
-        if action == "start":
-            self.anim_lbl.show()
-            self.wait_anim.start()
-        elif action == "stop":
-            self.anim_lbl.hide()
-            self.wait_anim.stop()
-
-
-class XTableWidgetItem(QTableWidgetItem):
-    def __lt__(self, value):
-        return self.data(Qt.UserRole) < value.data(Qt.UserRole)
-
-
-class LogStream(QObject):
-    append_to_log = Signal(str)
-
-    # def __init__(self):
-    #     super(LogStream, self).__init__()
-    #     # noinspection PyArgumentList
-    #     self.base = QtGui.QApplication.instance().base
-
-    def write(self, text):
-        self.append_to_log.emit(text)
-
-
-class Scanner(QObject):
-    found = Signal(unicode)
-    finished = Signal()
-
-    def __init__(self, path):
-        super(Scanner, self).__init__()
-        self.path = path
-
-    def process(self):
-        self.start_scan()
-        self.finished.emit()
-
-    def start_scan(self):
-        try:
-            for dir_tuple in os.walk(self.path):
-                dir_path = dir_tuple[0]
-                if dir_path.lower().endswith(".sdr"):  # a book's metadata folder
-                    if dir_path.lower().endswith("evernote.sdr"):
-                        continue
-                    for file_ in dir_tuple[2]:  # get the .lua file not the .old (backup)
-                        if splitext(file_)[1].lower() == ".lua":
-                            self.found.emit(join(dir_path, file_))
-                            break
-                # older metadata storage or android history folder
-                elif (dir_path.lower().endswith(join("koreader", "history"))
-                      or basename(dir_path).lower() == "history"):
-                    for file_ in dir_tuple[2]:
-                        if splitext(file_)[1].lower() == ".lua":
-                            self.found.emit(join(dir_path, file_))
-                    continue
-        except UnicodeDecodeError:  # os.walk error
-            pass
-
-
-class HighlightScanner(QObject):
-    found = Signal(dict)
-    finished = Signal()
-
-    def __init__(self):
-        super(HighlightScanner, self).__init__()
-        # noinspection PyArgumentList
-        self.base = QApplication.instance().base
-
-    def process(self):
-        for row in range(self.base.file_table.rowCount()):
-            data = self.base.file_table.item(row, TITLE).data(Qt.UserRole)
-            path = self.base.file_table.item(row, TYPE).data(Qt.UserRole)[0]
-            self.get_book_highlights(data, path)
-        self.finished.emit()
-
-    def get_book_highlights(self, data, path):
-        """ Finds all the highlights from a book
-
-        :type data: dict
-        :param data: The book data (converted from the lua file)
-        :type path: str|unicode
-        :param path: The book path
-        """
-        try:
-            authors = data["stats"]["authors"]
-        except KeyError:  # older type file
-            authors = ""
-        authors = authors if authors else _("NO AUTHOR FOUND")
-        try:
-            title = data["stats"]["title"]
-        except KeyError:  # older type file
-            title = ""
-        title = title if title else _("NO TITLE FOUND")
-
-        for page in sorted(data["highlight"]):
-            for page_id in data["highlight"][page]:
-                highlight = {"authors": authors, "title": title, "path": path}
-                try:
-                    highlight["date"] = data["highlight"][page][page_id]["datetime"]
-                    text4check = data["highlight"][page][page_id]["text"]
-                    text = text4check.replace("\\\n", "\n")
-                    comment = ""
-                    for idx in data["bookmarks"]:  # check for comment text
-                        if text4check == data["bookmarks"][idx]["notes"]:
-                            bkm_text = data["bookmarks"][idx].get("text", "")
-                            if not bkm_text:
-                                break
-                            bkm_text = re.sub(r"Page \d+ "
-                                              r"(.+?) @ \d+-\d+-\d+ \d+:\d+:\d+", r"\1",
-                                              bkm_text, 1, re.DOTALL | re.MULTILINE)
-                            if text4check != bkm_text:  # there is a comment
-                                comment = bkm_text.replace("\\\n", "\n")
-                            break
-                    highlight["text"] = text
-                    highlight["comment"] = comment
-                    highlight["page"] = str(page)
-                except KeyError:  # blank highlight
-                    continue
-                self.found.emit(highlight)
-
-
-class DropTableWidget(QTableWidget):
-    fileDropped = Signal(list)
-
-    def __init__(self, parent=None):
-        super(DropTableWidget, self).__init__(parent)
-
-    def dragEnterEvent(self, event):
-        if event.mimeData().hasUrls:
-            event.accept()
-            return True
-        else:
-            event.ignore()
-            return False
-
-    def dragMoveEvent(self, event):
-        if event.mimeData().hasUrls:
-            event.accept()
-            return True
-        else:
-            event.ignore()
-            return False
-
-    def dropEvent(self, event):
-        if event.mimeData().hasUrls:
-            links = []
-            for url in event.mimeData().urls():
-                links.append(url.toLocalFile())
-            self.fileDropped.emit(links)
-            event.accept()
-            return True
-        else:
-            event.ignore()
-            return False
-
-
-class XMessageBox(QMessageBox):
-    """ A QMessageBox with a QCheckBox
-    """
-    def __init__(self, parent=None):
-        super(XMessageBox, self).__init__(parent)
-
-        self.check_box = QCheckBox()
-        self.checked = False
-
-        # Access the Layout of the MessageBox to add a Checkbox
-        layout = self.layout()
-        layout.addWidget(self.check_box, 1, 1)
-
-    def exec_(self, *args, **kwargs):
-        """ Override the exec_ method so
-        you can return the value of the checkbox
-        """
-        return (QMessageBox.exec_(self, *args, **kwargs),
-                self.check_box.isChecked())
+        pass
 
 
 class KoHighlights(QApplication):
