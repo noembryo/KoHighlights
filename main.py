@@ -40,7 +40,7 @@ from pprint import pprint
 
 
 __author__ = "noEmbryo"
-__version__ = "0.9.1.0"
+__version__ = "1.0.0.0"
 
 
 def _(text):  # for future gettext support
@@ -150,7 +150,7 @@ class Base(QMainWindow, Ui_Base):
 
         self.query = None
         self.db = None
-        self.db_view = False
+        self.db_mode = False
         self.books = []
 
         self.file_table.verticalHeader().setResizeMode(QHeaderView.Fixed)
@@ -225,7 +225,7 @@ class Base(QMainWindow, Ui_Base):
         self.init_db()
         self.settings_load()
         if FIRST_RUN:  # on first run
-            self.toolbar.books_btn.click()
+            self.toolbar.loaded_btn.click()
             self.splitter.setSizes((500, 250))
         self.toolbar.export_btn.setMenu(self.save_menu())  # assign/create menu
         self.toolbar.merge_btn.setMenu(self.merge_menu())  # assign/create menu
@@ -550,7 +550,7 @@ class Base(QMainWindow, Ui_Base):
             action.setData(MANY_HTML)
             menu.addAction(action)
 
-        if not self.db_view:
+        if not self.db_mode:
             action = QAction(_("Archive\tAlt+A"), menu)
             action.setIcon(self.ico_db_add)
             action.triggered.connect(self.on_archive)
@@ -747,7 +747,7 @@ class Base(QMainWindow, Ui_Base):
         :type filename: str|unicode
         :param filename: The metadata file to be read
         """
-        if not self.db_view:
+        if not self.db_mode:
             # if exists(filename) and splitext(filename)[1].lower() == '.lua':
             if filename in self.loaded_paths:
                 return  # already loaded file
@@ -918,7 +918,7 @@ class Base(QMainWindow, Ui_Base):
             high_text = _("Copy Highlight")
             com_text = _("Copy Comment")
 
-            text = _("Find in Archive") if self.db_view else _("Find in Books")
+            text = _("Find in Archive") if self.db_mode else _("Find in Books")
             action = QAction(text, menu)
             action.triggered.connect(partial(self.find_in_books, highlights))
             action.setIcon(self.ico_view_books)
@@ -939,7 +939,7 @@ class Base(QMainWindow, Ui_Base):
         action.setIcon(self.ico_copy)
         menu.addAction(action)
 
-        action = QAction(_("Save to text file"), menu)
+        action = QAction(_("Export to text file"), menu)
         action.triggered.connect(self.on_save_actions)
         action.setData(2)
         action.setIcon(self.ico_file_save)
@@ -1089,12 +1089,13 @@ class Base(QMainWindow, Ui_Base):
             row_data = item.data(Qt.UserRole)
             try:  # find the book row
                 if data["stats"]["title"] == row_data["stats"]["title"]:
-                    self.on_file_table_itemClicked(item)
-                    if not self.db_view:
-                        self.toolbar.books_btn.click()
-                    else:
-                        self.toolbar.db_btn.click()
+                    self.views.setCurrentIndex(0)  # goto Books view
+                    self.toolbar.books_view_btn.setChecked(True)
+                    self.toolbar.setup_buttons()
+                    self.toolbar.activate_buttons()
+
                     self.file_table.selectRow(row)  # select the book
+                    self.on_file_table_itemClicked(item)
                     for high_row in range(self.high_list.count()):  # find the highlight
                         if (self.high_list.item(high_row)
                                 .data(Qt.UserRole)[HIGHLIGHT_TEXT] == highlight):
@@ -1143,7 +1144,7 @@ class Base(QMainWindow, Ui_Base):
             page_text = "Page " + str(page) if self.status.act_page.isChecked() else ""
             date_text = "[" + date + "]" if self.status.act_date.isChecked() else ""
             high_text = text if self.status.act_text.isChecked() else ""
-            line_break2 = "\n" if self.status.act_text.isChecked() and comment else ""
+            line_break2 = "\n" if self.status.act_comment.isChecked() and comment else ""
             high_comment = line_break2 + "● " + comment if line_break2 else ""
             highlight = (page_text + space + date_text + line_break +
                          high_text + high_comment + "\n")
@@ -1220,12 +1221,13 @@ class Base(QMainWindow, Ui_Base):
                     break
             item(row, TITLE).setData(Qt.UserRole, data)
 
-            if not self.db_view:  # Books view
+            if not self.db_mode:  # Loaded mode
                 path = item(row, PATH).text()
                 self.save_book_data(path, data)
-            else:  # Archive view
+            else:  # Archived mode
                 self.update_book2db(data)
                 self.on_file_table_itemClicked(item(row, 0), reset=False)
+
         elif self.high_table.isVisible():
             data = self.parent_book_data
             row = self.sel_high_view[-1].row()
@@ -1239,9 +1241,19 @@ class Base(QMainWindow, Ui_Base):
                     break
             self.high_table.item(row, HIGHLIGHT_H).setData(Qt.UserRole, high_data)
             self.high_table.item(row, COMMENT_H).setText(text)
-            book_path, ext = splitext(high_data["path"])
-            path = join(book_path + ".sdr", "metadata{}.lua".format(ext))
-            self.save_book_data(path, data)
+
+            if not self.db_mode:  # Loaded mode
+                book_path, ext = splitext(high_data["path"])
+                path = join(book_path + ".sdr", "metadata{}.lua".format(ext))
+                self.save_book_data(path, data)
+            else:  # Archived mode
+                self.update_book2db(data)
+                path = self.high_table.item(row, PATH_H).text()
+                for row in range(self.file_table.rowCount()):
+                    if path == self.file_table.item(row, TYPE).data(Qt.UserRole)[0]:
+                        self.file_table.item(row, TITLE).setData(Qt.UserRole, data)
+                        break
+
         self.reload_highlights = True
 
     def on_copy_highlights(self):
@@ -1257,7 +1269,7 @@ class Base(QMainWindow, Ui_Base):
     def on_delete_highlights(self):
         """ The delete highlights action was invoked
         """
-        if not self.db_view:
+        if not self.db_mode:
             if self.edit_lua_file_warning:
                 text = _("This is an one-time warning!\n\nIn order to delete highlights "
                          "from a book, its \"metadata\" file must be edited. This "
@@ -1317,7 +1329,7 @@ class Base(QMainWindow, Ui_Base):
             item = self.file_table.item(row, 0)
             item.setIcon(self.ico_empty)
 
-        if not self.db_view:
+        if not self.db_mode:
             path = self.file_table.item(row, PATH).text()
             self.save_book_data(path, data)
         else:
@@ -1570,7 +1582,7 @@ class Base(QMainWindow, Ui_Base):
         :type idx: int
         :param idx: The action type
         """
-        if not self.db_view:  # Books view
+        if not self.db_mode:  # Loaded mode
             if not self.sel_indexes and idx in [0, 1]:
                 return
             text = ""
@@ -1592,7 +1604,7 @@ class Base(QMainWindow, Ui_Base):
                 self.remove_sel_books(delete=True)
             elif idx == 2:  # delete all missing books info
                 self.clear_missing_info()
-        else:  # Archive view
+        else:  # Archived mode
             text = _("Delete the selected books from the Archive?")
             popup = self.popup(_("Warning!"), text, buttons=2, icon=QMessageBox.Question)
             if popup.buttonRole(popup.clickedButton()) == QMessageBox.RejectRole:
@@ -1661,7 +1673,7 @@ class Base(QMainWindow, Ui_Base):
     # ___ ___________________ SAVING STUFF __________________________
 
     def save_menu(self):
-        """ Creates the `Save Files` button menu
+        """ Creates the `Export Files` button menu
         """
         menu = QMenu(self)
         for idx, item in enumerate([_("To individual text files"),
@@ -1677,24 +1689,34 @@ class Base(QMainWindow, Ui_Base):
         return menu
 
     def on_save_actions(self):
-        """ A `Save selected...` menu item is clicked
+        """ A `Export selected...` menu item is clicked
         """
         idx = self.sender().data()
         self.save_actions(idx)
 
     # noinspection PyCallByClass
-    def save_actions(self, idx):
-        """ Execute the selected `Save action`
+    def save_actions(self, idx=MANY_TEXT):
+        """ Execute the selected `Export action`
 
         :type idx: int
         :param idx: The action type
         """
-        saved = 0
-        if not self.sel_indexes:
-            return
+        if self.current_view == 0:  # Books view
+            if not self.sel_indexes:
+                return
+        elif self.current_view == 1:  # Highlights view
+            if not self.sel_high_view:
+                return
+            else:  # Save from high_table, combine to one file
+                self.save_sel_highlights()
+                self.popup(_("Finished!"),
+                           _("The Highlights were exported successfully!"),
+                           icon=QMessageBox.Information)
+                return
 
+        saved = 0
         if idx in [MANY_TEXT, MANY_HTML]:  # Save from file_table to different files
-            text = _("Select destination folder for the saved file(s)")
+            text = _("Select destination folder for the exported file(s)")
             dir_path = QFileDialog.getExistingDirectory(self, text, self.last_dir,
                                                         QFileDialog.ShowDirsOnly)
             if not dir_path:
@@ -1704,19 +1726,17 @@ class Base(QMainWindow, Ui_Base):
         elif idx in [ONE_TEXT, ONE_HTML]:  # Save from file_table, combine to one file
             html = idx == ONE_HTML
             ext = " (*.html)" if html else " (*.txt)"
-            title = _("Save to HTML file") if html else _("Save to Text file")
+            title = _("Export to HTML file") if html else _("Export to Text file")
             filename = QFileDialog.getSaveFileName(self, title, self.last_dir,
                                                    _("Text files") + ext)[0]
             if not filename:
                 return
             self.last_dir = dirname(filename)
             saved = self.save_merged_file(filename, html=html)
-        elif idx == MERGED_HIGH:  # Save from high_table, combine to one file
-            return self.save_sel_highlights()  # exit without info popup
 
         self.status.animation("stop")
         all_files = len(self.file_table.selectionModel().selectedRows())
-        self.popup(_("Finished!"), _("{} texts were saved from the {} processed.\n"
+        self.popup(_("Finished!"), _("{} texts were exported from the {} processed.\n"
                                      "{} files with no highlights.")
                    .format(saved, all_files, all_files - saved),
                    icon=QMessageBox.Information)
@@ -1845,7 +1865,7 @@ class Base(QMainWindow, Ui_Base):
         if not self.sel_high_view:
             return
         # noinspection PyCallByClass
-        filename = QFileDialog.getSaveFileName(self, "Save to Text file", self.last_dir,
+        filename = QFileDialog.getSaveFileName(self, "Export to Text file", self.last_dir,
                                                "text files (*.txt);;"
                                                "all files (*.*)")[0]
         if filename:
@@ -1934,9 +1954,13 @@ class Base(QMainWindow, Ui_Base):
             self.high_merge_warning = app_config.get("high_merge_warning", True)
             self.edit_lua_file_warning = app_config.get("edit_lua_file_warning", True)
 
-            if len(sys.argv) > 1:  # command arguments exist, open in Book view
-                self.current_view = 0
-            self.toolbar.view_frame.children()[self.current_view + 1].click()
+            if len(sys.argv) > 1:  # command arguments exist, open in Loaded mode
+                self.toolbar.loaded_btn.click()
+            else:  # no extra arguments
+                if self.current_view == 0:  # open in Loaded mode
+                    self.toolbar.loaded_btn.click()
+                else:  # open in Archived mode
+                    self.toolbar.db_btn.click()
 
             checked = app_config.get("show_items", (True, True, True, True))
             # noinspection PyTypeChecker
@@ -2273,10 +2297,11 @@ class KoHighlights(QApplication):
                                  help="Sort highlights by page, otherwise sort by date")
         self.parser.add_argument("-m", "--merge", action="store_true", default=False,
                                  help="Merge the highlights of all input books in a "
-                                      "single file, otherwise save every book's "
+                                      "single file, otherwise exports every book's "
                                       "highlights to a different file")
         self.parser.add_argument("-f", "--html", action="store_true", default=False,
-                                 help="Saves highlights in .html format instead of .txt")
+                                 help="Exports highlights in .html format "
+                                      "instead of .txt")
 
         self.parser.add_argument("-np", "--no_page", action="store_true", default=False,
                                  help="Exclude the page number of the highlight")
@@ -2327,7 +2352,7 @@ class KoHighlights(QApplication):
             saved = self.cli_save_merged_file(args, files)
 
         all_files = len(files)
-        sys.stdout.write(_("\n{} files were saved from the {} processed.\n"
+        sys.stdout.write(_("\n{} files were exported from the {} processed.\n"
                            "{} files with no highlights.\n").format(saved, all_files,
                                                                     all_files - saved))
 

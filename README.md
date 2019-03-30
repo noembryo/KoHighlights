@@ -41,6 +41,7 @@ It needs the [Pyside](https://pypi.org/project/PySide/),
 [BeautifulSoup4](https://pypi.org/project/beautifulsoup4/),
 [future](https://pypi.org/project/future/) and
 [mechanize](https://pypi.org/project/mechanize/) libraries.  
+In Linux the `libqt4-sql-sqlite` package must be installed.  
 
 ## Extra
 KoHighlights includes SLPPU (a converter between python and lua objects).  

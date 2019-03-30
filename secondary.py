@@ -254,20 +254,15 @@ class ToolBar(QWidget, Ui_ToolBar):
         self.base = parent
 
         self.buttons = (self.check_btn, self.scan_btn, self.export_btn, self.open_btn,
-                        self.merge_btn, self.delete_btn, self.clear_btn, self.books_btn,
-                        self.highlights_btn, self.db_btn, self.about_btn)
-        # for button in buttons:
-        #     button.installEventFilter(TextSizer(button))
+                        self.merge_btn, self.delete_btn, self.clear_btn, self.loaded_btn,
+                        self.db_btn, self.about_btn)
         self.size_menu = self.create_size_menu()
 
-        self.books_btn.clicked.connect(partial(self.change_view, 0))
-        self.highlights_btn.clicked.connect(partial(self.change_view, 1))
-        self.db_btn.clicked.connect(partial(self.change_view, 2))
+        for btn in [self.loaded_btn, self.db_btn, self.books_view_btn, self.high_view_btn]:
+            btn.clicked.connect(self.change_view)
 
         self.check_btn.clicked.connect(parent.on_check_btn)
         self.check_btn.hide()
-        # self.view_selector.hide()
-        # self.view_selector_2.hide()
 
     @Slot(QPoint)
     def on_tool_frame_customContextMenuRequested(self, point):
@@ -302,10 +297,15 @@ class ToolBar(QWidget, Ui_ToolBar):
         """
         self.base.toolbar_size = size
         button_size = QSize(size, size)
+        half_size = QSize(size * .5, size * .5)
 
         for btn in self.buttons:
             btn.setMinimumWidth(size + 10)
             btn.setIconSize(button_size)
+
+        for btn in [self.books_view_btn, self.high_view_btn]:
+            # btn.setMinimumWidth(size + 10)
+            btn.setIconSize(half_size)
         # noinspection PyArgumentList
         QApplication.processEvents()
 
@@ -322,10 +322,6 @@ class ToolBar(QWidget, Ui_ToolBar):
             self.base.last_dir = path
             self.base.high_list.clear()
             self.base.reload_highlights = True
-            if self.base.current_view == 1:  # highlights view
-                if self.base.db_view:
-                    self.base.db_view = False  # we loading books, use to Books mode
-                    self.on_clear_btn_clicked()
             text = _("Scanning for KoReader metadata files")
             self.base.loading_thread(Scanner, path, text, clear=False)
 
@@ -333,16 +329,13 @@ class ToolBar(QWidget, Ui_ToolBar):
     def on_export_btn_clicked(self):
         """ The `Export` button is pressed
         """
-        if self.base.current_view in [0, 2]:  # books/archive view
-            self.base.save_actions(MANY_TEXT)
-        elif self.base.current_view == 1:  # highlights view
-            self.base.save_actions(MERGED_HIGH)
+        self.base.save_actions()
 
     @Slot()
     def on_open_btn_clicked(self):
         """ The `Open Book` button is pressed
         """
-        if self.base.current_view in [0, 2]:  # books/archive view
+        if self.base.current_view == 0:  # books view
             try:
                 idx = self.base.sel_indexes[-1]
             except IndexError:  # nothing selected
@@ -406,71 +399,81 @@ class ToolBar(QWidget, Ui_ToolBar):
     def on_clear_btn_clicked(self):
         """ The `Clear List` button is pressed
         """
-        if self.base.current_view == 1:  # highlights view
-            (self.base.high_table.model()
+        if self.base.current_view == 1:    # when in Highlights view
+            (self.base.high_table.model()  # clear Books view too
              .removeRows(0, self.base.high_table.rowCount()))
         self.base.loaded_paths.clear()
         self.base.reload_highlights = True
         self.base.file_table.model().removeRows(0, self.base.file_table.rowCount())
         self.activate_buttons()
 
-    def change_view(self, idx):
+    def change_view(self):
         """ Changes what is shown in the app
-
-        :type idx: int
-        :param idx: The view index
         """
-        self.base.current_view = idx
-        if idx == 0:  # Books view
-            for btn in [self.base.toolbar.export_btn, self.base.toolbar.delete_btn]:
-                self.add_btn_menu(btn)
+        if self.sender() in [self.loaded_btn, self.db_btn]:
+            if self.high_view_btn.isChecked():
+                self.books_view_btn.click()
+                return
+
+        self.update_archived() if self.db_btn.isChecked() else self.update_loaded()
+        books_view = self.books_view_btn.isChecked()
+        if books_view:  # Books view
+            self.add_btn_menu(self.base.toolbar.export_btn)
             if self.base.sel_idx:
                 item = self.base.file_table.item(self.base.sel_idx.row(),
                                                  self.base.sel_idx.column())
                 self.base.on_file_table_itemClicked(item, reset=False)
-            if self.base.db_view:
-                self.base.db_view = False
-                self.base.reload_highlights = True
-                text = "Scanning for KoReader metadata files"
-                self.base.loading_thread(ReLoader, self.base.books2reload, text)
-        elif idx == 1:  # Highlights view
+        else:  # Highlights view
             for btn in [self.base.toolbar.export_btn, self.base.toolbar.delete_btn]:
                 self.remove_btn_menu(btn)
             if self.base.reload_highlights:
                 self.base.scan_highlights_thread()
-        elif idx == 2:  # Database view
-            self.add_btn_menu(self.base.toolbar.export_btn)
-            self.remove_btn_menu(self.base.toolbar.delete_btn)
-            if not self.base.db_view:
-                self.base.books2reload = self.base.loaded_paths.copy()
-                self.base.db_view = True
-                self.base.reload_highlights = True
-                self.base.read_books_from_db()
-                text = "Loading KoHighlights database"
-                self.base.loading_thread(DBLoader, self.base.books, text)
-                if not len(self.base.books):  # no books in the db
-                    text = _('There are no books currently in the archive.\nTo add/update'
-                             ' one or more books, select them in the "Books" view and '
-                             'in their right-click menu, press "Archive".')
-                    self.base.popup(_("Info"), text, icon=QMessageBox.Question)
-        self.base.views.setCurrentIndex(1 if idx == 1 else 0)
-        self.setup_buttons(idx)
+
+        current_view = int(not books_view)
+        self.base.current_view = current_view
+        self.base.views.setCurrentIndex(current_view)
+        self.setup_buttons()
         self.activate_buttons()
 
-    def setup_buttons(self, idx):
-        """ Shows/Hides toolbar's buttons based on the view selected
-
-        :type idx: int
-        :param idx: The view index
+    def update_loaded(self):
+        """ Reloads the previously scanned metadata
         """
-        self.scan_btn.setVisible(idx in [0, 1])
-        # self.export_btn.setVisible(idx in [0, 1, 2])
-        # self.open_btn.setVisible(idx in [0, 1, 3])
-        self.merge_btn.setVisible(not idx)
-        self.delete_btn.setVisible(idx in [0, 2])
-        self.clear_btn.setVisible(not self.base.db_view)
+        if self.base.db_mode:
+            self.remove_btn_menu(self.base.toolbar.delete_btn)
+            self.base.db_mode = False
+            self.base.reload_highlights = True
+            text = "Scanning for KoReader metadata files"
+            self.base.loading_thread(ReLoader, self.base.books2reload, text)
 
-        self.base.status.setVisible(not idx)
+    def update_archived(self):
+        """ Reloads the archived metadata from the db
+        """
+        if not self.base.db_mode:
+            self.add_btn_menu(self.base.toolbar.delete_btn)
+            self.base.books2reload = self.base.loaded_paths.copy()
+            self.base.db_mode = True
+            self.base.reload_highlights = True
+            self.base.read_books_from_db()
+            text = "Loading KoHighlights database"
+            self.base.loading_thread(DBLoader, self.base.books, text)
+            if not len(self.base.books):  # no books in the db
+                text = _('There are no books currently in the archive.\nTo add/'
+                         'update one or more books, select them in the "Loaded" '
+                         'view and in their right-click menu, press "Archive".')
+                self.base.popup(_("Info"), text, icon=QMessageBox.Question)
+
+    def setup_buttons(self):
+        """ Shows/Hides toolbar's buttons based on the view selected
+        """
+        books_view = self.books_view_btn.isChecked()
+        db_mode = self.db_btn.isChecked()
+
+        self.scan_btn.setVisible(not db_mode)
+        self.merge_btn.setVisible(books_view and not db_mode)
+        self.delete_btn.setVisible(books_view)
+        self.clear_btn.setVisible(not db_mode)
+
+        self.base.status.setVisible(books_view)
 
     def activate_buttons(self):
         """ Enables/Disables toolbar's buttons based on selection/view
