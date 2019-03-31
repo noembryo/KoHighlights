@@ -43,7 +43,7 @@ except Exception:  # IOError on first run or everything else
     app_config = {}
     FIRST_RUN = True
 
-
+BOOKS_VIEW, HIGHLIGHTS_VIEW = range(2)  # app views
 TITLE, AUTHOR, TYPE, PERCENT, MODIFIED, PATH = range(6)  # file_table columns
 PAGE, HIGHLIGHT_TEXT, DATE, PAGE_ID, COMMENT = range(5)  # high_list item data
 (HIGHLIGHT_H, COMMENT_H,

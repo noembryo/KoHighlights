@@ -127,7 +127,8 @@ class Base(QMainWindow, Ui_Base):
         self.last_dir = os.getcwd()
         self.edit_lua_file_warning = True
         self.high_merge_warning = True
-        self.current_view = 0
+        self.current_view = BOOKS_VIEW
+        self.db_mode = False
         self.toolbar_size = 48
         self.high_by_page = False
         self.exit_msg = True
@@ -150,7 +151,6 @@ class Base(QMainWindow, Ui_Base):
 
         self.query = None
         self.db = None
-        self.db_mode = False
         self.books = []
 
         self.file_table.verticalHeader().setResizeMode(QHeaderView.Fixed)
@@ -232,6 +232,22 @@ class Base(QMainWindow, Ui_Base):
         self.toolbar.delete_btn.setMenu(self.delete_menu())  # assign/create menu
         self.connect_gui()
         self.passed_files()
+
+        if len(sys.argv) > 1:  # command line arguments exist, open in Loaded mode
+            self.toolbar.loaded_btn.click()
+        else:  # no extra command line arguments
+            if not self.db_mode:
+                self.toolbar.loaded_btn.setChecked(True)  # open in Loaded mode
+            else:
+                self.toolbar.db_btn.setChecked(True)  # open in Archived mode
+                self.read_books_from_db()
+                text = "Loading KoHighlights database"
+                self.loading_thread(DBLoader, self.books, text)
+        if self.current_view == BOOKS_VIEW:
+            self.toolbar.books_view_btn.click()  # open in Books view
+        else:
+            self.toolbar.high_view_btn.click()  # open in Highlights view
+
         self.show()
 
     # ___ ___________________ EVENTS STUFF __________________________
@@ -330,14 +346,14 @@ class Base(QMainWindow, Ui_Base):
             return
         self.query = QSqlQuery()
         self.set_db_version() if not db_exists else None
-        self.create_feeds_table()
+        self.create_books_table()
         if app_config:
             self.query.exec_("""PRAGMA user_version""")
             while self.query.next():
                 self.check_db_version(self.query.value(0))  # check the db version
                 # self.query.exec_("""PRAGMA user_version = 1""")
 
-    def create_feeds_table(self):
+    def create_books_table(self):
         """ Create the feeds table
         """
         self.query.exec_("""CREATE TABLE IF NOT EXISTS books (id INTEGER PRIMARY KEY, 
@@ -598,10 +614,10 @@ class Base(QMainWindow, Ui_Base):
         """ The View Book menu entry is pressed
         """
         row = self.sender().data()
-        if self.current_view == 0:  # books view
+        if self.current_view == BOOKS_VIEW:
             item = self.file_table.itemAt(row, 0)
             self.on_file_table_itemDoubleClicked(item)
-        elif self.current_view == 1:  # highlights view
+        elif self.current_view == HIGHLIGHTS_VIEW:
             data = self.high_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)
             self.open_file(data["path"])
 
@@ -714,7 +730,7 @@ class Base(QMainWindow, Ui_Base):
         loader = worker(args)
         loader.moveToThread(scan_thread)
         loader.found.connect(self.create_row)
-        loader.finished.connect(self.scan_finished)
+        loader.finished.connect(self.loading_finished)
         loader.finished.connect(scan_thread.quit)
         loader.finished.connect(self.thread_cleanup)
         scan_thread.loader = loader
@@ -722,12 +738,12 @@ class Base(QMainWindow, Ui_Base):
         scan_thread.start(QThread.IdlePriority)
         self.threads.append(scan_thread)
 
-    def scan_finished(self):
+    def loading_finished(self):
         """ What will happen after the populating of the file_table ends
         """
-        if self.current_view == 1:  # loading books from highlights view
+        if self.current_view == HIGHLIGHTS_VIEW:
             self.scan_highlights_thread()
-        else:
+        else:  # Books view
             self.status.animation("stop")
             self.auto_info.hide()
 
@@ -1089,7 +1105,7 @@ class Base(QMainWindow, Ui_Base):
             row_data = item.data(Qt.UserRole)
             try:  # find the book row
                 if data["stats"]["title"] == row_data["stats"]["title"]:
-                    self.views.setCurrentIndex(0)  # goto Books view
+                    self.views.setCurrentIndex(BOOKS_VIEW)
                     self.toolbar.books_view_btn.setChecked(True)
                     self.toolbar.setup_buttons()
                     self.toolbar.activate_buttons()
@@ -1701,10 +1717,10 @@ class Base(QMainWindow, Ui_Base):
         :type idx: int
         :param idx: The action type
         """
-        if self.current_view == 0:  # Books view
+        if self.current_view == BOOKS_VIEW:
             if not self.sel_indexes:
                 return
-        elif self.current_view == 1:  # Highlights view
+        elif self.current_view == HIGHLIGHTS_VIEW:
             if not self.sel_high_view:
                 return
             else:  # Save from high_table, combine to one file
@@ -1865,24 +1881,36 @@ class Base(QMainWindow, Ui_Base):
         if not self.sel_high_view:
             return
         # noinspection PyCallByClass
-        filename = QFileDialog.getSaveFileName(self, "Export to Text file", self.last_dir,
-                                               "text files (*.txt);;"
-                                               "all files (*.*)")[0]
-        if filename:
+        filename = QFileDialog.getSaveFileName(self, _("Export to file"), self.last_dir,
+                                               "text file (*.txt);;html file (*.html)")
+        if filename[0]:
+            filename, extra = filename
+            html = extra.startswith("html")
+            ext = ".html" if html else ".txt"
+            filename = splitext(filename)[0] + ext
             self.last_dir = dirname(filename)
         else:
             return
-        text = ""
+        text = HTML_HEAD if html else ""
         for i in sorted(self.sel_high_view):
             row = i.row()
             data = self.high_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)
             comment = "\n● " + data["comment"] if data["comment"] else ""
-            txt = ("{} [{}]\nPage {} [{}]\n{}{}".format(data["title"], data["authors"],
-                                                        data["page"], data["date"],
-                                                        data["text"], comment))
-            text += txt + "\n\n"
-        with io.open(filename, "w+", encoding="utf-8", newline="") as text_file:
-            text_file.write(text.replace("\n", os.linesep))
+            if not html:
+                txt = ("{} [{}]\nPage {} [{}]\n{}{}"
+                       .format(data["title"], data["authors"], data["page"],
+                               data["date"], data["text"], comment))
+                text += txt + "\n\n"
+            else:
+                left = "{} [{}]".format(data["title"], data["authors"])
+                right = "Page {} [{}]".format(data["page"], data["date"])
+                text += HIGH_BLOCK % {"page": left, "date": right,
+                                      "highlight": data["text"], "comment": comment}
+                text += "</div>\n"
+        if not html:
+            text.replace("\n", os.linesep)
+        with io.open(filename, "w+", encoding="utf-8", newline="") as file2save:
+            file2save.write(text)
 
     def analyze_high(self, data, page, page_id, html):
         """ Get the highlight's info (text, comment, date and page)
@@ -1944,7 +1972,8 @@ class Base(QMainWindow, Ui_Base):
             self.highlight_width = app_config.get("highlight_width", None)
             self.comment_width = app_config.get("comment_width", None)
             self.last_dir = app_config.get("last_dir", os.getcwd())
-            self.current_view = app_config.get("current_view", 0)
+            self.current_view = app_config.get("current_view", BOOKS_VIEW)
+            self.db_mode = app_config.get("db_mode", False)
             self.fold_btn.setChecked(app_config.get("show_info", True))
             self.opened_times = app_config.get("opened_times", 0)
             self.toolbar_size = app_config.get("toolbar_size", 48)
@@ -1953,14 +1982,6 @@ class Base(QMainWindow, Ui_Base):
             self.exit_msg = app_config.get("exit_msg", True)
             self.high_merge_warning = app_config.get("high_merge_warning", True)
             self.edit_lua_file_warning = app_config.get("edit_lua_file_warning", True)
-
-            if len(sys.argv) > 1:  # command arguments exist, open in Loaded mode
-                self.toolbar.loaded_btn.click()
-            else:  # no extra arguments
-                if self.current_view == 0:  # open in Loaded mode
-                    self.toolbar.loaded_btn.click()
-                else:  # open in Archived mode
-                    self.toolbar.db_btn.click()
 
             checked = app_config.get("show_items", (True, True, True, True))
             # noinspection PyTypeChecker
@@ -1990,7 +2011,7 @@ class Base(QMainWindow, Ui_Base):
                   "highlight_width": self.highlight_width,
                   "comment_width": self.comment_width, "toolbar_size": self.toolbar_size,
                   "last_dir": self.last_dir, "exit_msg": self.exit_msg,
-                  "current_view": self.current_view,
+                  "current_view": self.current_view, "db_mode": self.db_mode,
                   "high_by_page": self.high_by_page, "date_vacuumed": self.date_vacuumed,
                   "show_info": self.fold_btn.isChecked(),
                   "show_items": (self.status.act_page.isChecked(),

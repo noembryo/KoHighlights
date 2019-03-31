@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_edit.ui'
 #
-# Created: Sun Mar  3 11:56:15 2019
+# Created: Sun Mar 31 18:17:28 2019
 #      by: pyside-uic 0.2.15 running on PySide 1.2.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -29,8 +29,6 @@ class Ui_TextDialog(object):
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.btn_box.sizePolicy().hasHeightForWidth())
         self.btn_box.setSizePolicy(sizePolicy)
-        self.btn_box.setFrameShape(QtGui.QFrame.StyledPanel)
-        self.btn_box.setFrameShadow(QtGui.QFrame.Raised)
         self.btn_box.setObjectName("btn_box")
         self.horizontalLayout = QtGui.QHBoxLayout(self.btn_box)
         self.horizontalLayout.setContentsMargins(0, 0, 0, 0)

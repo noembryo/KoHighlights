@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_about.ui'
 #
-# Created: Sun Mar  3 11:56:16 2019
+# Created: Sun Mar 31 18:17:28 2019
 #      by: pyside-uic 0.2.15 running on PySide 1.2.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -31,7 +31,7 @@ class Ui_About(object):
         self.scrollArea_2.setWidgetResizable(True)
         self.scrollArea_2.setObjectName("scrollArea_2")
         self.scrollAreaWidgetContents_2 = QtGui.QWidget()
-        self.scrollAreaWidgetContents_2.setGeometry(QtCore.QRect(0, 0, 454, 483))
+        self.scrollAreaWidgetContents_2.setGeometry(QtCore.QRect(0, 0, 454, 485))
         self.scrollAreaWidgetContents_2.setStyleSheet("background-color:transparent;")
         self.scrollAreaWidgetContents_2.setObjectName("scrollAreaWidgetContents_2")
         self.verticalLayout_6 = QtGui.QVBoxLayout(self.scrollAreaWidgetContents_2)
@@ -67,8 +67,6 @@ class Ui_About(object):
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.btn_box.sizePolicy().hasHeightForWidth())
         self.btn_box.setSizePolicy(sizePolicy)
-        self.btn_box.setFrameShape(QtGui.QFrame.StyledPanel)
-        self.btn_box.setFrameShadow(QtGui.QFrame.Raised)
         self.btn_box.setObjectName("btn_box")
         self.horizontalLayout = QtGui.QHBoxLayout(self.btn_box)
         self.horizontalLayout.setContentsMargins(0, 0, 0, 0)

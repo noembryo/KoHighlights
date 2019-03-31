@@ -44,6 +44,7 @@ __all__ = ("About", "AutoInfo", "ToolBar", "TextDialog", "Status", "XTableWidget
 
 
 class XTableWidgetItem(QTableWidgetItem):
+
     def __lt__(self, value):
         return self.data(Qt.UserRole) < value.data(Qt.UserRole)
 
@@ -53,9 +54,11 @@ class DropTableWidget(QTableWidget):
 
     def __init__(self, parent=None):
         super(DropTableWidget, self).__init__(parent)
+        # noinspection PyArgumentList
+        self.app = QApplication.instance()
 
     def dragEnterEvent(self, event):
-        if event.mimeData().hasUrls:
+        if event.mimeData().hasUrls and not self.app.base.db_mode:
             event.accept()
             return True
         else:
@@ -254,8 +257,8 @@ class ToolBar(QWidget, Ui_ToolBar):
         self.base = parent
 
         self.buttons = (self.check_btn, self.scan_btn, self.export_btn, self.open_btn,
-                        self.merge_btn, self.delete_btn, self.clear_btn, self.loaded_btn,
-                        self.db_btn, self.about_btn)
+                        self.merge_btn, self.delete_btn, self.clear_btn,self.about_btn,
+                        self.books_view_btn, self.high_view_btn)
         self.size_menu = self.create_size_menu()
 
         for btn in [self.loaded_btn, self.db_btn, self.books_view_btn, self.high_view_btn]:
@@ -303,7 +306,7 @@ class ToolBar(QWidget, Ui_ToolBar):
             btn.setMinimumWidth(size + 10)
             btn.setIconSize(button_size)
 
-        for btn in [self.books_view_btn, self.high_view_btn]:
+        for btn in [ self.loaded_btn, self.db_btn,]:
             # btn.setMinimumWidth(size + 10)
             btn.setIconSize(half_size)
         # noinspection PyArgumentList
@@ -335,14 +338,14 @@ class ToolBar(QWidget, Ui_ToolBar):
     def on_open_btn_clicked(self):
         """ The `Open Book` button is pressed
         """
-        if self.base.current_view == 0:  # books view
+        if self.base.current_view == BOOKS_VIEW:
             try:
                 idx = self.base.sel_indexes[-1]
             except IndexError:  # nothing selected
                 return
             item = self.base.file_table.item(idx.row(), 0)
             self.base.on_file_table_itemDoubleClicked(item)
-        if self.base.current_view == 1:  # highlights view
+        if self.base.current_view == HIGHLIGHTS_VIEW:
             try:
                 idx = self.base.sel_high_view[-1]
             except IndexError:  # nothing selected
@@ -399,7 +402,7 @@ class ToolBar(QWidget, Ui_ToolBar):
     def on_clear_btn_clicked(self):
         """ The `Clear List` button is pressed
         """
-        if self.base.current_view == 1:    # when in Highlights view
+        if self.base.current_view == HIGHLIGHTS_VIEW:
             (self.base.high_table.model()  # clear Books view too
              .removeRows(0, self.base.high_table.rowCount()))
         self.base.loaded_paths.clear()
@@ -410,14 +413,8 @@ class ToolBar(QWidget, Ui_ToolBar):
     def change_view(self):
         """ Changes what is shown in the app
         """
-        if self.sender() in [self.loaded_btn, self.db_btn]:
-            if self.high_view_btn.isChecked():
-                self.books_view_btn.click()
-                return
-
-        self.update_archived() if self.db_btn.isChecked() else self.update_loaded()
-        books_view = self.books_view_btn.isChecked()
-        if books_view:  # Books view
+        new = self.update_archived() if self.db_btn.isChecked() else self.update_loaded()
+        if self.books_view_btn.isChecked():  # Books view
             self.add_btn_menu(self.base.toolbar.export_btn)
             if self.base.sel_idx:
                 item = self.base.file_table.item(self.base.sel_idx.row(),
@@ -426,12 +423,11 @@ class ToolBar(QWidget, Ui_ToolBar):
         else:  # Highlights view
             for btn in [self.base.toolbar.export_btn, self.base.toolbar.delete_btn]:
                 self.remove_btn_menu(btn)
-            if self.base.reload_highlights:
+            if self.base.reload_highlights and not new:
                 self.base.scan_highlights_thread()
 
-        current_view = int(not books_view)
-        self.base.current_view = current_view
-        self.base.views.setCurrentIndex(current_view)
+        self.base.current_view = 0 if self.books_view_btn.isChecked() else 1
+        self.base.views.setCurrentIndex(self.base.current_view)
         self.setup_buttons()
         self.activate_buttons()
 
@@ -444,6 +440,7 @@ class ToolBar(QWidget, Ui_ToolBar):
             self.base.reload_highlights = True
             text = "Scanning for KoReader metadata files"
             self.base.loading_thread(ReLoader, self.base.books2reload, text)
+            return True
 
     def update_archived(self):
         """ Reloads the archived metadata from the db
@@ -461,6 +458,7 @@ class ToolBar(QWidget, Ui_ToolBar):
                          'update one or more books, select them in the "Loaded" '
                          'view and in their right-click menu, press "Archive".')
                 self.base.popup(_("Info"), text, icon=QMessageBox.Question)
+            return True
 
     def setup_buttons(self):
         """ Shows/Hides toolbar's buttons based on the view selected
