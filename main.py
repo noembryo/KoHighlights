@@ -955,7 +955,7 @@ class Base(QMainWindow, Ui_Base):
         action.setIcon(self.ico_copy)
         menu.addAction(action)
 
-        action = QAction(_("Export to text file"), menu)
+        action = QAction(_("Export to file"), menu)
         action.triggered.connect(self.on_save_actions)
         action.setData(2)
         action.setIcon(self.ico_file_save)
