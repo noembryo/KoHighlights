@@ -20,6 +20,7 @@ The original KoHighlights (using the wxPython) can be found
     * Drag and drop files or folders. This will load the files and/or all the files
       inside the folders.
 * View the highlights and various info for a book by selecting it in the list.
+* Save the highlights to the "Archive" and view them, even if your reader is not connected.
 * Merge highlights from the same book that is read in two different devices and/or sync
   its reading position. 
 * Show/hide the page, date or even the highlight text while viewing or saving the
