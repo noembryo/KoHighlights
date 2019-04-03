@@ -4,9 +4,9 @@
 
 [![made-with-python][Python]](https://www.python.org/)
 [![License: MIT][MIT]](https://opensource.org/licenses/MIT)
-[![Github all releases][TotalDown]]([ReleaseLink])
-[![GitHub release][Release]]([ReleaseLink])
-<!-- [![Github Releases (by Release)][VersionDown]]([ReleaseLink]) -->
+[![Github all releases][TotalDown]][ReleaseLink]
+[![GitHub release][Release]][ReleaseLink]
+<!-- [![Github Releases (by Release)][VersionDown]][ReleaseLink] -->
 
 
 **KoHighlights** is a utility for viewing and converting the
@@ -60,7 +60,7 @@ If you want it globally available, get it from its
 
 
 [Release]:https://img.shields.io/github/release/noembryo/KoHighlights.svg
-[ReleseLink]:https://GitHub.com/noembryo/KoHighlights/releases/
+[ReleaseLink]:https://GitHub.com/noembryo/KoHighlights/releases/
 [TotalDown]:https://img.shields.io/github/downloads/noembryo/KoHighlights/total.svg
 [VersionDown]:https://img.shields.io/github/downloads/noembryo/KoHighlights/v1.0.0.0/total.svg
 [Python]:https://img.shields.io/badge/Made%20with-Python-1f425f.svg
