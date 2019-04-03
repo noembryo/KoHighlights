@@ -2,8 +2,11 @@
 ![kohighlights128w](https://cloud.githubusercontent.com/assets/14363074/9978678/22e01940-5f49-11e5-8112-bc58b8f0f56f.png)
 
 
-[![MIT Licence][licence-badge]](COPYING)
-[![Latest release][release-badge]](https://github.com/noembryo/KoHighlights/releases/)
+[![GitHub release](https://img.shields.io/github/release/noembryo/KoHighlights.svg)](https://GitHub.com/noembryo/KoHighlights/releases/)
+[![Github all releases](https://img.shields.io/github/downloads/noembryo/KoHighlights/total.svg)](https://GitHub.com/noembryo/KoHighlights/releases/)
+[![made-with-python](https://img.shields.io/badge/Made%20with-Python-1f425f.svg)]()
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+<!-- [![Github Releases (by Release)](https://img.shields.io/github/downloads/noembryo/KoHighlights/v1.0.0.0/total.svg)](https://GitHub.com/noembryo/KoHighlights/releases/) -->
 
 
 **KoHighlights** is a utility for viewing and converting the
