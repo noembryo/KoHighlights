@@ -3,7 +3,7 @@
 
 
 [![made-with-python][Python]](https://www.python.org/)
-[![License: MIT][MIT]](https://opensource.org/licenses/MIT)
+[![License: MIT][MIT]](LICENSE)
 [![Github all releases][TotalDown]][ReleaseLink]
 [![GitHub release][Release]][ReleaseLink]
 <!-- [![Github Releases (by Release)][VersionDown]][ReleaseLink] -->
