@@ -2,11 +2,11 @@
 ![kohighlights128w](https://cloud.githubusercontent.com/assets/14363074/9978678/22e01940-5f49-11e5-8112-bc58b8f0f56f.png)
 
 
-[![GitHub release](https://img.shields.io/github/release/noembryo/KoHighlights.svg)](https://GitHub.com/noembryo/KoHighlights/releases/)
-[![Github all releases](https://img.shields.io/github/downloads/noembryo/KoHighlights/total.svg)](https://GitHub.com/noembryo/KoHighlights/releases/)
-[![made-with-python](https://img.shields.io/badge/Made%20with-Python-1f425f.svg)]()
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-<!-- [![Github Releases (by Release)](https://img.shields.io/github/downloads/noembryo/KoHighlights/v1.0.0.0/total.svg)](https://GitHub.com/noembryo/KoHighlights/releases/) -->
+[![made-with-python][Python]](https://www.python.org/)
+[![License: MIT][MIT]](https://opensource.org/licenses/MIT)
+[![Github all releases][TotalDown]]([ReleaseLink])
+[![GitHub release][Release]]([ReleaseLink])
+<!-- [![Github Releases (by Release)][VersionDown]]([ReleaseLink]) -->
 
 
 **KoHighlights** is a utility for viewing and converting the
@@ -57,3 +57,11 @@ KoHighlights includes SLPPU (a converter between python and lua objects).
 If you want it globally available, get it from its
 [GitHub's page](https://github.com/noembryo/slppu) or install it with:  
 `pip install git+https://github.com/noembryo/slppu`  
+
+
+[Release]:https://img.shields.io/github/release/noembryo/KoHighlights.svg
+[ReleseLink]:https://GitHub.com/noembryo/KoHighlights/releases/
+[TotalDown]:https://img.shields.io/github/downloads/noembryo/KoHighlights/total.svg
+[VersionDown]:https://img.shields.io/github/downloads/noembryo/KoHighlights/v1.0.0.0/total.svg
+[Python]:https://img.shields.io/badge/Made%20with-Python-1f425f.svg
+[MIT]:https://img.shields.io/badge/License-MIT-blue.svg
