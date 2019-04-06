@@ -435,7 +435,6 @@ class ToolBar(QWidget, Ui_ToolBar):
         """ Reloads the previously scanned metadata
         """
         if self.base.db_mode:
-            self.remove_btn_menu(self.base.toolbar.delete_btn)
             self.base.db_mode = False
             self.base.reload_highlights = True
             text = "Scanning for KoReader metadata files"
@@ -446,7 +445,6 @@ class ToolBar(QWidget, Ui_ToolBar):
         """ Reloads the archived metadata from the db
         """
         if not self.base.db_mode:
-            self.add_btn_menu(self.base.toolbar.delete_btn)
             self.base.books2reload = self.base.loaded_paths.copy()
             self.base.db_mode = True
             self.base.reload_highlights = True
@@ -471,6 +469,10 @@ class ToolBar(QWidget, Ui_ToolBar):
         self.delete_btn.setVisible(books_view)
         self.clear_btn.setVisible(not db_mode)
 
+        if self.base.db_mode:
+            self.remove_btn_menu(self.base.toolbar.delete_btn)
+        else:
+            self.add_btn_menu(self.base.toolbar.delete_btn)
         self.base.status.setVisible(books_view)
 
     def activate_buttons(self):

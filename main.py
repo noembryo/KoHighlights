@@ -40,7 +40,7 @@ from pprint import pprint
 
 
 __author__ = "noEmbryo"
-__version__ = "1.0.0.0"
+__version__ = "1.0.2.0"
 
 
 def _(text):  # for future gettext support
@@ -164,6 +164,9 @@ class Base(QMainWindow, Ui_Base):
         self.header_high_view.setDefaultAlignment(Qt.AlignLeft)
         # self.header_high_view.setResizeMode(HIGHLIGHT_H, QHeaderView.Stretch)
 
+        self.splitter.setCollapsible(0, False)
+        self.splitter.setCollapsible(1, False)
+
         self.info_fields = [self.title_txt, self.author_txt, self.series_txt,
                             self.lang_txt, self.pages_txt, self.tags_txt]
         self.info_keys = ["title", "authors", "series", "language", "pages", "keywords"]
@@ -179,7 +182,11 @@ class Base(QMainWindow, Ui_Base):
         self.ico_label_green = QIcon(":/stuff/label_green.png")
         self.ico_view_books = QIcon(":/stuff/view_books.png")
         self.ico_db_add = QIcon(":/stuff/db_add.png")
+        self.ico_app = QIcon(":/stuff/logo64.png")
         self.ico_empty = QIcon(":/stuff/trans32.png")
+
+        # noinspection PyArgumentList
+        self.clip = QApplication.clipboard()
 
         self.about = About(self)
         self.auto_info = AutoInfo(self)
@@ -203,21 +210,15 @@ class Base(QMainWindow, Ui_Base):
         self.description.btn_box.hide()
         self.description_btn.setEnabled(False)
 
-        self.splitter.setCollapsible(0, False)
-        self.splitter.setCollapsible(1, False)
-
-        # noinspection PyArgumentList
-        self.clip = QApplication.clipboard()
-
-        # noinspection PyTypeChecker,PyCallByClass
-        QTimer.singleShot(0, self.on_load)
-
         # noinspection PyTypeChecker,PyCallByClass
         QTimer.singleShot(30000, self.auto_check4update)  # check for updates
 
         main_timer = QTimer(self)  # cleanup threads for ever
         main_timer.timeout.connect(self.thread_cleanup)
         main_timer.start(2000)
+
+        # noinspection PyTypeChecker,PyCallByClass
+        QTimer.singleShot(0, self.on_load)
 
     def on_load(self):
         """ Things that must be done after the initialization
@@ -337,27 +338,20 @@ class Base(QMainWindow, Ui_Base):
     def init_db(self):
         """ Initialize the database tables
         """
-        db_exists = isfile(join(SETTINGS_DIR, "data.db"))
+        db_path = join(SETTINGS_DIR, "data.db")
         # noinspection PyTypeChecker,PyCallByClass
         self.db = QSqlDatabase.addDatabase("QSQLITE")
-        self.db.setDatabaseName(join(SETTINGS_DIR, "data.db"))
+        self.db.setDatabaseName(db_path)
         if not self.db.open():
             print("Could not open database!")
             return
         self.query = QSqlQuery()
-        self.set_db_version() if not db_exists else None
-        self.create_books_table()
         if app_config:
             self.query.exec_("""PRAGMA user_version""")
             while self.query.next():
                 self.check_db_version(self.query.value(0))  # check the db version
-                # self.query.exec_("""PRAGMA user_version = 1""")
-
-    def create_books_table(self):
-        """ Create the feeds table
-        """
-        self.query.exec_("""CREATE TABLE IF NOT EXISTS books (id INTEGER PRIMARY KEY, 
-                         md5 TEXT UNIQUE NOT NULL, date TEXT, path TEXT, data TEXT)""")
+        self.set_db_version() if not isfile(db_path) else None
+        self.create_books_table()
 
     def check_db_version(self, version):
         """ Updates the db to the last version
@@ -370,9 +364,15 @@ class Base(QMainWindow, Ui_Base):
         self.ask_upgrade(version)
 
     def set_db_version(self):
-        """ Set the database version as current
+        """ Set the current database version
         """
         self.query.exec_("""PRAGMA user_version = {}""".format(DB_VERSION))
+
+    def create_books_table(self):
+        """ Create the books table
+        """
+        self.query.exec_("""CREATE TABLE IF NOT EXISTS books (id INTEGER PRIMARY KEY, 
+                         md5 TEXT UNIQUE NOT NULL, date TEXT, path TEXT, data TEXT)""")
 
     def add_books2db(self, books):
         """ Add some books to the books db table
@@ -456,11 +456,10 @@ class Base(QMainWindow, Ui_Base):
         self.file_table.setSortingEnabled(True)
         folders = [j for j in dropped if isdir(j)]
         for folder in folders:
-            # self.scan_files_thread(folder)
             text = _("Scanning for KoReader metadata files")
             self.loading_thread(Scanner, folder, text, clear=False)
 
-    # @Slot(QTableWidgetItem)  # its called indirectly from self.file_selection_update
+    # @Slot(QTableWidgetItem)  # called indirectly from self.file_selection_update
     def on_file_table_itemClicked(self, item, reset=True):
         """ When an item of the FileTable is clicked
 
@@ -2102,7 +2101,7 @@ class Base(QMainWindow, Ui_Base):
         :parameter check_text: The checkbox's text (checkbox is omitted if "")
         """
         popup = XMessageBox(self)
-        popup.setWindowIcon(QIcon(":/stuff/icon.png"))
+        popup.setWindowIcon(self.ico_app)
         if type(icon) == QMessageBox.Icon:
             popup.setIcon(icon)
         elif type(icon) == unicode:
@@ -2279,7 +2278,7 @@ class KoHighlights(QApplication):
         self.parser.add_argument("-v", "--version", action="version",
                                  version="%(prog)s v{}".format(__version__))
 
-        if getattr(sys, 'frozen', False):
+        if getattr(sys, "frozen", False):
             if not sys.platform.lower().startswith("win"):
                 self.parse_args()
         else:

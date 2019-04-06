@@ -3,9 +3,10 @@
 
 
 [![made-with-python][Python]](https://www.python.org/)
+[![Generic badge][OS]][ReleaseLink]
 [![License: MIT][MIT]](LICENSE)
-[![Github all releases][TotalDown]][ReleaseLink]
 [![GitHub release][Release]][ReleaseLink]
+<!-- [![Github all releases][TotalDown]][ReleaseLink] -->
 <!-- [![Github Releases (by Release)][VersionDown]][ReleaseLink] -->
 
 
@@ -41,7 +42,7 @@ The original KoHighlights (using the wxPython) can be found
 * Clear the .sdr folders with the metadata or the books in the eReader.
 
 ## Downloads
-Check the latest release on the [Downloads Page](https://github.com/noembryo/KoHighlights/releases).  
+Check the latest release on the [Downloads Page][ReleaseLink].  
 Read the version history at [App's Page](http://www.noembryo.com/apps.php?kohighlights).
 
 ## Dependencies
@@ -64,4 +65,5 @@ If you want it globally available, get it from its
 [TotalDown]:https://img.shields.io/github/downloads/noembryo/KoHighlights/total.svg
 [VersionDown]:https://img.shields.io/github/downloads/noembryo/KoHighlights/v1.0.0.0/total.svg
 [Python]:https://img.shields.io/badge/Made%20with-Python-1f425f.svg
-[MIT]:https://img.shields.io/badge/License-MIT-blue.svg
+[OS]:https://img.shields.io/badge/OS-Windows&nbsp;/&nbsp;Linux-darkgreen.svg
+[MIT]:https://img.shields.io/badge/License-MIT-green.svg

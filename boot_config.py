@@ -10,11 +10,46 @@ from os.path import dirname, join, isdir, expanduser
 APP_NAME = "KoHighlights"
 APP_DIR = dirname(os.path.abspath(sys.argv[0]))
 os.chdir(APP_DIR)  # Set the current working directory to the app's directory
+
 if sys.platform == "win32":  # Windows
+    class SingleInstance:
+        """ Limits application to single instance
+        """
+        def __init__(self, name):
+            import win32event
+            import win32api
+            self.mutex = win32event.CreateMutex(None, False, name)
+            self.lasterror = win32api.GetLastError()
+
+        def already_running(self):
+            from winerror import ERROR_ALREADY_EXISTS
+            return self.lasterror == ERROR_ALREADY_EXISTS
+
+        def __del__(self):
+            import win32api
+            win32api.CloseHandle(self.mutex) if self.mutex else None
+
+    my_app = SingleInstance(APP_NAME)
+    if my_app.already_running():  # another instance is running
+        sys.exit(0)
     SETTINGS_DIR = join(os.environ["APPDATA"], APP_NAME)
-elif sys.platform == "darwin":  # MacOS
+elif sys.platform == "darwin":  # MacOS 2check: needs to be tested
+    import socket
+    app_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        app_socket.bind(("127.0.0.1", 42001))  # use a specific port
+        # app_socket.listen(1)
+    except socket.error:  # port in use - another instance is running
+        sys.exit(0)
     SETTINGS_DIR = join(expanduser("~"), "Library", "Application Support", APP_NAME)
 else:  # Linux+
+    try:
+        import socket
+        app_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        # Create an abstract socket, by prefixing it with null.
+        app_socket.bind(str("\0{}_lock_port".format(APP_NAME)))
+    except socket.error:  # port in use - another instance is running
+        sys.exit(0)
     SETTINGS_DIR = join(expanduser("~"), ".config", APP_NAME)
 os.makedirs(SETTINGS_DIR) if not isdir(SETTINGS_DIR) else None
 
@@ -42,6 +77,7 @@ try:
 except Exception:  # IOError on first run or everything else
     app_config = {}
     FIRST_RUN = True
+
 
 BOOKS_VIEW, HIGHLIGHTS_VIEW = range(2)  # app views
 TITLE, AUTHOR, TYPE, PERCENT, MODIFIED, PATH = range(6)  # file_table columns
