@@ -16,7 +16,6 @@ This is a totally re-written application using the Qt framework (PySide).
 The original KoHighlights (using the wxPython) can be found
 [here](https://github.com/noonkey/KoHighlights), but is considered deprecated..
 
-
 ![HighLights ScreenShot](screen1.png)
 ![HighLights ScreenShot](screen2.png)
 ![HighLights ScreenShot](screen3.png)
@@ -29,7 +28,13 @@ The original KoHighlights (using the wxPython) can be found
     * Drag and drop files or folders. This will load the files and/or all the files
       inside the folders.
 * View the highlights and various info for a book by selecting it in the list.
-* Save the highlights to the "Archive" and view them, even if your reader is not connected.
+* Save the highlights to the "Archive" and view them, even if your reader is not
+connected. To do it you have to:
+    * Load both metadata (e.g. your reader's and your tablet's)
+    * Select the relevant rows of the (same) book.
+    * If the book has the same cre_dom_version (version of the CREngine), then the
+      "Merge/Sync" button gets activated and you get the options to sync the highlights
+      or the position or both.
 * Merge highlights from the same book that is read in two different devices and/or sync
   its reading position. 
 * Show/hide the page, date or even the highlight text while viewing or saving the
@@ -47,10 +52,10 @@ Read the version history at [App's Page](http://www.noembryo.com/apps.php?kohigh
 
 ## Dependencies
 Should run in any system with Python 2.7.x or 3.x (more testing required)  
-It needs the [Pyside](https://pypi.org/project/PySide/),
+It needs the [PySide](https://pypi.org/project/PySide/),
 [BeautifulSoup4](https://pypi.org/project/beautifulsoup4/),
 [future](https://pypi.org/project/future/) and
-[mechanize](https://pypi.org/project/mechanize/) libraries.  
+[requests](https://pypi.org/project/requests/) libraries.  
 In Linux the `libqt4-sql-sqlite` package must be installed.  
 
 ## Extra
