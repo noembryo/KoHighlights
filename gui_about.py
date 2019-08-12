@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_about.ui'
 #
-# Created: Sun Mar 31 18:17:28 2019
+# Created: Mon Aug 12 13:08:09 2019
 #      by: pyside-uic 0.2.15 running on PySide 1.2.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -95,7 +95,6 @@ class Ui_About(object):
         About.setWindowTitle(QtGui.QApplication.translate("About", "About KoHighlights", None, QtGui.QApplication.UnicodeUTF8))
         self.about_tabs.setTabText(self.about_tabs.indexOf(self.info_tab), QtGui.QApplication.translate("About", "Information", None, QtGui.QApplication.UnicodeUTF8))
         self.about_tabs.setTabText(self.about_tabs.indexOf(self.log_tab), QtGui.QApplication.translate("About", "Log", None, QtGui.QApplication.UnicodeUTF8))
-        self.about_qt_btn.setToolTip(QtGui.QApplication.translate("About", "Check online for an updated version", None, QtGui.QApplication.UnicodeUTF8))
         self.about_qt_btn.setText(QtGui.QApplication.translate("About", "About Qt", None, QtGui.QApplication.UnicodeUTF8))
         self.updates_btn.setToolTip(QtGui.QApplication.translate("About", "Check online for an updated version", None, QtGui.QApplication.UnicodeUTF8))
         self.updates_btn.setText(QtGui.QApplication.translate("About", "Check for Updates", None, QtGui.QApplication.UnicodeUTF8))

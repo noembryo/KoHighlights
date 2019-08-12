@@ -12,21 +12,22 @@ APP_DIR = dirname(os.path.abspath(sys.argv[0]))
 os.chdir(APP_DIR)  # Set the current working directory to the app's directory
 
 if sys.platform == "win32":  # Windows
+    import win32api
+    import win32event
+    from winerror import ERROR_ALREADY_EXISTS
+
     class SingleInstance:
         """ Limits application to single instance
         """
         def __init__(self, name):
-            import win32event
-            import win32api
             self.mutex = win32event.CreateMutex(None, False, name)
             self.lasterror = win32api.GetLastError()
 
         def already_running(self):
-            from winerror import ERROR_ALREADY_EXISTS
             return self.lasterror == ERROR_ALREADY_EXISTS
 
         def __del__(self):
-            import win32api
+            import win32api  # needed otherwise raises Exception AttributeError
             win32api.CloseHandle(self.mutex) if self.mutex else None
 
     my_app = SingleInstance(APP_NAME)
@@ -67,7 +68,12 @@ def except_hook(class_type, value, trace_back):
 sys.excepthook = except_hook
 
 
-PYTHON2 = True if not sys.version_info >= (3, 0) else False
+PYTHON2 = True if sys.version_info < (3, 0) else False
+QT4 = True
+try:
+    import PySide
+except ImportError:
+    QT4 = False
 FIRST_RUN = False
 # noinspection PyBroadException
 try:
@@ -80,10 +86,10 @@ except Exception:  # IOError on first run or everything else
 
 
 BOOKS_VIEW, HIGHLIGHTS_VIEW = range(2)  # app views
-TITLE, AUTHOR, TYPE, PERCENT, MODIFIED, PATH = range(6)  # file_table columns
+TITLE, AUTHOR, TYPE, PERCENT, RATING, MODIFIED, PATH = range(7)  # file_table columns
 PAGE, HIGHLIGHT_TEXT, DATE, PAGE_ID, COMMENT = range(5)  # high_list item data
 (HIGHLIGHT_H, COMMENT_H,
- DATE_H, TITLE_H, PAGE_H, AUTHOR_H, PATH_H) = range(7)  # high_table columns
+ DATE_H, TITLE_H, AUTHOR_H, PAGE_H, PATH_H) = range(7)  # high_table columns
 MANY_TEXT, ONE_TEXT, MANY_HTML, ONE_HTML, MERGED_HIGH = range(5)  # save_actions
 DB_MD5, DB_DATE, DB_PATH, DB_DATA = range(4)  # db data (columns)
 

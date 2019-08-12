@@ -7,6 +7,8 @@ try:  # ___ _______ PYTHON 2/3 COMPATIBILITY ________________________
 except NameError:  # python 3.x
     # noinspection PyShadowingBuiltins
     basestring = str
+    unicode = str
+    long = int
 from future.utils import iteritems
 
 # https://github.com/noembryo/slppu

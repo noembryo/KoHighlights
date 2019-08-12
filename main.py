@@ -1,5 +1,7 @@
 # coding=utf-8
 from __future__ import absolute_import, division, print_function, unicode_literals
+
+
 from boot_config import *
 import os, sys, re, io
 import gzip
@@ -14,16 +16,25 @@ from collections import defaultdict
 from distutils.version import LooseVersion
 from os.path import (isdir, isfile, join, basename, splitext, dirname, split,
                      getmtime, abspath)
+from pprint import pprint
 
 
 # ___ _____________ DEPENDENCIES ____________________________________
-from PySide.QtSql import QSqlDatabase, QSqlQuery
-from PySide.QtCore import (Qt, QTimer, Slot,QThread, QMimeData, QModelIndex, QByteArray,
-                           QPoint)
-from PySide.QtGui import (QMainWindow, QApplication, QMessageBox, QIcon, QFileDialog,
-                          QTableWidgetItem, QTextCursor, QMenu, QAction, QHeaderView,
-                          QPixmap, QListWidgetItem)
-
+try:
+    from PySide.QtSql import QSqlDatabase, QSqlQuery
+    from PySide.QtCore import (Qt, QTimer, Slot, QThread, QMimeData, QModelIndex,
+                               QByteArray, QPoint)
+    from PySide.QtGui import (QMainWindow, QApplication, QMessageBox, QIcon, QFileDialog,
+                              QTableWidgetItem, QTextCursor, QMenu, QAction, QHeaderView,
+                              QPixmap, QListWidgetItem, QBrush, QColor)
+except ImportError:
+    from PySide2.QtWidgets import (QMainWindow, QHeaderView, QApplication, QMessageBox,
+                                   QAction, QMenu, QTableWidgetItem, QListWidgetItem,
+                                   QFileDialog)
+    from PySide2.QtCore import (Qt, QTimer, QThread, QModelIndex, Slot, QPoint, QMimeData,
+                                QByteArray)
+    from PySide2.QtSql import QSqlDatabase, QSqlQuery
+    from PySide2.QtGui import QIcon, QPixmap, QTextCursor, QBrush, QColor
 
 from secondary import *
 from gui_main import Ui_Base
@@ -32,15 +43,17 @@ from slppu import slppu as lua  # https://github.com/noembryo/slppu
 
 try:  # ___ _______ PYTHON 2/3 COMPATIBILITY ________________________
     import cPickle as pickle
+    from codecs import open
 except ImportError:  # python 3.x
     import pickle
+    from io import open
     # noinspection PyShadowingBuiltins
     unicode = str
-from pprint import pprint
+    basestring = str
 
 
 __author__ = "noEmbryo"
-__version__ = "1.0.2.0"
+__version__ = "1.1.0.0"
 
 
 def _(text):  # for future gettext support
@@ -111,7 +124,6 @@ class Base(QMainWindow, Ui_Base):
         super(Base, self).__init__(parent)
 
         self.scan_thread = None
-        # self.highlight_scan_thread = QThread()
         self.setupUi(self)
         self.version = __version__
 
@@ -126,11 +138,12 @@ class Base(QMainWindow, Ui_Base):
         self.opened_times = 0
         self.last_dir = os.getcwd()
         self.edit_lua_file_warning = True
-        self.high_merge_warning = True
         self.current_view = BOOKS_VIEW
         self.db_mode = False
         self.toolbar_size = 48
         self.high_by_page = False
+        self.high_merge_warning = True
+        self.archive_warning = True
         self.exit_msg = True
         self.date_vacuumed = datetime.now().strftime(DATE_FORMAT)
         # ___ ___________________________________
@@ -153,16 +166,21 @@ class Base(QMainWindow, Ui_Base):
         self.db = None
         self.books = []
 
-        self.file_table.verticalHeader().setResizeMode(QHeaderView.Fixed)
         self.header_main = self.file_table.horizontalHeader()
-        self.header_main.setMovable(True)
         self.header_main.setDefaultAlignment(Qt.AlignLeft)
-
-        self.high_table.verticalHeader().setResizeMode(QHeaderView.Fixed)
         self.header_high_view = self.high_table.horizontalHeader()
-        self.header_high_view.setMovable(True)
         self.header_high_view.setDefaultAlignment(Qt.AlignLeft)
         # self.header_high_view.setResizeMode(HIGHLIGHT_H, QHeaderView.Stretch)
+        if QT4:
+            self.file_table.verticalHeader().setResizeMode(QHeaderView.Fixed)
+            self.header_main.setMovable(True)
+            self.high_table.verticalHeader().setResizeMode(QHeaderView.Fixed)
+            self.header_high_view.setMovable(True)
+        else:
+            self.file_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
+            self.header_main.setSectionsMovable(True)
+            self.high_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
+            self.header_high_view.setSectionsMovable(True)
 
         self.splitter.setCollapsible(0, False)
         self.splitter.setCollapsible(1, False)
@@ -241,9 +259,9 @@ class Base(QMainWindow, Ui_Base):
                 self.toolbar.loaded_btn.setChecked(True)  # open in Loaded mode
             else:
                 self.toolbar.db_btn.setChecked(True)  # open in Archived mode
-                self.read_books_from_db()
                 text = "Loading KoHighlights database"
                 self.loading_thread(DBLoader, self.books, text)
+        self.read_books_from_db()  # always load db on start
         if self.current_view == BOOKS_VIEW:
             self.toolbar.books_view_btn.click()  # open in Books view
         else:
@@ -347,9 +365,10 @@ class Base(QMainWindow, Ui_Base):
             return
         self.query = QSqlQuery()
         if app_config:
-            self.query.exec_("""PRAGMA user_version""")
-            while self.query.next():
-                self.check_db_version(self.query.value(0))  # check the db version
+            pass
+            # self.query.exec_("""PRAGMA user_version""")  # 2do: enable if db changes
+            # while self.query.next():
+            #     self.check_db_version(self.query.value(0))  # check the db version
         self.set_db_version() if not isfile(db_path) else None
         self.create_books_table()
 
@@ -361,7 +380,7 @@ class Base(QMainWindow, Ui_Base):
         """
         if version == DB_VERSION or not isfile(join(SETTINGS_DIR, "data.db")):
             return  # the db is up to date or does not exists yet
-        self.ask_upgrade(version)
+        self.update_db(version)
 
     def set_db_version(self):
         """ Set the current database version
@@ -399,8 +418,20 @@ class Base(QMainWindow, Ui_Base):
         self.query.exec_("""SELECT * FROM books""")
         while self.query.next():
             book = [self.query.value(i) for i in range(1, 5)]  # don't read the id
+            data = json.loads(book[DB_DATA], object_hook=self.keys2int)
             self.books.append({"md5": book[DB_MD5], "date": book[DB_DATE],
-                               "path": book[DB_PATH], "data": json.loads(book[DB_DATA])})
+                               "path": book[DB_PATH], "data": data})
+
+    @staticmethod
+    def keys2int(data):
+        """ ReConverts the numeric keys of the Highlights in the data dictionary
+            that are converted to strings because of json serialization
+        :type data: dict
+        :param data: The books to add in the db
+        """
+        if isinstance(data, dict):
+            return {int(k) if k.isdigit() else k: v for k, v in data.items()}
+        return data
 
     def update_book2db(self, data):
         """ Updates the data of a book in the db
@@ -449,11 +480,11 @@ class Base(QMainWindow, Ui_Base):
         :type dropped: list
         :param dropped: The items dropped
         """
-        self.file_table.setSortingEnabled(False)
+        # self.file_table.setSortingEnabled(False)
         for i in dropped:
             if splitext(i)[1] == ".lua":
                 self.create_row(i)
-        self.file_table.setSortingEnabled(True)
+        # self.file_table.setSortingEnabled(True)
         folders = [j for j in dropped if isdir(j)]
         for folder in folders:
             text = _("Scanning for KoReader metadata files")
@@ -547,7 +578,7 @@ class Base(QMainWindow, Ui_Base):
         self.act_view_book.setData(row)
         menu.addAction(self.act_view_book)
 
-        if len(self.file_selection.selectedRows()) > 1:  # many items selected
+        if len(self.sel_indexes) > 1:  # many items selected
             save_menu = self.save_menu()
             save_menu.setIcon(self.ico_file_save)
             save_menu.setTitle(_("Export"))
@@ -570,6 +601,13 @@ class Base(QMainWindow, Ui_Base):
             action.setIcon(self.ico_db_add)
             action.triggered.connect(self.on_archive)
             menu.addAction(action)
+
+            if len(self.sel_indexes) == 1:
+                if self.check4archive_merge() is not False:
+                    sync_menu = self.create_archive_merge_menu()
+                    sync_menu.setTitle(_("Sync with archived"))
+                    sync_menu.setIcon(self.ico_files_merge)
+                    menu.addMenu(sync_menu)
 
             delete_menu = self.delete_menu()
             delete_menu.setIcon(self.ico_files_delete)
@@ -679,6 +717,17 @@ class Base(QMainWindow, Ui_Base):
         """
         if not self.sel_indexes:
             return
+
+        if self.archive_warning:  # warn about book replacement in archive
+            extra = _("these books") if len(self.sel_indexes) > 1 else _("this book")
+            popup = self.popup(_("Question!"),
+                               _("Add or replace {} in the archive?").format(extra),
+                               buttons=2, icon=QMessageBox.Question,
+                               check_text=_("Don't show this again"))
+            self.archive_warning = not popup.checked
+            if popup.buttonRole(popup.clickedButton()) == QMessageBox.RejectRole:
+                return
+
         empty = 0
         older = 0
         added = 0
@@ -772,10 +821,16 @@ class Base(QMainWindow, Ui_Base):
                 print("No data here!", filename)
                 return
             date = str(datetime.fromtimestamp(getmtime(filename)))
-            icon, title, authors, percent = self.get_item_stats(filename, data)
+            icon, title, authors, percent, rating, status = self.get_item_stats(filename,
+                                                                                data)
         else:
-            icon, title, authors, percent = self.get_item_db_stats(data)
+            icon, title, authors, percent, rating, status = self.get_item_db_stats(data)
 
+        color = ("#660000" if status == "abandoned" else
+                 # "#005500" if status == "complete" else
+                 None)
+
+        self.file_table.setSortingEnabled(False)
         self.file_table.insertRow(0)
 
         title_item = QTableWidgetItem(icon, title)
@@ -797,10 +852,15 @@ class Base(QMainWindow, Ui_Base):
         type_item.setData(Qt.UserRole, (book_path, book_exists))
         self.file_table.setItem(0, TYPE, type_item)
 
-        percent_item = QTableWidgetItem(percent)
+        percent_item = XTableWidgetPercentItem(percent)
         percent_item.setToolTip(percent)
         percent_item.setTextAlignment(Qt.AlignRight)
         self.file_table.setItem(0, PERCENT, percent_item)
+
+        rating_item = QTableWidgetItem(rating)
+        rating_item.setToolTip(rating)
+        # rating_item.setTextAlignment(Qt.AlignRight)
+        self.file_table.setItem(0, RATING, rating_item)
 
         date_item = QTableWidgetItem(date)
         date_item.setToolTip(date)
@@ -810,25 +870,38 @@ class Base(QMainWindow, Ui_Base):
         path_item.setToolTip(filename)
         self.file_table.setItem(0, PATH, path_item)
 
+        for i in range(7):  # colorize row
+            item = self.file_table.item(0, i)
+            item.setForeground(QBrush(QColor(color)))
+        self.file_table.setSortingEnabled(True)
+
     def get_item_db_stats(self, data):
         """ Returns the title and authors of a history file
 
         :type data: dict
         :param data: The dict converted lua file
         """
+        icon = self.ico_label_green if data["highlight"] else self.ico_empty
         title = data["stats"]["title"]
         authors = data["stats"]["authors"]
         title = title if title else _("NO TITLE FOUND")
         authors = authors if authors else _("NO AUTHOR FOUND")
         try:
-            percent = data["percent_finished"]
-            percent = str(int(percent * 100)) + "%"
-            percent = "Complete" if percent == "100%" else percent
+            percent = str(int(data["percent_finished"] * 100)) + "%"
+            # percent = data["percent_finished"]
+            # percent = str(int(percent * 100)) + "%"
+            # percent = "Complete" if percent == "100%" else percent
         except KeyError:
-            percent = None
+            percent = ""
+        if "summary" in data:
+            rating = data["summary"].get("rating")
+            rating = rating * "*" if rating else ""
+            status = data["summary"].get("status")
+        else:
+            rating = ""
+            status = None
 
-        icon = self.ico_label_green if data["highlight"] else self.ico_empty
-        return icon, title, authors, percent
+        return icon, title, authors, percent, rating, status
 
     def get_item_stats(self, filename, data):
         """ Returns the title and authors of a metadata file
@@ -838,6 +911,7 @@ class Base(QMainWindow, Ui_Base):
         :type data: dict
         :param data: The dict converted lua file
         """
+        icon = self.ico_label_green if data["highlight"] else self.ico_empty
         try:
             title = data["stats"]["title"]
             authors = data["stats"]["authors"]
@@ -857,14 +931,21 @@ class Base(QMainWindow, Ui_Base):
                 title = _("NO TITLE FOUND")
         authors = authors if authors else _("NO AUTHOR FOUND")
         try:
-            percent = data["percent_finished"]
-            percent = str(int(percent * 100)) + "%"
-            percent = "Complete" if percent == "100%" else percent
+            percent = str(int(data["percent_finished"] * 100)) + "%"
+            # percent = data["percent_finished"]
+            # percent = str(int(percent * 100)) + "%"
+            # percent = "Complete" if percent == "100%" else percent
         except KeyError:
             percent = None
+        if "summary" in data:
+            rating = data["summary"].get("rating")
+            rating = rating * "*" if rating else ""
+            status = data["summary"].get("status")
+        else:
+            rating = ""
+            status = None
 
-        icon = self.ico_label_green if data["highlight"] else self.ico_empty
-        return icon, title, authors, percent
+        return icon, title, authors, percent, rating, status
 
     # ___ ___________________ HIGHLIGHT TABLE STUFF _________________
 
@@ -1029,17 +1110,17 @@ class Base(QMainWindow, Ui_Base):
         item.setToolTip(title)
         self.high_table.setItem(0, TITLE_H, item)
 
+        authors = data["authors"]
+        item = QTableWidgetItem(authors)
+        item.setToolTip(authors)
+        self.high_table.setItem(0, AUTHOR_H, item)
+
         page = data["page"]
         item = XTableWidgetItem(page)
         item.setToolTip(page)
         item.setTextAlignment(Qt.AlignRight)
         item.setData(Qt.UserRole, int(page))
         self.high_table.setItem(0, PAGE_H, item)
-
-        authors = data["authors"]
-        item = QTableWidgetItem(authors)
-        item.setToolTip(authors)
-        self.high_table.setItem(0, AUTHOR_H, item)
 
         path = data["path"]
         item = QTableWidgetItem(path)
@@ -1436,19 +1517,82 @@ class Base(QMainWindow, Ui_Base):
 
         return menu
 
-    def merge_highlights(self, sync, merge=True):
+    def check4archive_merge(self):
+        """ Check if the selected books' highlights can be merged
+            with its archived version
+        """
+        if len(self.sel_indexes) == 1:
+            idx = self.sel_idx
+            data = self.file_table.item(idx.row(), idx.column()).data(Qt.UserRole)
+            try:
+                md5 = data["partial_md5_checksum"]
+                dom_version = data["cre_dom_version"]
+            except KeyError:  # no "partial_md5_checksum" key (older metadata)
+                pass
+            else:
+                for idx, book in enumerate(self.books):
+                    if md5 == book["md5"]:
+                        if dom_version == book["data"]["cre_dom_version"]:
+                            return idx
+        return False
+
+    def create_archive_merge_menu(self):
+        """ Creates the `Sync` sub-menu
+        """
+        menu = QMenu(self)
+
+        action = QAction(self.ico_files_merge, _("Merge highlights"), menu)
+        action.triggered.connect(partial(self.on_merge_highlights, True))
+        menu.addAction(action)
+
+        action = QAction(self.ico_files_merge, _("Sync position only"), menu)
+        action.triggered.connect(partial(self.merge_highlights, True, False, True))
+        menu.addAction(action)
+
+        return menu
+
+    def on_merge_highlights(self, to_archived=False):
+        """ Tries to merge/sync highlights
+        """
+        if self.high_merge_warning:
+            text = _("Merging highlights is experimental so, always do backups ;o)\n"
+                     "Because of the different page formats and sizes, some page "
+                     "numbers in KoHighlights might be inaccurate. "
+                     "Do you want to continue?")
+            popup = self.popup(_("Warning!"), text, buttons=3,
+                               check_text=_("Don't show this again"))
+            self.high_merge_warning = not popup.checked
+            if popup.buttonRole(popup.clickedButton()) == QMessageBox.RejectRole:
+                return
+
+        popup = self.popup(_("Warning!"),
+                           _("The highlights of the selected entries will be merged.\n"
+                             "This can not be undone! Continue?"), buttons=3,
+                           check_text=_("Sync the reading position too"))
+        if popup.buttonRole(popup.clickedButton()) == QMessageBox.AcceptRole:
+            self.merge_highlights(popup.checked, True, to_archived)
+
+    def merge_highlights(self, sync, merge, to_archived=False):
         """ Merge highlights from the same book in two different devices
 
         :type sync: bool
         :param sync: Sync reading position too
         :type merge: bool
         :param merge: Merge the highlights
+        :type to_archived: bool
+        :param to_archived: Merge a book with its archived version
         """
-        idx1, idx2 = self.sel_indexes
-        data1, data2 = [self.file_table.item(idx.row(), TITLE).data(Qt.UserRole)
-                        for idx in [idx1, idx2]]
-        path1, path2 = [self.file_table.item(idx.row(), PATH).text()
-                        for idx in [idx1, idx2]]
+        if to_archived:  # Merge/Sync a book with archive
+            idx1, idx2 = self.sel_idx, None
+            data1 = self.file_table.item(idx1.row(), TITLE).data(Qt.UserRole)
+            data2 = self.books[self.check4archive_merge()]["data"]
+            path1, path2 = self.file_table.item(idx1.row(), PATH).text(), None
+        else:  # Merge/Sync two different book files
+            idx1, idx2 = self.sel_indexes
+            data1, data2 = [self.file_table.item(idx.row(), TITLE).data(Qt.UserRole)
+                            for idx in [idx1, idx2]]
+            path1, path2 = [self.file_table.item(idx.row(), PATH).text()
+                            for idx in [idx1, idx2]]
 
         if merge:  # merge highlights
             args = (data1["highlight"], data2["highlight"],
@@ -1461,21 +1605,23 @@ class Base(QMainWindow, Ui_Base):
             if data1["percent_finished"] > data2["percent_finished"]:
                 data2["percent_finished"] = data1["percent_finished"]
                 data2["last_xpointer"] = data1["last_xpointer"]
-                percent = self.file_table.item(idx1.row(), PERCENT).text()
-                self.file_table.item(idx2.row(), PERCENT).setText(percent)
-                self.file_table.item(idx2.row(), PERCENT).setToolTip(percent)
             else:
                 data1["percent_finished"] = data2["percent_finished"]
                 data1["last_xpointer"] = data2["last_xpointer"]
-                percent = self.file_table.item(idx2.row(), PERCENT).text()
-                self.file_table.item(idx1.row(), PERCENT).setText(percent)
-                self.file_table.item(idx1.row(), PERCENT).setToolTip(percent)
+
+            percent = str(int(data1["percent_finished"] * 100)) + "%"
+            self.file_table.item(idx1.row(), PERCENT).setText(percent)
+            if not to_archived:
+                self.file_table.item(idx2.row(), PERCENT).setToolTip(percent)
 
         self.file_table.item(idx1.row(), TITLE).setData(Qt.UserRole, data1)
-        self.file_table.item(idx2.row(), TITLE).setData(Qt.UserRole, data2)
-
         self.save_book_data(path1, data1)
-        self.save_book_data(path2, data2)
+        if to_archived:
+            self.update_book2db(data2)
+        else:
+            self.file_table.item(idx2.row(), TITLE).setData(Qt.UserRole, data2)
+            self.save_book_data(path2, data2)
+
         self.reload_highlights = True
 
     @staticmethod
@@ -1978,6 +2124,7 @@ class Base(QMainWindow, Ui_Base):
             self.toolbar_size = app_config.get("toolbar_size", 48)
             self.skip_version = app_config.get("skip_version", None)
             self.date_vacuumed = app_config.get("date_vacuumed", self.date_vacuumed)
+            self.archive_warning = app_config.get("archive_warning", True)
             self.exit_msg = app_config.get("exit_msg", True)
             self.high_merge_warning = app_config.get("high_merge_warning", True)
             self.edit_lua_file_warning = app_config.get("edit_lua_file_warning", True)
@@ -2009,7 +2156,8 @@ class Base(QMainWindow, Ui_Base):
                   "col_sort_asc_h": self.col_sort_asc_h, "col_sort_h": self.col_sort_h,
                   "highlight_width": self.highlight_width,
                   "comment_width": self.comment_width, "toolbar_size": self.toolbar_size,
-                  "last_dir": self.last_dir, "exit_msg": self.exit_msg,
+                  "last_dir": self.last_dir, "archive_warning": self.archive_warning,
+                  "exit_msg": self.exit_msg,
                   "current_view": self.current_view, "db_mode": self.db_mode,
                   "high_by_page": self.high_by_page, "date_vacuumed": self.date_vacuumed,
                   "show_info": self.fold_btn.isChecked(),
@@ -2045,7 +2193,7 @@ class Base(QMainWindow, Ui_Base):
         :param array: The data
         """
         if PYTHON2:
-            return pickle.dumps(array)
+            return pickle.dumps(array.data())
         # noinspection PyArgumentList
         return str(pickle.dumps(array.data()), encoding="unicode_escape")  # Python3
 
@@ -2067,7 +2215,7 @@ class Base(QMainWindow, Ui_Base):
                     # noinspection PyArgumentList
                     pickled = pickle.loads(bytes(app_config.get(key), encoding="latin"))
                     value = QByteArray(pickled)
-                except UnicodeDecodeError:  # settings file from Python2
+                except (UnicodeDecodeError, ImportError):  # settings file from Python2
                     return
         except pickle.UnpicklingError as err:
             print("While unPickling:", err)

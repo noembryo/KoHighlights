@@ -30,17 +30,19 @@ The original KoHighlights (using the wxPython) can be found
 * View the highlights and various info for a book by selecting it in the list.
 * Save the highlights to the "Archive" and view them, even if your reader is not
 connected.
-* Merge highlights from the same book that is read in two different devices and/or sync
-  its reading position. To do it you have to:
-    * Load both metadata (e.g. your reader's and your tablet's)
+* Merge highlights/Sync position from the same book that is read in two different devices
+  and/or sync its reading position. To do it you have to:
+    * Load both metadata (e.g. by scanning your reader's _and_ your tablet's books).
     * Select the relevant rows of the (same) book.
     * If the book has the same cre_dom_version (version of the CREngine), then the
       "Merge/Sync" button gets activated and you get the options to sync the highlights
       or the position or both.
+* Merge highlights/Sync position of a book with its archived version
+  (book's right click menu) 
 * Show/hide the page, date or even the highlight text while viewing or saving the
   highlights of the books. 
 * Double click or press the Open Book button to view the book in your system's reader.
-* Save all the selected books' highlights:
+* Save all the selected books' highlights in:
     * A text/html file for every selected book or
     * A single text/html file with all highlights combined
 * Delete some or all the highlights of any book.

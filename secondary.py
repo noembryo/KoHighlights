@@ -1,7 +1,6 @@
 # coding=utf-8
 from __future__ import absolute_import, division, print_function, unicode_literals
 from boot_config import *
-
 import re
 import webbrowser
 from functools import partial
@@ -9,12 +8,19 @@ from distutils.version import LooseVersion
 from os.path import join, basename, splitext, isfile
 
 # ___ _____________ DEPENDENCIES ____________________________________
-import mechanize
+import requests
 from bs4 import BeautifulSoup
-from PySide.QtCore import Qt, Slot, QObject, Signal, QSize, QPoint, QThread
-from PySide.QtGui import (QApplication, QMessageBox, QIcon, QFileDialog, QTableWidgetItem,
-                          QDialog, QWidget, QMovie, QFont, QMenu, QAction, QTableWidget,
-                          QCheckBox, QToolButton, QActionGroup)
+try:
+    from PySide.QtCore import Qt, Slot, QObject, Signal, QSize, QPoint, QThread
+    from PySide.QtGui import (QApplication, QMessageBox, QIcon, QFileDialog,
+                              QTableWidgetItem, QDialog, QWidget, QMovie, QFont, QMenu,
+                              QAction, QTableWidget, QCheckBox, QToolButton, QActionGroup)
+except ImportError:
+    from PySide2.QtCore import QObject, Qt, Signal, QPoint, Slot, QSize
+    from PySide2.QtGui import QFont, QMovie, QIcon
+    from PySide2.QtWidgets import (QTableWidgetItem, QTableWidget, QMessageBox, QApplication,
+                                   QWidget, QDialog, QFileDialog, QActionGroup, QMenu,
+                                   QAction, QToolButton, QCheckBox, QWidgetItem)
 
 from gui_about import Ui_About  # ___ ______ GUI STUFF ______________
 from gui_auto_info import Ui_AutoInfo
@@ -35,9 +41,9 @@ def _(text):  # for future gettext support
     return text
 
 
-__all__ = ("About", "AutoInfo", "ToolBar", "TextDialog", "Status", "XTableWidgetItem",
-           "LogStream", "Scanner", "HighlightScanner", "DropTableWidget", "XMessageBox",
-           "ReLoader", "DBLoader")
+__all__ = ("XTableWidgetItem", "XTableWidgetPercentItem", "DropTableWidget","XMessageBox",
+           "About", "AutoInfo", "ToolBar", "TextDialog", "Status", "LogStream", "Scanner",
+           "HighlightScanner", "ReLoader", "DBLoader")
 
 
 # ___ _______________________ SUBCLASSING ___________________________
@@ -47,6 +53,12 @@ class XTableWidgetItem(QTableWidgetItem):
 
     def __lt__(self, value):
         return self.data(Qt.UserRole) < value.data(Qt.UserRole)
+
+
+class XTableWidgetPercentItem(QTableWidgetItem):
+
+    def __lt__(self, value):
+        return int(self.data(Qt.DisplayRole)[:-1]) < int(value.data(Qt.DisplayRole)[:-1])
 
 
 class DropTableWidget(QTableWidget):
@@ -95,9 +107,12 @@ class XMessageBox(QMessageBox):
         self.check_box = QCheckBox()
         self.checked = False
 
-        # Access the Layout of the MessageBox to add a Checkbox
-        layout = self.layout()
-        layout.addWidget(self.check_box, 1, 1)
+        if QT4:
+            # Access the Layout of the MessageBox to add a Checkbox
+            layout = self.layout()
+            layout.addWidget(self.check_box, 1, 1)
+        else:
+            self.setCheckBox(self.check_box)
 
     def exec_(self, *args, **kwargs):
         """ Override the exec_ method so
@@ -257,11 +272,12 @@ class ToolBar(QWidget, Ui_ToolBar):
         self.base = parent
 
         self.buttons = (self.check_btn, self.scan_btn, self.export_btn, self.open_btn,
-                        self.merge_btn, self.delete_btn, self.clear_btn,self.about_btn,
+                        self.merge_btn, self.delete_btn, self.clear_btn, self.about_btn,
                         self.books_view_btn, self.high_view_btn)
         self.size_menu = self.create_size_menu()
 
-        for btn in [self.loaded_btn, self.db_btn, self.books_view_btn, self.high_view_btn]:
+        for btn in [self.loaded_btn, self.db_btn,
+                    self.books_view_btn, self.high_view_btn]:
             btn.clicked.connect(self.change_view)
 
         self.check_btn.clicked.connect(parent.on_check_btn)
@@ -306,7 +322,7 @@ class ToolBar(QWidget, Ui_ToolBar):
             btn.setMinimumWidth(size + 10)
             btn.setIconSize(button_size)
 
-        for btn in [ self.loaded_btn, self.db_btn,]:
+        for btn in [self.loaded_btn, self.db_btn]:
             # btn.setMinimumWidth(size + 10)
             btn.setIconSize(half_size)
         # noinspection PyArgumentList
@@ -357,28 +373,10 @@ class ToolBar(QWidget, Ui_ToolBar):
     def on_merge_btn_clicked(self):
         """ The `Merge` button is pressed
         """
-        data = [self.base.file_table.item(idx.row(), idx.column()).data(Qt.UserRole)
-                for idx in self.base.sel_indexes]
-        if data[0]["cre_dom_version"] == data[1]["cre_dom_version"]:
-            if self.base.high_merge_warning:
-                text = _("Merging highlights from different devices is experimental so, "
-                         "always do backups ;o)\n"
-                         "Because of the different page formats and sizes, some page "
-                         "numbers in KoHighlights might be inaccurate. "
-                         "Do you want to continue?")
-                popup = self.base.popup(_("Warning!"), text, buttons=3,
-                                        check_text=_("Don't show this again"))
-                self.base.high_merge_warning = not popup.checked
-                if popup.buttonRole(popup.clickedButton()) == QMessageBox.RejectRole:
-                    return
-
-            popup = self.base.popup(_("Warning!"),
-                                    _("The highlights of the selected entries will be "
-                                      "merged.\nThis can not be undone! Continue?"),
-                                    buttons=3,
-                                    check_text=_("Try to sync the reading position too"))
-            if popup.buttonRole(popup.clickedButton()) == QMessageBox.AcceptRole:
-                self.base.merge_highlights(popup.checked)
+        datas = [self.base.file_table.item(idx.row(), idx.column()).data(Qt.UserRole)
+                 for idx in self.base.sel_indexes]
+        if datas[0]["cre_dom_version"] == datas[1]["cre_dom_version"]:
+            self.base.on_merge_highlights()
         else:
             text = _("Can not merge these highlights, because they are produced with a "
                      "different version of the reader engine!\n\n"
@@ -588,19 +586,18 @@ class About(QDialog, Ui_About):
                                 "Gecko/20100101 Firefox/24.0.1",
                   "Referer": "http://whateveritis.com"}
         url = "http://www.noembryo.com/apps.php?kohighlights"
-
-        browser = mechanize.Browser()
-        browser.set_handle_robots(False)
-        request = Request(url, None, header)
-        html_text = browser.open(request)
-        soup_text = BeautifulSoup(html_text, "html5lib")
+        try:
+            html_text = requests.get(url, headers=header).content
+        except requests.exceptions.ConnectionError:
+            return
+        soup_text = BeautifulSoup(html_text, "html.parser")
         results = soup_text.findAll(name="p")
         results = "".join([str(i) for i in results])
         match = re.search(r"\d+\.\d+\.\d+\.\d+", results, re.DOTALL)
         try:
             version_new = match.group(0)
         except AttributeError:  # no match found
-            return
+            version_new = "0.0.0.0"
         return LooseVersion(version_new)
 
     def create_text(self):

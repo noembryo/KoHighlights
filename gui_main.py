@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_main.ui'
 #
-# Created: Sun Apr  7 02:32:13 2019
+# Created: Mon Aug 12 13:08:09 2019
 #      by: pyside-uic 0.2.15 running on PySide 1.2.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -42,10 +42,11 @@ class Ui_Base(object):
         self.file_table.setDefaultDropAction(QtCore.Qt.CopyAction)
         self.file_table.setSelectionBehavior(QtGui.QAbstractItemView.SelectRows)
         self.file_table.setHorizontalScrollMode(QtGui.QAbstractItemView.ScrollPerPixel)
+        self.file_table.setWordWrap(False)
         self.file_table.setCornerButtonEnabled(False)
-        self.file_table.setColumnCount(6)
+        self.file_table.setColumnCount(7)
         self.file_table.setObjectName("file_table")
-        self.file_table.setColumnCount(6)
+        self.file_table.setColumnCount(7)
         self.file_table.setRowCount(0)
         item = QtGui.QTableWidgetItem()
         self.file_table.setHorizontalHeaderItem(0, item)
@@ -59,6 +60,8 @@ class Ui_Base(object):
         self.file_table.setHorizontalHeaderItem(4, item)
         item = QtGui.QTableWidgetItem()
         self.file_table.setHorizontalHeaderItem(5, item)
+        item = QtGui.QTableWidgetItem()
+        self.file_table.setHorizontalHeaderItem(6, item)
         self.file_table.horizontalHeader().setHighlightSections(False)
         self.file_table.horizontalHeader().setMinimumSectionSize(22)
         self.file_table.horizontalHeader().setSortIndicatorShown(True)
@@ -178,6 +181,7 @@ class Ui_Base(object):
         self.high_table.setDefaultDropAction(QtCore.Qt.CopyAction)
         self.high_table.setSelectionBehavior(QtGui.QAbstractItemView.SelectRows)
         self.high_table.setHorizontalScrollMode(QtGui.QAbstractItemView.ScrollPerPixel)
+        self.high_table.setWordWrap(False)
         self.high_table.setCornerButtonEnabled(False)
         self.high_table.setColumnCount(7)
         self.high_table.setObjectName("high_table")
@@ -244,8 +248,9 @@ class Ui_Base(object):
         self.file_table.horizontalHeaderItem(1).setText(QtGui.QApplication.translate("Base", "Author", None, QtGui.QApplication.UnicodeUTF8))
         self.file_table.horizontalHeaderItem(2).setText(QtGui.QApplication.translate("Base", "Type", None, QtGui.QApplication.UnicodeUTF8))
         self.file_table.horizontalHeaderItem(3).setText(QtGui.QApplication.translate("Base", "Percent", None, QtGui.QApplication.UnicodeUTF8))
-        self.file_table.horizontalHeaderItem(4).setText(QtGui.QApplication.translate("Base", "Modified", None, QtGui.QApplication.UnicodeUTF8))
-        self.file_table.horizontalHeaderItem(5).setText(QtGui.QApplication.translate("Base", "Path", None, QtGui.QApplication.UnicodeUTF8))
+        self.file_table.horizontalHeaderItem(4).setText(QtGui.QApplication.translate("Base", "Rating", None, QtGui.QApplication.UnicodeUTF8))
+        self.file_table.horizontalHeaderItem(5).setText(QtGui.QApplication.translate("Base", "Modified", None, QtGui.QApplication.UnicodeUTF8))
+        self.file_table.horizontalHeaderItem(6).setText(QtGui.QApplication.translate("Base", "Path", None, QtGui.QApplication.UnicodeUTF8))
         self.fold_btn.setText(QtGui.QApplication.translate("Base", "Hide Book Info", None, QtGui.QApplication.UnicodeUTF8))
         self.title_lbl.setText(QtGui.QApplication.translate("Base", "Title", None, QtGui.QApplication.UnicodeUTF8))
         self.series_lbl.setText(QtGui.QApplication.translate("Base", "Series", None, QtGui.QApplication.UnicodeUTF8))
@@ -259,8 +264,8 @@ class Ui_Base(object):
         self.high_table.horizontalHeaderItem(1).setText(QtGui.QApplication.translate("Base", "Comment", None, QtGui.QApplication.UnicodeUTF8))
         self.high_table.horizontalHeaderItem(2).setText(QtGui.QApplication.translate("Base", "Date", None, QtGui.QApplication.UnicodeUTF8))
         self.high_table.horizontalHeaderItem(3).setText(QtGui.QApplication.translate("Base", "Title", None, QtGui.QApplication.UnicodeUTF8))
-        self.high_table.horizontalHeaderItem(4).setText(QtGui.QApplication.translate("Base", "Page", None, QtGui.QApplication.UnicodeUTF8))
-        self.high_table.horizontalHeaderItem(5).setText(QtGui.QApplication.translate("Base", "Author", None, QtGui.QApplication.UnicodeUTF8))
+        self.high_table.horizontalHeaderItem(4).setText(QtGui.QApplication.translate("Base", "Author", None, QtGui.QApplication.UnicodeUTF8))
+        self.high_table.horizontalHeaderItem(5).setText(QtGui.QApplication.translate("Base", "Page", None, QtGui.QApplication.UnicodeUTF8))
         self.high_table.horizontalHeaderItem(6).setText(QtGui.QApplication.translate("Base", "Book path", None, QtGui.QApplication.UnicodeUTF8))
         self.act_english.setText(QtGui.QApplication.translate("Base", "English", None, QtGui.QApplication.UnicodeUTF8))
         self.act_greek.setText(QtGui.QApplication.translate("Base", "Greek", None, QtGui.QApplication.UnicodeUTF8))
