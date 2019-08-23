@@ -62,7 +62,7 @@ In Linux the `libqt4-sql-sqlite` package must be installed.
 
 ## Extra
 KoHighlights includes SLPPU (a converter between python and lua objects).  
-If you want it globally available, get it from its
+If you want it to be globally available, get it from its
 [GitHub's page](https://github.com/noembryo/slppu) or install it with:  
 `pip install git+https://github.com/noembryo/slppu`  
 

@@ -48,12 +48,11 @@ except ImportError:  # python 3.x
     import pickle
     from io import open
     # noinspection PyShadowingBuiltins
-    unicode = str
-    basestring = str
+    unicode, basestring = str, str
 
 
 __author__ = "noEmbryo"
-__version__ = "1.1.0.0"
+__version__ = "1.2.0.0"
 
 
 def _(text):  # for future gettext support
@@ -141,6 +140,7 @@ class Base(QMainWindow, Ui_Base):
         self.current_view = BOOKS_VIEW
         self.db_mode = False
         self.toolbar_size = 48
+        self.alt_title_sort = False
         self.high_by_page = False
         self.high_merge_warning = True
         self.archive_warning = True
@@ -168,6 +168,7 @@ class Base(QMainWindow, Ui_Base):
 
         self.header_main = self.file_table.horizontalHeader()
         self.header_main.setDefaultAlignment(Qt.AlignLeft)
+        self.header_main.setContextMenuPolicy(Qt.CustomContextMenu)
         self.header_high_view = self.high_table.horizontalHeader()
         self.header_high_view.setDefaultAlignment(Qt.AlignLeft)
         # self.header_high_view.setResizeMode(HIGHLIGHT_H, QHeaderView.Stretch)
@@ -278,6 +279,7 @@ class Base(QMainWindow, Ui_Base):
         self.file_selection = self.file_table.selectionModel()
         self.file_selection.selectionChanged.connect(self.file_selection_update)
         self.header_main.sectionClicked.connect(self.on_column_clicked)
+        self.header_main.customContextMenuRequested.connect(self.on_column_right_clicked)
         self.high_list_selection = self.high_list.selectionModel()
         self.high_list_selection.selectionChanged.connect(self.high_list_selection_update)
 
@@ -697,6 +699,35 @@ class Base(QMainWindow, Ui_Base):
             self.col_sort_asc = True
         self.col_sort = column
 
+    def on_column_right_clicked(self, pos):
+        """ Creates a sorting menu for the "Title" column
+
+        :type pos: QPoint
+        :parameter pos: The position of the right click
+        """
+        column = self.header_main.logicalIndexAt(pos)
+        name = self.file_table.horizontalHeaderItem(column).text()
+        if name == _("Title"):
+            menu = QMenu(self)
+
+            action = QAction(_('Ignore "A" && "The"'), menu)
+            action.setCheckable(True)
+            action.setChecked(self.alt_title_sort)
+            action.triggered.connect(self.toggle_title_sort)
+            menu.addAction(action)
+
+            menu.exec_(self.file_table.mapToGlobal(pos))
+
+    def toggle_title_sort(self):
+        """ Toggles the way titles are sorted (use or not A/The)
+        """
+        self.alt_title_sort = not self.alt_title_sort
+        text = _("ReSorting books...")
+        if not self.db_mode:
+            self.loading_thread(ReLoader, self.loaded_paths.copy(), text)
+        else:
+            self.loading_thread(DBLoader, self.books, text)
+
     @Slot(bool)
     def on_fold_btn_toggled(self, pressed):
         """ Open/closes the Book info panel
@@ -833,7 +864,9 @@ class Base(QMainWindow, Ui_Base):
         self.file_table.setSortingEnabled(False)
         self.file_table.insertRow(0)
 
-        title_item = QTableWidgetItem(icon, title)
+        widget = QTableWidgetItem if not self.alt_title_sort else XTableWidgetTitleItem
+        title_item = widget(icon, title)
+
         title_item.setToolTip(title)
         title_item.setData(Qt.UserRole, data)
         self.file_table.setItem(0, TITLE, title_item)
@@ -1116,10 +1149,9 @@ class Base(QMainWindow, Ui_Base):
         self.high_table.setItem(0, AUTHOR_H, item)
 
         page = data["page"]
-        item = XTableWidgetItem(page)
+        item = XTableWidgetIntItem(page)
         item.setToolTip(page)
         item.setTextAlignment(Qt.AlignRight)
-        item.setData(Qt.UserRole, int(page))
         self.high_table.setItem(0, PAGE_H, item)
 
         path = data["path"]
@@ -2121,6 +2153,7 @@ class Base(QMainWindow, Ui_Base):
             self.db_mode = app_config.get("db_mode", False)
             self.fold_btn.setChecked(app_config.get("show_info", True))
             self.opened_times = app_config.get("opened_times", 0)
+            self.alt_title_sort = app_config.get("alt_title_sort", False)
             self.toolbar_size = app_config.get("toolbar_size", 48)
             self.skip_version = app_config.get("skip_version", None)
             self.date_vacuumed = app_config.get("date_vacuumed", self.date_vacuumed)
@@ -2156,8 +2189,8 @@ class Base(QMainWindow, Ui_Base):
                   "col_sort_asc_h": self.col_sort_asc_h, "col_sort_h": self.col_sort_h,
                   "highlight_width": self.highlight_width,
                   "comment_width": self.comment_width, "toolbar_size": self.toolbar_size,
-                  "last_dir": self.last_dir, "archive_warning": self.archive_warning,
-                  "exit_msg": self.exit_msg,
+                  "last_dir": self.last_dir, "alt_title_sort": self.alt_title_sort,
+                  "archive_warning": self.archive_warning, "exit_msg": self.exit_msg,
                   "current_view": self.current_view, "db_mode": self.db_mode,
                   "high_by_page": self.high_by_page, "date_vacuumed": self.date_vacuumed,
                   "show_info": self.fold_btn.isChecked(),

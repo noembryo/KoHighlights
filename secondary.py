@@ -41,24 +41,42 @@ def _(text):  # for future gettext support
     return text
 
 
-__all__ = ("XTableWidgetItem", "XTableWidgetPercentItem", "DropTableWidget","XMessageBox",
-           "About", "AutoInfo", "ToolBar", "TextDialog", "Status", "LogStream", "Scanner",
-           "HighlightScanner", "ReLoader", "DBLoader")
+__all__ = ("XTableWidgetIntItem", "XTableWidgetPercentItem", "XTableWidgetTitleItem",
+           "DropTableWidget","XMessageBox", "About", "AutoInfo", "ToolBar", "TextDialog",
+           "Status", "LogStream", "Scanner", "HighlightScanner", "ReLoader", "DBLoader")
 
 
 # ___ _______________________ SUBCLASSING ___________________________
 
 
-class XTableWidgetItem(QTableWidgetItem):
+class XTableWidgetIntItem(QTableWidgetItem):
+    """ Sorts numbers writen as strings (after 1 is 2 not 11)
+    """
 
     def __lt__(self, value):
-        return self.data(Qt.UserRole) < value.data(Qt.UserRole)
+        return int(self.data(Qt.DisplayRole)) < int(value.data(Qt.DisplayRole))
 
 
 class XTableWidgetPercentItem(QTableWidgetItem):
+    """ Sorts percentages writen as strings (e.g. 35%)
+    """
 
     def __lt__(self, value):
         return int(self.data(Qt.DisplayRole)[:-1]) < int(value.data(Qt.DisplayRole)[:-1])
+
+
+class XTableWidgetTitleItem(QTableWidgetItem):
+    """ Sorts titles ignoring the leading "A" or "The"
+    """
+
+    def __lt__(self, value):
+        t1 = self.data(Qt.DisplayRole).lower()
+        t1 = t1[2:] if t1.startswith("a") else t1[4:] if t1.startswith("the") else t1
+
+        t2 = value.data(Qt.DisplayRole).lower()
+        t2 = t2[2:] if t2.startswith("a") else t2[4:] if t2.startswith("the") else t2
+
+        return t1 < t2
 
 
 class DropTableWidget(QTableWidget):
@@ -435,7 +453,7 @@ class ToolBar(QWidget, Ui_ToolBar):
         if self.base.db_mode:
             self.base.db_mode = False
             self.base.reload_highlights = True
-            text = "Scanning for KoReader metadata files"
+            text = _("Scanning for KoReader metadata files")
             self.base.loading_thread(ReLoader, self.base.books2reload, text)
             return True
 
@@ -447,7 +465,7 @@ class ToolBar(QWidget, Ui_ToolBar):
             self.base.db_mode = True
             self.base.reload_highlights = True
             self.base.read_books_from_db()
-            text = "Loading KoHighlights database"
+            text = _("Loading KoHighlights database")
             self.base.loading_thread(DBLoader, self.base.books, text)
             if not len(self.base.books):  # no books in the db
                 text = _('There are no books currently in the archive.\nTo add/'
