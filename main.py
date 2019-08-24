@@ -52,7 +52,7 @@ except ImportError:  # python 3.x
 
 
 __author__ = "noEmbryo"
-__version__ = "1.2.1.0"
+__version__ = "1.2.2.0"
 
 
 def _(text):  # for future gettext support
@@ -710,7 +710,7 @@ class Base(QMainWindow, Ui_Base):
         if name == _("Title"):
             menu = QMenu(self)
 
-            action = QAction(_('Ignore "A" && "The"'), menu)
+            action = QAction(_("Ignore english articles"), menu)
             action.setCheckable(True)
             action.setChecked(self.alt_title_sort)
             action.triggered.connect(self.toggle_title_sort)

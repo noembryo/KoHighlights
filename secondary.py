@@ -71,10 +71,12 @@ class XTableWidgetTitleItem(QTableWidgetItem):
 
     def __lt__(self, value):
         t1 = self.data(Qt.DisplayRole).lower()
-        t1 = t1[2:] if t1.startswith("a ") else t1[4:] if t1.startswith("the ") else t1
+        t1 = (t1[2:] if t1.startswith("a ") else t1[4:] if t1.startswith("the ") else
+              t1[3:] if t1.startswith("an ") else t1)
 
         t2 = value.data(Qt.DisplayRole).lower()
-        t2 = t2[2:] if t2.startswith("a ") else t2[4:] if t2.startswith("the ") else t2
+        t2 = (t2[2:] if t2.startswith("a ") else t2[4:] if t2.startswith("the ") else
+              t2[3:] if t2.startswith("an ") else t2)
 
         return t1 < t2
 
