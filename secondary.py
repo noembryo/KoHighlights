@@ -6,21 +6,21 @@ import webbrowser
 from functools import partial
 from distutils.version import LooseVersion
 from os.path import join, basename, splitext, isfile
+from pprint import pprint
 
-# ___ _____________ DEPENDENCIES ____________________________________
-import requests
-from bs4 import BeautifulSoup
-try:
-    from PySide.QtCore import Qt, Slot, QObject, Signal, QSize, QPoint, QThread
+if QT4:  # ___ ______________ DEPENDENCIES __________________________
+    from PySide.QtCore import Qt, Slot, QObject, Signal, QSize, QPoint
     from PySide.QtGui import (QApplication, QMessageBox, QIcon, QFileDialog,
                               QTableWidgetItem, QDialog, QWidget, QMovie, QFont, QMenu,
                               QAction, QTableWidget, QCheckBox, QToolButton, QActionGroup)
-except ImportError:
+else:
     from PySide2.QtCore import QObject, Qt, Signal, QPoint, Slot, QSize
     from PySide2.QtGui import QFont, QMovie, QIcon
-    from PySide2.QtWidgets import (QTableWidgetItem, QTableWidget, QMessageBox, QApplication,
-                                   QWidget, QDialog, QFileDialog, QActionGroup, QMenu,
-                                   QAction, QToolButton, QCheckBox, QWidgetItem)
+    from PySide2.QtWidgets import (QTableWidgetItem, QTableWidget, QMessageBox,
+                                   QApplication, QWidget, QDialog, QFileDialog,
+                                   QActionGroup, QMenu, QAction, QToolButton, QCheckBox)
+import requests
+from bs4 import BeautifulSoup
 
 from gui_about import Ui_About  # ___ ______ GUI STUFF ______________
 from gui_auto_info import Ui_AutoInfo
@@ -29,20 +29,12 @@ from gui_status import Ui_Status
 from gui_edit import Ui_TextDialog
 
 
-# ___ _____________ PYTHON 2/3 COMPATIBILITY ________________________
-if not PYTHON2:
-    # noinspection PyShadowingBuiltins
-    unicode = str
-from future.moves.urllib.request import Request
-from pprint import pprint
-
-
 def _(text):  # for future gettext support
     return text
 
 
 __all__ = ("XTableWidgetIntItem", "XTableWidgetPercentItem", "XTableWidgetTitleItem",
-           "DropTableWidget","XMessageBox", "About", "AutoInfo", "ToolBar", "TextDialog",
+           "DropTableWidget", "XMessageBox", "About", "AutoInfo", "ToolBar", "TextDialog",
            "Status", "LogStream", "Scanner", "HighlightScanner", "ReLoader", "DBLoader")
 
 
@@ -71,11 +63,13 @@ class XTableWidgetTitleItem(QTableWidgetItem):
 
     def __lt__(self, value):
         t1 = self.data(Qt.DisplayRole).lower()
-        t1 = (t1[2:] if t1.startswith("a ") else t1[4:] if t1.startswith("the ") else
+        t1 = (t1[2:] if t1.startswith("a ") else
+              t1[4:] if t1.startswith("the ") else
               t1[3:] if t1.startswith("an ") else t1)
 
         t2 = value.data(Qt.DisplayRole).lower()
-        t2 = (t2[2:] if t2.startswith("a ") else t2[4:] if t2.startswith("the ") else
+        t2 = (t2[2:] if t2.startswith("a ") else
+              t2[4:] if t2.startswith("the ") else
               t2[3:] if t2.startswith("an ") else t2)
 
         return t1 < t2
@@ -361,8 +355,7 @@ class ToolBar(QWidget, Ui_ToolBar):
             self.base.last_dir = path
             self.base.high_list.clear()
             self.base.reload_highlights = True
-            text = _("Scanning for KoReader metadata files")
-            self.base.loading_thread(Scanner, path, text, clear=False)
+            self.base.loading_thread(Scanner, path, self.base.kor_text, clear=False)
 
     @Slot()
     def on_export_btn_clicked(self):
@@ -406,7 +399,7 @@ class ToolBar(QWidget, Ui_ToolBar):
                      "metadata of a book the first time is opened and can only change "
                      "if the metadata are cleared (loosing all highlights) and open the "
                      "book again as new.\n"
-                     "The reader's engine version is independent of the KoReader version "
+                     "The reader's engine version is independent of the KOReader version "
                      "and does not change that often.")
             self.base.popup(_("Version mismatch!"), text, icon=QMessageBox.Critical)
 
@@ -455,8 +448,7 @@ class ToolBar(QWidget, Ui_ToolBar):
         if self.base.db_mode:
             self.base.db_mode = False
             self.base.reload_highlights = True
-            text = _("Scanning for KoReader metadata files")
-            self.base.loading_thread(ReLoader, self.base.books2reload, text)
+            self.base.loading_thread(ReLoader, self.base.books2reload, self.base.kor_text)
             return True
 
     def update_archived(self):
@@ -467,7 +459,7 @@ class ToolBar(QWidget, Ui_ToolBar):
             self.base.db_mode = True
             self.base.reload_highlights = True
             self.base.read_books_from_db()
-            text = _("Loading KoHighlights database")
+            text = _("Loading {} database").format(APP_NAME)
             self.base.loading_thread(DBLoader, self.base.books, text)
             if not len(self.base.books):  # no books in the db
                 text = _('There are no books currently in the archive.\nTo add/'
@@ -557,6 +549,7 @@ class About(QDialog, Ui_About):
         # Remove the question mark widget from dialog
         self.setWindowFlags(self.windowFlags() ^
                             Qt.WindowContextHelpButtonHint)
+        self.setWindowTitle(_("About {}").format(APP_NAME))
         self.base = parent
 
     @Slot()
@@ -629,13 +622,13 @@ class About(QDialog, Ui_About):
           <table width="100%" border="0">
             <tr>
                 <p align="center"><img src="{0}" width="256" height ="212"></p>
-                <p align="center"><b>KoHighlights</b> is a utility for viewing
+                <p align="center"><b>{3}</b> is a utility for viewing
                     <a href="https://github.com/koreader/koreader">Koreader</a>'s
                     highlights<br/>and/or export them to simple text</p>
                 <p align="center">Version {1}</p>
                 <p align="center">Visit
                     <a href="https://github.com/noEmbryo/KoHighlights">
-                    KoHighlights page at GitHub</a>, or</p>
+                    {3} page at GitHub</a>, or</p>
                 <p align="center"><a href="http://www.noEmbryo.com"> noEmbryo's page</a>
                     with more Apps and stuff...</p>
                 <p align="center">Use it and if you like it, consider to
@@ -647,7 +640,7 @@ class About(QDialog, Ui_About):
             </tr>
           </table>
         </center>
-        </body>""").format(splash, self.base.version, paypal)
+        </body>""").format(splash, self.base.version, paypal, APP_NAME)
         self.text_lbl.setText(info)
 
 
@@ -742,16 +735,17 @@ class Status(QWidget, Ui_Status):
         item = self.base.file_table.item(idx.row(), 0)
         self.base.on_file_table_itemClicked(item)
 
-    def animation(self, action):
+    def animation(self, run):
         """ Creates or deletes temporary files and folders
 
-        :type action: str|unicode
-        :param action: The action that must be done
+        :type run: bool
+        :param run: Start/stop animation
         """
-        if action == "start":
+        # if action == "start":
+        if run:
             self.anim_lbl.show()
             self.wait_anim.start()
-        elif action == "stop":
+        else:
             self.anim_lbl.hide()
             self.wait_anim.stop()
 

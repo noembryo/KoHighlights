@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_main.ui'
 #
-# Created: Mon Aug 12 13:08:09 2019
+# Created: Thu Feb  6 12:55:05 2020
 #      by: pyside-uic 0.2.15 running on PySide 1.2.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -13,7 +13,6 @@ class Ui_Base(object):
     def setupUi(self, Base):
         Base.setObjectName("Base")
         Base.resize(624, 412)
-        Base.setWindowTitle("KoHighlights")
         icon = QtGui.QIcon()
         icon.addPixmap(QtGui.QPixmap(":/stuff/logo64.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         Base.setWindowIcon(icon)
@@ -272,5 +271,5 @@ class Ui_Base(object):
         self.act_view_book.setText(QtGui.QApplication.translate("Base", "View Book", None, QtGui.QApplication.UnicodeUTF8))
         self.act_view_book.setShortcut(QtGui.QApplication.translate("Base", "Ctrl+B", None, QtGui.QApplication.UnicodeUTF8))
 
-from main import DropTableWidget
+from secondary import DropTableWidget
 import images_rc

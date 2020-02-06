@@ -7,7 +7,7 @@ import traceback
 import gzip, json
 from os.path import dirname, join, isdir, expanduser
 
-APP_NAME = "KoHighlights"
+APP_NAME = "KOHighlights"
 APP_DIR = dirname(os.path.abspath(sys.argv[0]))
 os.chdir(APP_DIR)  # Set the current working directory to the app's directory
 
@@ -55,11 +55,19 @@ else:  # Linux+
 os.makedirs(SETTINGS_DIR) if not isdir(SETTINGS_DIR) else None
 
 
+PYTHON2 = True if sys.version_info < (3, 0) else False
+if PYTHON2:
+    from io import open
+else:
+    # noinspection PyShadowingBuiltins
+    unicode, basestring = str, str
+
+
 def except_hook(class_type, value, trace_back):
     """ Print the error to a log file
     """
     name = join(SETTINGS_DIR, "error_log_{}.txt".format(time.strftime(str("%Y-%m-%d"))))
-    with open(name, "a") as log:
+    with open(name, "a", encoding="utf8") as log:
         log.write(str("\nCrash@{}\n").format(time.strftime(str("%Y-%m-%d %H:%M:%S"))))
     traceback.print_exception(class_type, value, trace_back, file=open(name, "a"))
     sys.__excepthook__(class_type, value, trace_back)
@@ -67,8 +75,6 @@ def except_hook(class_type, value, trace_back):
 
 sys.excepthook = except_hook
 
-
-PYTHON2 = True if sys.version_info < (3, 0) else False
 QT4 = True
 try:
     import PySide

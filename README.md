@@ -10,15 +10,24 @@
 <!-- [![Github Releases (by Release)][VersionDown]][ReleaseLink] -->
 
 
-**KoHighlights** is a utility for viewing and converting the
+**KOHighlights** is a utility for viewing and converting the
 [Koreader](https://github.com/koreader/koreader)'s history files to simple text or html files.  
 This is a totally re-written application using the Qt framework (PySide).  
-The original KoHighlights (using the wxPython) can be found
+The original KOHighlights (using the wxPython) can be found
 [here](https://github.com/noonkey/KoHighlights), but is considered deprecated..
 
-![HighLights ScreenShot](screen1.png)
-![HighLights ScreenShot](screen2.png)
-![HighLights ScreenShot](screen3.png)
+<!-- ![HighLights ScreenShot](screen1.png) -->
+<!-- ![HighLights ScreenShot](screen2.png) -->
+<!-- ![HighLights ScreenShot](screen3.png) -->
+
+<p align="center">
+  <a href="https://raw.githubusercontent.com/noembryo/KoHighlights/master/screen1.png">
+    <img src="https://raw.githubusercontent.com/noembryo/KoHighlights/master/screen1.png" height="180"></a>
+  <a href="https://raw.githubusercontent.com/noembryo/KoHighlights/master/screen2.png">
+    <img src="https://raw.githubusercontent.com/noembryo/KoHighlights/master/screen2.png" height="180"></a>
+  <a href="https://raw.githubusercontent.com/noembryo/KoHighlights/master/screen3.png">
+    <img src="https://raw.githubusercontent.com/noembryo/KoHighlights/master/screen3.png" height="180"></a>
+</p>
 
 ## Usage
 * Load items by:
@@ -61,7 +70,7 @@ It needs the [PySide](https://pypi.org/project/PySide/),
 In Linux the `libqt4-sql-sqlite` package must be installed.  
 
 ## Extra
-KoHighlights includes SLPPU (a converter between python and lua objects).  
+KOHighlights includes SLPPU (a converter between python and lua objects).  
 If you want it to be globally available, get it from its
 [GitHub's page](https://github.com/noembryo/slppu) or install it with:  
 `pip install git+https://github.com/noembryo/slppu`  
