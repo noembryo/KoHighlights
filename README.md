@@ -79,7 +79,7 @@ If you want it to be globally available, get it from its
 [Release]:https://img.shields.io/github/release/noembryo/KoHighlights.svg
 [ReleaseLink]:https://GitHub.com/noembryo/KoHighlights/releases/
 [TotalDown]:https://img.shields.io/github/downloads/noembryo/KoHighlights/total.svg
-[VersionDown]:https://img.shields.io/github/downloads/noembryo/KoHighlights/v1.0.0.0/total.svg
+[VersionDown]:https://img.shields.io/github/downloads/noembryo/KoHighlights/v1.2.2.0/total.svg
 [Python]:https://img.shields.io/badge/Made%20with-Python-1f425f.svg
 [OS]:https://img.shields.io/badge/OS-Windows&nbsp;/&nbsp;Linux-darkgreen.svg
 [MIT]:https://img.shields.io/badge/License-MIT-green.svg
