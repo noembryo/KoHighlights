@@ -29,6 +29,9 @@ The original KOHighlights (using the wxPython) can be found
     <img src="https://raw.githubusercontent.com/noembryo/KoHighlights/master/screen3.png" height="180"></a>
 </p>
 
+### Prerequisites
+* Progress sync plugin must be enabled in KOReader
+
 ## Usage
 * Load items by:
     * Selecting the reader's drive or any folder that contains books that where opened
@@ -75,6 +78,10 @@ If you want it to be globally available, get it from its
 [GitHub's page](https://github.com/noembryo/slppu) or install it with:  
 `pip install git+https://github.com/noembryo/slppu`  
 
+
+<!-- ##### Stargazers over time
+
+[![Stargazers over time](https://starchart.cc/noembryo/KoHighlights.svg)](https://starchart.cc/noembryo/KoHighlights) -->
 
 [Release]:https://img.shields.io/github/release/noembryo/KoHighlights.svg
 [ReleaseLink]:https://GitHub.com/noembryo/KoHighlights/releases/

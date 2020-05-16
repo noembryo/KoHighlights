@@ -8,6 +8,7 @@ import shutil
 import webbrowser
 import subprocess
 import argparse
+import hashlib
 from datetime import datetime
 from functools import partial
 from collections import defaultdict
@@ -45,7 +46,7 @@ else:
 
 
 __author__ = "noEmbryo"
-__version__ = "1.2.2.0"
+__version__ = "1.3.0.0"
 
 
 def _(text):  # for future gettext support
@@ -198,6 +199,8 @@ class Base(QMainWindow, Ui_Base):
         self.ico_db_add = QIcon(":/stuff/db_add.png")
         self.ico_app = QIcon(":/stuff/logo64.png")
         self.ico_empty = QIcon(":/stuff/trans32.png")
+        self.ico_refresh = QIcon(":/stuff/refresh16.png")
+        self.ico_folder_open = QIcon(":/stuff/folder_open.png")
 
         # noinspection PyArgumentList
         self.clip = QApplication.clipboard()
@@ -225,7 +228,7 @@ class Base(QMainWindow, Ui_Base):
         self.description_btn.setEnabled(False)
 
         # noinspection PyTypeChecker,PyCallByClass
-        QTimer.singleShot(30000, self.auto_check4update)  # check for updates
+        QTimer.singleShot(10000, self.auto_check4update)  # check for updates
 
         main_timer = QTimer(self)  # cleanup threads for ever
         main_timer.timeout.connect(self.thread_cleanup)
@@ -268,7 +271,7 @@ class Base(QMainWindow, Ui_Base):
     # ___ ___________________ EVENTS STUFF __________________________
 
     def connect_gui(self):
-        """ Make all the signal/slots connections
+        """ Make all the extra signal/slots connections
         """
         self.file_selection = self.file_table.selectionModel()
         self.file_selection.selectionChanged.connect(self.file_selection_update)
@@ -312,13 +315,23 @@ class Base(QMainWindow, Ui_Base):
                 return True
             if key == Qt.Key_Q:
                 self.close()
+            if self.current_view == HIGHLIGHTS_VIEW and self.sel_high_view:
+                if key == Qt.Key_C:
+                    self.copy_text_2clip(self.get_highlights()[0])
+                    return True
         if mod == Qt.AltModifier:  # if alt is pressed
             if key == Qt.Key_A:
                 self.on_archive()
+                return True
+            if self.current_view == HIGHLIGHTS_VIEW and self.sel_high_view:
+                if key == Qt.Key_C:
+                    self.copy_text_2clip(self.get_highlights()[1])
+                    return True
 
         if key == Qt.Key_Escape:
             self.close()
-        if key == Qt.Key_Delete:  # Delete
+            return True
+        if key == Qt.Key_Delete:
             self.delete_actions(0)
             return True
 
@@ -592,24 +605,45 @@ class Base(QMainWindow, Ui_Base):
             menu.addAction(action)
 
         if not self.db_mode:
-            action = QAction(_("Archive\tAlt+A"), menu)
+            action = QAction(_("Archive") + "\tAlt+A", menu)
             action.setIcon(self.ico_db_add)
             action.triggered.connect(self.on_archive)
             menu.addAction(action)
 
             if len(self.sel_indexes) == 1:
+                sync_group = QMenu(self)
+                sync_group.setTitle(_("Sync"))
+                sync_group.setIcon(self.ico_files_merge)
                 if self.check4archive_merge() is not False:
                     sync_menu = self.create_archive_merge_menu()
                     sync_menu.setTitle(_("Sync with archived"))
                     sync_menu.setIcon(self.ico_files_merge)
-                    menu.addMenu(sync_menu)
+                    sync_group.addMenu(sync_menu)
+                action = QAction(_("Sync with file"), sync_group)
+                action.setIcon(self.ico_files_merge)
+                action.triggered.connect(self.use_meta_files)
+                sync_group.addAction(action)
+
+                book_path, book_exists = self.file_table.item(row, TYPE).data(Qt.UserRole)
+                if book_exists:
+                    action = QAction(_("ReCalculate MD5"), sync_group)
+                    action.setIcon(self.ico_refresh)
+                    action.triggered.connect(partial(self.recalculate_md5, book_path))
+                    sync_group.addAction(action)
+                menu.addMenu(sync_group)
+
+                action = QAction(_("Open location"), menu)
+                action.setIcon(self.ico_folder_open)
+                folder_path = dirname(self.file_table.item(row, PATH).text())
+                action.triggered.connect(partial(self.open_file, folder_path))
+                menu.addAction(action)
 
             delete_menu = self.delete_menu()
             delete_menu.setIcon(self.ico_files_delete)
-            delete_menu.setTitle(_("Delete\tDel"))
+            delete_menu.setTitle(_("Delete") + "\tDel")
             menu.addMenu(delete_menu)
         else:
-            action = QAction(_("Delete\tDel"), menu)
+            action = QAction(_("Delete") + "\tDel", menu)
             action.setIcon(self.ico_files_delete)
             action.triggered.connect(partial(self.delete_actions, 0))
             menu.addAction(action)
@@ -844,7 +878,7 @@ class Base(QMainWindow, Ui_Base):
             if not data:
                 print("No data here!", filename)
                 return
-            date = str(datetime.fromtimestamp(getmtime(filename)))
+            date = str(datetime.fromtimestamp(getmtime(filename))).split(".")[0]
             icon, title, authors, percent, rating, status = self.get_item_stats(filename,
                                                                                 data)
         else:  # for db entries
@@ -1012,20 +1046,7 @@ class Base(QMainWindow, Ui_Base):
         self.act_view_book.setEnabled(self.toolbar.open_btn.isEnabled())
         menu.addAction(self.act_view_book)
 
-        highlights = ""
-        comments = ""
-        for idx in self.sel_high_view:
-            item_row = idx.row()
-            data = self.high_table.item(item_row, HIGHLIGHT_H).data(Qt.UserRole)
-            highlight = data["text"]
-            if highlight:
-                highlights += highlight + "\n\n"
-            comment = data["comment"]
-            if comment:
-                comments += comment + "\n\n"
-
-        highlights = highlights.rstrip("\n").replace("\n", os.linesep)
-        comments = comments.rstrip("\n").replace("\n", os.linesep)
+        highlights, comments = self.get_highlights()
 
         high_text = _("Copy Highlights")
         com_text = _("Copy Comments")
@@ -1044,12 +1065,12 @@ class Base(QMainWindow, Ui_Base):
             action.setIcon(self.ico_file_edit)
             menu.addAction(action)
 
-        action = QAction(high_text, menu)
+        action = QAction(high_text + "\tCtrl+C", menu)
         action.triggered.connect(partial(self.copy_text_2clip, highlights))
         action.setIcon(self.ico_copy)
         menu.addAction(action)
 
-        action = QAction(com_text, menu)
+        action = QAction(com_text + "\tAlt+C", menu)
         action.triggered.connect(partial(self.copy_text_2clip, comments))
         action.setIcon(self.ico_copy)
         menu.addAction(action)
@@ -1061,6 +1082,24 @@ class Base(QMainWindow, Ui_Base):
         menu.addAction(action)
 
         menu.exec_(self.high_table.mapToGlobal(point))
+
+    def get_highlights(self):
+        """ Returns the selected highlights and the comments texts
+        """
+        highlights = ""
+        comments = ""
+        for idx in self.sel_high_view:
+            item_row = idx.row()
+            data = self.high_table.item(item_row, HIGHLIGHT_H).data(Qt.UserRole)
+            highlight = data["text"]
+            if highlight:
+                highlights += highlight + "\n\n"
+            comment = data["comment"]
+            if comment:
+                comments += comment + "\n\n"
+        highlights = highlights.rstrip("\n").replace("\n", os.linesep)
+        comments = comments.rstrip("\n").replace("\n", os.linesep)
+        return highlights, comments
 
     def scan_highlights_thread(self):
         """ Gets all the loaded highlights
@@ -1506,17 +1545,79 @@ class Base(QMainWindow, Ui_Base):
 
     # ___ ___________________ MERGING - SYNCING STUFF _______________
 
-    def check4merge(self):
-        """ Check if the selected books' highlights can be merged
+    def same_book(self, data1, data2, book1="", book2=""):
+        """ Check if the supplied metadata comes from the same book
+
+        :type data1: dict
+        :param data1: The data of the first book
+        :type data2: dict
+        :param data2: The data of the second book
+        :type book1: str|unicode
+        :param book1: The path to the first book
+        :type book2: str|unicode
+        :param book2: The path to the second book
         """
-        if len(self.sel_indexes) == 2:
-            data = [self.file_table.item(idx.row(), idx.column()).data(Qt.UserRole)
-                    for idx in self.sel_indexes]
-            try:
-                if data[0]["partial_md5_checksum"] == data[1]["partial_md5_checksum"]:
-                    return True
-            except KeyError:  # no "partial_md5_checksum" key (older metadata)
-                pass
+        md5_1 = data1.get("partial_md5_checksum", data1["stats"].get("md5", None)
+                          if "stats" in data1 else None)
+        if not md5_1 and book1:
+            md5_1 = self.md5_from_file(book1)
+        if md5_1:  # got the first MD5, check for the second
+            md5_2 = data2.get("partial_md5_checksum", data2["stats"].get("md5", None)
+                              if "stats" in data2 else None)
+            if not md5_2 and book2:
+                md5_2 = self.md5_from_file(book2)
+            if md5_2 and md5_1 == md5_2:  # same MD5 for both books
+                return True
+        return False
+
+    def wrong_book(self):
+        """ Shows an info dialog if the book MD5 of two metadata are different
+        """
+        text = _("It seems that the selected metadata file belongs to a different book..")
+        self.popup(_("Book mismatch!"), text, icon=QMessageBox.Critical)
+
+    @staticmethod
+    def same_cre_version(data):
+        """ Check if the supplied metadata have the same CRE version
+
+        :type data: list[dict]
+        :param data: The data to get checked
+        """
+        try:
+            if data[0]["cre_dom_version"] == data[1]["cre_dom_version"]:
+                return True
+        except KeyError:  # no "cre_dom_version" key (older metadata)
+            pass
+        return False
+
+    def wrong_cre_version(self):
+        """ Shows an info dialog if the CRE version of two metadata are different
+        """
+        text = _("Can not merge these highlights, because they are produced with a "
+                 "different version of the reader engine!\n\n"
+                 "The reader engine and the way it renders the text is responsible "
+                 "for the positioning of highlights. Some times, code changes are "
+                 "made that change its behavior. Its version is written in the "
+                 "metadata of a book the first time is opened and can only change "
+                 "if the metadata are cleared (loosing all highlights) and open the "
+                 "book again as new.\n\n"
+                 "The reader's engine version is independent of the KOReader version "
+                 "and does not change that often.")
+        self.popup(_("Version mismatch!"), text, icon=QMessageBox.Critical)
+
+    def check4archive_merge(self):
+        """ Check if the selected books' highlights can be merged
+            with its archived version
+        """
+        idx = self.sel_idx
+        data1 = self.file_table.item(idx.row(), idx.column()).data(Qt.UserRole)
+        book_path = self.file_table.item(idx.row(), TYPE).data(Qt.UserRole)[0]
+
+        for index, book in enumerate(self.books):
+            data2 = book["data"]
+            if self.same_book(data1, data2, book_path):
+                if self.same_cre_version([data1, data2]):
+                    return index
         return False
 
     def merge_menu(self):
@@ -1534,25 +1635,6 @@ class Base(QMainWindow, Ui_Base):
 
         return menu
 
-    def check4archive_merge(self):
-        """ Check if the selected books' highlights can be merged
-            with its archived version
-        """
-        if len(self.sel_indexes) == 1:
-            idx = self.sel_idx
-            data = self.file_table.item(idx.row(), idx.column()).data(Qt.UserRole)
-            try:
-                md5 = data["partial_md5_checksum"]
-                dom_version = data["cre_dom_version"]
-            except KeyError:  # no "partial_md5_checksum" key (older metadata)
-                pass
-            else:
-                for idx, book in enumerate(self.books):
-                    if md5 == book["md5"]:
-                        if dom_version == book["data"]["cre_dom_version"]:
-                            return idx
-        return False
-
     def create_archive_merge_menu(self):
         """ Creates the `Sync` sub-menu
         """
@@ -1568,8 +1650,13 @@ class Base(QMainWindow, Ui_Base):
 
         return menu
 
-    def on_merge_highlights(self, to_archived=False):
+    def on_merge_highlights(self, to_archived=False, filename=""):
         """ Tries to merge/sync highlights
+
+        :type to_archived: bool
+        :param to_archived: Merge a book with its archived version
+        :type filename: str|unicode
+        :param filename: The path to the metadata file to merge the book with
         """
         if self.high_merge_warning:
             text = _("Merging highlights is experimental so, always do backups ;o)\n"
@@ -1587,22 +1674,38 @@ class Base(QMainWindow, Ui_Base):
                              "This can not be undone! Continue?"), buttons=3,
                            check_text=_("Sync the reading position too"))
         if popup.buttonRole(popup.clickedButton()) == QMessageBox.AcceptRole:
-            self.merge_highlights(popup.checked, True, to_archived)
+            self.merge_highlights(popup.checked, True, to_archived, filename)
 
-    def merge_highlights(self, sync, merge, to_archived=False):
+    def merge_highlights(self, sync, merge, to_archived=False, filename=""):
         """ Merge highlights from the same book in two different devices
 
         :type sync: bool
-        :param sync: Sync reading position too
+        :param sync: Sync reading position
         :type merge: bool
         :param merge: Merge the highlights
         :type to_archived: bool
         :param to_archived: Merge a book with its archived version
+        :type filename: str|unicode
+        :param filename: The path to the metadata file to merge the book with
         """
         if to_archived:  # Merge/Sync a book with archive
             idx1, idx2 = self.sel_idx, None
             data1 = self.file_table.item(idx1.row(), TITLE).data(Qt.UserRole)
             data2 = self.books[self.check4archive_merge()]["data"]
+            path1, path2 = self.file_table.item(idx1.row(), PATH).text(), None
+        elif filename:  # Merge/Sync a book with a metadata file
+            idx1, idx2 = self.sel_idx, None
+            data1 = self.file_table.item(idx1.row(), TITLE).data(Qt.UserRole)
+            book1 = self.file_table.item(idx1.row(), TYPE).data(Qt.UserRole)[0]
+            data2 = decode_data(filename)
+            name2 = splitext(dirname(filename))[0]
+            book2 = name2 + splitext(book1)[1]
+            if not self.same_book(data1, data2, book1, book2):
+                self.wrong_book()
+                return
+            if not self.same_cre_version([data1, data2]):
+                self.wrong_cre_version()
+                return
             path1, path2 = self.file_table.item(idx1.row(), PATH).text(), None
         else:  # Merge/Sync two different book files
             idx1, idx2 = self.sel_indexes
@@ -1617,6 +1720,11 @@ class Base(QMainWindow, Ui_Base):
             high1, high2, bkm1, bkm2 = self.get_unique_highlights(*args)
             self.update_data(data1, high2, bkm2)
             self.update_data(data2, high1, bkm1)
+            if data1["highlight"] or data2["highlight"]:  # since there are highlights
+                for index in [idx1, idx2]:                # set the green icon
+                    if index:
+                        item = self.file_table.item(idx1.row(), TITLE)
+                        item.setIcon(self.ico_label_green)
 
         if sync:  # sync position and percent
             if data1["percent_finished"] > data2["percent_finished"]:
@@ -1628,14 +1736,16 @@ class Base(QMainWindow, Ui_Base):
 
             percent = str(int(data1["percent_finished"] * 100)) + "%"
             self.file_table.item(idx1.row(), PERCENT).setText(percent)
-            if not to_archived:
+            if not to_archived and not filename:
                 self.file_table.item(idx2.row(), PERCENT).setToolTip(percent)
 
         self.file_table.item(idx1.row(), TITLE).setData(Qt.UserRole, data1)
         self.save_book_data(path1, data1)
-        if to_archived:
+        if to_archived:  # update the db item
             self.update_book2db(data2)
-        else:
+        elif filename:  # do nothing with the loaded file
+            pass
+        else:  # update the second item
             self.file_table.item(idx2.row(), TITLE).setData(Qt.UserRole, data2)
             self.save_book_data(path2, data2)
 
@@ -1732,6 +1842,18 @@ class Base(QMainWindow, Ui_Base):
         for key in extra_bookmarks.keys():
             bookmarks[counter] = extra_bookmarks[key]
             counter += 1
+
+    def use_meta_files(self):
+        """ Selects a metadata files to sync/merge
+        """
+        # noinspection PyCallByClass
+        filenames = QFileDialog.getOpenFileNames(self, _("Select metadata file"),
+                                                 self.last_dir,
+                                                 (_("metadata files (*.lua *.old)")))[0]
+        if filenames:
+            self.last_dir = dirname(filenames[0])
+            for filename in filenames:
+                self.on_merge_highlights(filename=filename)
 
     # ___ ___________________ DELETING STUFF ________________________
 
@@ -1882,16 +2004,12 @@ class Base(QMainWindow, Ui_Base):
         if self.current_view == BOOKS_VIEW:
             if not self.sel_indexes:
                 return
-        elif self.current_view == HIGHLIGHTS_VIEW:
-            if not self.sel_high_view:
-                return
-            else:  # Save from high_table, combine to one file
-                self.save_sel_highlights()
+        elif self.current_view == HIGHLIGHTS_VIEW:  # Save from high_table,
+            if self.save_sel_highlights():          # combine to one file
                 self.popup(_("Finished!"),
                            _("The Highlights were exported successfully!"),
                            icon=QMessageBox.Information)
-                return
-
+            return
         saved = 0
         if idx in [MANY_TEXT, MANY_HTML]:  # Save from file_table to different files
             text = _("Select destination folder for the exported file(s)")
@@ -2042,7 +2160,7 @@ class Base(QMainWindow, Ui_Base):
         """ Save the selected highlights to a text file (from high_table)
         """
         if not self.sel_high_view:
-            return
+            return False
         # noinspection PyCallByClass
         filename = QFileDialog.getSaveFileName(self, _("Export to file"), self.last_dir,
                                                "text file (*.txt);;html file (*.html)")
@@ -2053,7 +2171,7 @@ class Base(QMainWindow, Ui_Base):
             filename = splitext(filename)[0] + ext
             self.last_dir = dirname(filename)
         else:
-            return
+            return False
         text = HTML_HEAD if html else ""
         for i in sorted(self.sel_high_view):
             row = i.row()
@@ -2074,6 +2192,7 @@ class Base(QMainWindow, Ui_Base):
             text.replace("\n", os.linesep)
         with open(filename, "w+", encoding="utf-8", newline="") as file2save:
             file2save.write(text)
+        return True
 
     def analyze_high(self, data, page, page_id, html):
         """ Create the highlight's texts
@@ -2327,14 +2446,15 @@ class Base(QMainWindow, Ui_Base):
         :type path: str|unicode
         :param path: The path to the file to be opened
         """
-        if isfile(path):
+        try:
             if sys.platform == "win32":
                 os.startfile(path)
             else:
                 opener = "open" if sys.platform == "darwin" else "xdg-open"
                 subprocess.call([opener, path])
-        else:
-            self.popup(_("Error opening file!"), _('"{}" does not exists!').format(path))
+        except OSError:
+            self.popup(_("Error opening target!"),
+                       _('"{}" does not exists!').format(path))
 
     def copy_text_2clip(self, text):
         """ Copy a text to clipboard
@@ -2345,6 +2465,51 @@ class Base(QMainWindow, Ui_Base):
             data = QMimeData()
             data.setText(text)
             self.clip.setMimeData(data)
+
+    def recalculate_md5(self, file_path):
+        """ Recalculates the MD5 for a book and saves it to the metadata file
+
+        :type file_path: str|unicode
+        :param file_path: The path to the book
+        """
+        popup = self.popup(_("Confirmation"),
+                           _("This action can not be undone.\nContinue?"), buttons=2)
+        if popup.buttonRole(popup.clickedButton()) == QMessageBox.AcceptRole:
+            row = self.sel_idx.row()
+            data = self.file_table.item(row, TITLE).data(Qt.UserRole)
+            path = self.file_table.item(row, PATH).text()
+            md5 = self.md5_from_file(file_path)
+            if "partial_md5_checksum" in data:
+                data["partial_md5_checksum"] = md5
+            if "stats" in data and "md5" in data["stats"]:
+                data["stats"]["md5"] = md5
+            self.file_table.item(row, TITLE).setData(Qt.UserRole, data)
+            self.save_book_data(path, data)
+            self.popup(_("Information"), _("The MD5 was recalculated and saved!"),
+                       QMessageBox.Information)
+
+    @staticmethod
+    def md5_from_file(file_path):
+        """ Calculates the MD5 for a file
+
+        :type file_path: str|unicode
+        :param file_path: The path to the file
+        :return: str|unicode|None
+        """
+        if isfile(file_path):
+            with open(file_path, "rb") as file_:
+                md5 = hashlib.md5()
+                sample = file_.read(1024)
+                if sample:
+                    md5.update(sample)
+                for i in range(11):
+                    file_.seek((4 ** i) * 1024)
+                    sample = file_.read(1024)
+                    if sample:
+                        md5.update(sample)
+                    else:
+                        break
+                return md5.hexdigest()
 
     @staticmethod
     def get_time_str(sec):
@@ -2402,8 +2567,7 @@ class Base(QMainWindow, Ui_Base):
         """
         if self.get_db_book_count():  # db has books
             now = datetime.now()
-            vacuumed = datetime.strptime(self.date_vacuumed, DATE_FORMAT)
-            delta = now - vacuumed
+            delta = now - datetime.strptime(self.date_vacuumed, DATE_FORMAT)
             if delta.days > 90:  # after three months
                 self.vacuum_db(info=False)  # compact db
                 self.date_vacuumed = now.strftime(DATE_FORMAT)  # reset vacuumed date

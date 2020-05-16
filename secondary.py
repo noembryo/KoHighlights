@@ -173,7 +173,6 @@ class Scanner(QObject):
                     for file_ in dir_tuple[2]:  # get the .lua file not the .old (backup)
                         if splitext(file_)[1].lower() == ".lua":
                             self.found.emit(join(dir_path, file_))
-                            break
                 # older metadata storage or android history folder
                 elif (dir_path.lower().endswith(join("koreader", "history"))
                       or basename(dir_path).lower() == "history"):
@@ -386,22 +385,12 @@ class ToolBar(QWidget, Ui_ToolBar):
     def on_merge_btn_clicked(self):
         """ The `Merge` button is pressed
         """
-        datas = [self.base.file_table.item(idx.row(), idx.column()).data(Qt.UserRole)
+        data = [self.base.file_table.item(idx.row(), idx.column()).data(Qt.UserRole)
                  for idx in self.base.sel_indexes]
-        if datas[0]["cre_dom_version"] == datas[1]["cre_dom_version"]:
+        if self.base.same_cre_version(data):
             self.base.on_merge_highlights()
         else:
-            text = _("Can not merge these highlights, because they are produced with a "
-                     "different version of the reader engine!\n\n"
-                     "The reader engine and the way it renders the text is responsible "
-                     "for the positioning of highlights. Some times, code changes are "
-                     "made that change its behavior. Its version is written in the "
-                     "metadata of a book the first time is opened and can only change "
-                     "if the metadata are cleared (loosing all highlights) and open the "
-                     "book again as new.\n"
-                     "The reader's engine version is independent of the KOReader version "
-                     "and does not change that often.")
-            self.base.popup(_("Version mismatch!"), text, icon=QMessageBox.Critical)
+            self.base.wrong_cre_version()
 
     @Slot()
     def on_delete_btn_clicked(self):
@@ -437,7 +426,8 @@ class ToolBar(QWidget, Ui_ToolBar):
             if self.base.reload_highlights and not new:
                 self.base.scan_highlights_thread()
 
-        self.base.current_view = 0 if self.books_view_btn.isChecked() else 1
+        self.base.current_view = (BOOKS_VIEW if self.books_view_btn.isChecked()
+                                  else HIGHLIGHTS_VIEW)
         self.base.views.setCurrentIndex(self.base.current_view)
         self.setup_buttons()
         self.activate_buttons()
@@ -509,9 +499,17 @@ class ToolBar(QWidget, Ui_ToolBar):
 
         self.export_btn.setEnabled(bool(idx))
         self.open_btn.setEnabled(book_exists)
-        self.merge_btn.setEnabled(self.base.check4merge())
         self.delete_btn.setEnabled(bool(idx))
         self.clear_btn.setEnabled(bool(count))
+
+        self.merge_btn.setEnabled(False)
+        if len(self.base.sel_indexes) == 2:  # check if we can sync/merge
+            idx1, idx2 = self.base.sel_indexes
+            data1 = self.base.file_table.item(idx1.row(), idx1.column()).data(Qt.UserRole)
+            path1 = self.base.file_table.item(idx1.row(), TYPE).data(Qt.UserRole)[0]
+            data2 = self.base.file_table.item(idx2.row(), idx2.column()).data(Qt.UserRole)
+            path2 = self.base.file_table.item(idx2.row(), TYPE).data(Qt.UserRole)[0]
+            self.merge_btn.setEnabled(self.base.same_book(data1, data2, path1, path2))
 
     @staticmethod
     def add_btn_menu(btn):

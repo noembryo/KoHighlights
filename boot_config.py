@@ -68,7 +68,7 @@ def except_hook(class_type, value, trace_back):
     """
     name = join(SETTINGS_DIR, "error_log_{}.txt".format(time.strftime(str("%Y-%m-%d"))))
     with open(name, "a", encoding="utf8") as log:
-        log.write(str("\nCrash@{}\n").format(time.strftime(str("%Y-%m-%d %H:%M:%S"))))
+        log.write("\nCrash@{}\n".format(time.strftime(str("%Y-%m-%d %H:%M:%S"))))
     traceback.print_exception(class_type, value, trace_back, file=open(name, "a"))
     sys.__excepthook__(class_type, value, trace_back)
 
