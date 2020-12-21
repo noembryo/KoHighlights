@@ -11,7 +11,7 @@
 
 
 **KOHighlights** is a utility for viewing and exporting the
-[Koreader](https://github.com/koreader/koreader)'s highlights to simple text or html files.  
+[Koreader](https://github.com/koreader/koreader)'s highlights to simple text, csv or html files.  
 This is a totally re-written application using the Qt framework (PySide).  
 The original KOHighlights (using the wxPython) can be found
 [here](https://github.com/noonkey/KoHighlights), but is considered deprecated..
@@ -57,8 +57,8 @@ connected.
   highlights of the books. 
 * Double click or press the Open Book button to view the book in your system's reader.
 * Save all the selected books' highlights in:
-    * A text/html file for every selected book or
-    * A single text/html file with all highlights combined
+    * A text/html/csv file for every selected book or
+    * A single text/html/csv file with all highlights combined
 * Delete some or all the highlights of any book.
 * Clear the .sdr folders with the metadata or the books in the eReader.
 
