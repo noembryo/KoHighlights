@@ -1098,7 +1098,7 @@ class Base(QMainWindow, Ui_Base):
         menu.addAction(action)
 
         action = QAction(_("Export to file"), menu)
-        action.triggered.connect(self.on_save_actions)
+        action.triggered.connect(self.on_export)
         action.setData(2)
         action.setIcon(self.ico_file_save)
         menu.addAction(action)
