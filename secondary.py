@@ -360,7 +360,7 @@ class ToolBar(QWidget, Ui_ToolBar):
     def on_export_btn_clicked(self):
         """ The `Export` button is pressed
         """
-        self.base.save_actions()
+        self.base.on_export()
 
     @Slot()
     def on_open_btn_clicked(self):
@@ -386,7 +386,7 @@ class ToolBar(QWidget, Ui_ToolBar):
         """ The `Merge` button is pressed
         """
         data = [self.base.file_table.item(idx.row(), idx.column()).data(Qt.UserRole)
-                 for idx in self.base.sel_indexes]
+                for idx in self.base.sel_indexes]
         if self.base.same_cre_version(data):
             self.base.on_merge_highlights()
         else:
@@ -415,7 +415,7 @@ class ToolBar(QWidget, Ui_ToolBar):
         """
         new = self.update_archived() if self.db_btn.isChecked() else self.update_loaded()
         if self.books_view_btn.isChecked():  # Books view
-            self.add_btn_menu(self.base.toolbar.export_btn)
+            # self.add_btn_menu(self.base.toolbar.export_btn)
             if self.base.sel_idx:
                 item = self.base.file_table.item(self.base.sel_idx.row(),
                                                  self.base.sel_idx.column())

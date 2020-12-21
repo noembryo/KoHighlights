@@ -96,11 +96,14 @@ TITLE, AUTHOR, TYPE, PERCENT, RATING, MODIFIED, PATH = range(7)  # file_table co
 PAGE, HIGHLIGHT_TEXT, DATE, PAGE_ID, COMMENT = range(5)  # high_list item data
 (HIGHLIGHT_H, COMMENT_H,
  DATE_H, TITLE_H, AUTHOR_H, PAGE_H, PATH_H) = range(7)  # high_table columns
-MANY_TEXT, ONE_TEXT, MANY_HTML, ONE_HTML, MERGED_HIGH = range(5)  # save_actions
+(MANY_TEXT, ONE_TEXT, MANY_HTML, ONE_HTML,
+ MANY_CSV, ONE_CSV, MERGED_HIGH) = range(7)  # save_actions
 DB_MD5, DB_DATE, DB_PATH, DB_DATA = range(4)  # db data (columns)
 
 DB_VERSION = 0
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
+CSV_HEAD = "Title\tAuthors\tPage\tDate\tHighlight\tComment\n"
+CSV_KEYS = ["title", "authors", "page", "date", "text", "comment"]
 HTML_HEAD = """<!DOCTYPE html>
 <html lang="en">
 <head>

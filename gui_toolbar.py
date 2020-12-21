@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_toolbar.ui'
 #
-# Created: Sun Mar 31 18:17:28 2019
+# Created: Mon Dec 21 18:01:29 2020
 #      by: pyside-uic 0.2.15 running on PySide 1.2.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -62,10 +62,8 @@ class Ui_ToolBar(object):
         icon2.addPixmap(QtGui.QPixmap(":/stuff/file_save.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         self.export_btn.setIcon(icon2)
         self.export_btn.setIconSize(QtCore.QSize(48, 48))
-        self.export_btn.setPopupMode(QtGui.QToolButton.MenuButtonPopup)
         self.export_btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextUnderIcon)
         self.export_btn.setAutoRaise(True)
-        self.export_btn.setArrowType(QtCore.Qt.NoArrow)
         self.export_btn.setObjectName("export_btn")
         self.horizontalLayout.addWidget(self.export_btn)
         self.open_btn = QtGui.QToolButton(self.tool_frame)

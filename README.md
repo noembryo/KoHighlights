@@ -16,6 +16,8 @@ This is a totally re-written application using the Qt framework (PySide).
 The original KOHighlights (using the wxPython) can be found
 [here](https://github.com/noonkey/KoHighlights), but is considered deprecated..
 
+
+### Screenshots
 <!-- ![HighLights ScreenShot](screen1.png) -->
 <!-- ![HighLights ScreenShot](screen2.png) -->
 <!-- ![HighLights ScreenShot](screen3.png) -->
