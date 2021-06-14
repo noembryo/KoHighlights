@@ -14,8 +14,8 @@ if QT4:  # ___ ______________ DEPENDENCIES __________________________
                               QDialog, QWidget, QMovie, QFont, QMenu, QAction, QTableWidget,
                               QCheckBox, QToolButton, QActionGroup, QCursor)
 else:
-    from PySide2.QtCore import QObject, Qt, Signal, QPoint, Slot, QSize
-    from PySide2.QtGui import QFont, QMovie, QIcon
+    from PySide2.QtCore import QObject, Qt, Signal, QPoint, Slot, QSize, QEvent
+    from PySide2.QtGui import QFont, QMovie, QIcon, QCursor
     from PySide2.QtWidgets import (QTableWidgetItem, QTableWidget, QMessageBox,
                                    QApplication, QWidget, QDialog, QFileDialog,
                                    QActionGroup, QMenu, QAction, QToolButton, QCheckBox)

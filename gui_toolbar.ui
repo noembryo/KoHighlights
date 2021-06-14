@@ -501,7 +501,7 @@ Activated only if two entries of the same book are selected.</string>
           </widget>
          </item>
          <item>
-          <widget class="QToolButton" name="db_btn">
+          <widget class="XToolButton" name="db_btn">
            <property name="sizePolicy">
             <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
              <horstretch>0</horstretch>
@@ -515,10 +515,11 @@ Activated only if two entries of the same book are selected.</string>
             </size>
            </property>
            <property name="toolTip">
-            <string>Show the archived files</string>
+            <string>Show the archived files in the database
+(Right click to change the database file)</string>
            </property>
            <property name="statusTip">
-            <string>Show the archived files</string>
+            <string>Show the archived files in the database (Right click to change the database file)</string>
            </property>
            <property name="text">
             <string>Archived</string>
@@ -596,6 +597,13 @@ Activated only if two entries of the same book are selected.</string>
    </item>
   </layout>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>XToolButton</class>
+   <extends>QToolButton</extends>
+   <header>secondary</header>
+  </customwidget>
+ </customwidgets>
  <resources>
  <include location="images.qrc"/>
  </resources>
