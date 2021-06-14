@@ -9,10 +9,10 @@ from os.path import join, basename, splitext, isfile
 from pprint import pprint
 
 if QT4:  # ___ ______________ DEPENDENCIES __________________________
-    from PySide.QtCore import Qt, Slot, QObject, Signal, QSize, QPoint
-    from PySide.QtGui import (QApplication, QMessageBox, QIcon, QFileDialog,
-                              QTableWidgetItem, QDialog, QWidget, QMovie, QFont, QMenu,
-                              QAction, QTableWidget, QCheckBox, QToolButton, QActionGroup)
+    from PySide.QtCore import Qt, Slot, QObject, Signal, QSize, QPoint, QEvent
+    from PySide.QtGui import (QApplication, QMessageBox, QIcon, QFileDialog, QTableWidgetItem,
+                              QDialog, QWidget, QMovie, QFont, QMenu, QAction, QTableWidget,
+                              QCheckBox, QToolButton, QActionGroup, QCursor)
 else:
     from PySide2.QtCore import QObject, Qt, Signal, QPoint, Slot, QSize
     from PySide2.QtGui import QFont, QMovie, QIcon
@@ -22,12 +22,6 @@ else:
 import requests
 from bs4 import BeautifulSoup
 
-from gui_about import Ui_About  # ___ ______ GUI STUFF ______________
-from gui_auto_info import Ui_AutoInfo
-from gui_toolbar import Ui_ToolBar
-from gui_status import Ui_Status
-from gui_edit import Ui_TextDialog
-
 
 def _(text):  # for future gettext support
     return text
@@ -35,7 +29,8 @@ def _(text):  # for future gettext support
 
 __all__ = ("XTableWidgetIntItem", "XTableWidgetPercentItem", "XTableWidgetTitleItem",
            "DropTableWidget", "XMessageBox", "About", "AutoInfo", "ToolBar", "TextDialog",
-           "Status", "LogStream", "Scanner", "HighlightScanner", "ReLoader", "DBLoader")
+           "Status", "LogStream", "Scanner", "HighlightScanner", "ReLoader", "DBLoader",
+           "XToolButton")
 
 
 # ___ _______________________ SUBCLASSING ___________________________
@@ -135,6 +130,30 @@ class XMessageBox(QMessageBox):
         return (QMessageBox.exec_(self, *args, **kwargs),
                 self.check_box.isChecked())
 
+
+class XToolButton(QToolButton):
+    right_clicked = Signal()
+
+    def __init__(self, parent=None):
+        super(XToolButton, self).__init__(parent)
+        self.installEventFilter(self)
+
+    # def mousePressEvent(self, QMouseEvent):
+    #     if QMouseEvent.button() == Qt.RightButton:
+    #         # do what you want here
+    #         print("Right Button Clicked")
+    #         QMouseEvent.accept()
+
+    def eventFilter(self, obj, event):
+        if obj.objectName() == "db_btn":
+            if event.type() == QEvent.ContextMenu:
+                self.right_clicked.emit()
+                return True
+            else:
+                return False
+        else:
+            # pass the event on to the parent class
+            return QToolButton.eventFilter(self, obj, event)
 
 # ___ _______________________ WORKERS _______________________________
 
@@ -276,6 +295,12 @@ class HighlightScanner(QObject):
 
 # ___ _______________________ GUI STUFF _____________________________
 
+from gui_about import Ui_About
+from gui_auto_info import Ui_AutoInfo
+from gui_toolbar import Ui_ToolBar
+from gui_status import Ui_Status
+from gui_edit import Ui_TextDialog
+
 
 class ToolBar(QWidget, Ui_ToolBar):
 
@@ -409,6 +434,35 @@ class ToolBar(QWidget, Ui_ToolBar):
         self.base.reload_highlights = True
         self.base.file_table.model().removeRows(0, self.base.file_table.rowCount())
         self.activate_buttons()
+
+    @Slot()
+    def on_db_btn_right_clicked(self):
+        """ The context menu of the "Archived" button is pressed
+        """
+        menu = self.create_db_menu()
+        # noinspection PyArgumentList
+        menu.exec_(QCursor.pos())
+
+    def create_db_menu(self):
+        """ Create the database menu
+        """
+        menu = QMenu(self)
+
+        action = QAction(_("Create new database"), menu)
+        action.setIcon(self.base.ico_db_add)
+        action.triggered.connect(partial(self.base.change_db, NEW_DB))
+        menu.addAction(action)
+
+        action = QAction(_("Reload database"), menu)
+        action.setIcon(self.base.ico_refresh)
+        action.triggered.connect(partial(self.base.change_db, RELOAD_DB))
+        menu.addAction(action)
+
+        action = QAction(_("Change database"), menu)
+        action.setIcon(self.base.ico_db_open)
+        action.triggered.connect(partial(self.base.change_db, CHANGE_DB))
+        menu.addAction(action)
+        return menu
 
     def change_view(self):
         """ Changes what is shown in the app

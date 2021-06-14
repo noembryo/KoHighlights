@@ -48,7 +48,7 @@ else:
 
 
 __author__ = "noEmbryo"
-__version__ = "1.4.0.0"
+__version__ = "1.4.2.0"
 
 
 def _(text):  # for future gettext support
@@ -157,6 +157,7 @@ class Base(QMainWindow, Ui_Base):
         self.high_merge_warning = True
         self.archive_warning = True
         self.exit_msg = True
+        self.db_path = join(SETTINGS_DIR, "data.db")
         self.date_vacuumed = datetime.now().strftime(DATE_FORMAT)
         # ___ ___________________________________
 
@@ -214,6 +215,7 @@ class Base(QMainWindow, Ui_Base):
         self.ico_label_green = QIcon(":/stuff/label_green.png")
         self.ico_view_books = QIcon(":/stuff/view_books.png")
         self.ico_db_add = QIcon(":/stuff/db_add.png")
+        self.ico_db_open = QIcon(":/stuff/db_open.png")
         self.ico_app = QIcon(":/stuff/logo64.png")
         self.ico_empty = QIcon(":/stuff/trans32.png")
         self.ico_refresh = QIcon(":/stuff/refresh16.png")
@@ -257,8 +259,8 @@ class Base(QMainWindow, Ui_Base):
     def on_load(self):
         """ Things that must be done after the initialization
         """
-        self.init_db()
         self.settings_load()
+        self.init_db()
         if FIRST_RUN:  # on first run
             self.toolbar.loaded_btn.click()
             self.splitter.setSizes((500, 250))
@@ -382,10 +384,9 @@ class Base(QMainWindow, Ui_Base):
     def init_db(self):
         """ Initialize the database tables
         """
-        db_path = join(SETTINGS_DIR, "data.db")
         # noinspection PyTypeChecker,PyCallByClass
         self.db = QSqlDatabase.addDatabase("QSQLITE")
-        self.db.setDatabaseName(db_path)
+        self.db.setDatabaseName(self.db_path)
         if not self.db.open():
             print("Could not open database!")
             return
@@ -395,7 +396,7 @@ class Base(QMainWindow, Ui_Base):
             # self.query.exec_("""PRAGMA user_version""")  # 2do: enable if db changes
             # while self.query.next():
             #     self.check_db_version(self.query.value(0))  # check the db version
-        self.set_db_version() if not isfile(db_path) else None
+        self.set_db_version() if not isfile(self.db_path) else None
         self.create_books_table()
 
     def check_db_version(self, version):
@@ -404,7 +405,7 @@ class Base(QMainWindow, Ui_Base):
         :type version: int
         :param version: The db file version
         """
-        if version == DB_VERSION or not isfile(join(SETTINGS_DIR, "data.db")):
+        if version == DB_VERSION or not isfile(self.db_path):
             return  # the db is up to date or does not exists yet
         self.update_db(version)
 
@@ -412,6 +413,48 @@ class Base(QMainWindow, Ui_Base):
         """ Set the current database version
         """
         self.query.exec_("""PRAGMA user_version = {}""".format(DB_VERSION))
+
+    def change_db(self, mode):
+        """ Changes the current db file
+
+        :type mode: int
+        :param mode: Change, create new or reload the current db
+        """
+        if mode == NEW_DB:
+            # noinspection PyCallByClass
+            filename = QFileDialog.getSaveFileName(self, _("Type the name of the new db"),
+                                                   self.db_path,
+                                                   (_("database files (*.db)")))[0]
+        elif mode == CHANGE_DB:
+            # noinspection PyCallByClass
+            filename = QFileDialog.getOpenFileName(self, _("Select a database file"),
+                                                   self.db_path,
+                                                   (_("database files (*.db)")))[0]
+        elif mode == RELOAD_DB:
+            filename = self.db_path
+        else:
+            return
+        if filename:
+            # self.toolbar.loaded_btn.click()
+            if self.toolbar.db_btn.isChecked():
+                self.toolbar.update_loaded()
+            self.delete_data()
+            self.db_path = filename
+            self.db_mode = False
+            self.init_db()
+            self.read_books_from_db()
+            if self.toolbar.db_btn.isChecked():
+                # noinspection PyTypeChecker,PyCallByClass
+                QTimer.singleShot(0, self.toolbar.update_archived)
+
+    def delete_data(self):
+        """ Deletes the database data
+        """
+        self.db.close()  # close the db
+        self.db = None
+        self.query = None
+        # print(self.db.connectionNames())
+        # self.db.removeDatabase(self.db.connectionName())
 
     def create_books_table(self):
         """ Create the books table
@@ -1565,7 +1608,8 @@ class Base(QMainWindow, Ui_Base):
         :type data: tuple
         param: data: The highlight's data
         """
-        return int(data[3][5:]) if self.high_by_page else data[0]
+        return int(data[3][5:]) if (self.high_by_page and
+                                    self.status.act_page.isChecked()) else data[0]
 
     # ___ ___________________ MERGING - SYNCING STUFF _______________
 
@@ -2115,12 +2159,11 @@ class Base(QMainWindow, Ui_Base):
                  self.status.act_date.isChecked() else "")
         line_break = (":" + os.linesep if self.status.act_page.isChecked() or
                       self.status.act_date.isChecked() else "")
-        html = format_ == MANY_HTML
         encoding = "utf-8-sig" if format_ == MANY_CSV else "utf-8"
         for idx in self.sel_indexes:
             (authors, title, highlights,
              title_counter) = self.get_item_data(idx, format_, title_counter)
-            if not highlights:  # no highlights
+            if not highlights:  # no highlights in book
                 continue
             name = title
             if authors:
@@ -2128,7 +2171,7 @@ class Base(QMainWindow, Ui_Base):
             if format_ == MANY_TEXT:
                 ext = ".txt"
                 text = ""
-            elif html:
+            elif format_ == MANY_HTML:
                 ext = ".html"
                 text = HTML_HEAD + BOOK_BLOCK % {"title": title, "authors": authors}
             elif format_ == MANY_CSV:
@@ -2140,14 +2183,15 @@ class Base(QMainWindow, Ui_Base):
             with open(filename, "w+", encoding=encoding, newline="") as text_file:
                 for highlight in sorted(highlights, key=self.sort_high4write):
                     date_text, high_comment, high_text, page_text = highlight
-                    if html:
-                        text += (page_text + space + date_text + line_break +
-                                 high_text + high_comment)
-                        text += 2 * os.linesep
-                    elif format_ == MANY_TEXT:
+                    if format_ == MANY_HTML:
                         text += HIGH_BLOCK % {"page": page_text, "date": date_text,
                                               "highlight": high_text,
                                               "comment": high_comment}
+                    elif format_ == MANY_TEXT:
+                        text += (
+                                    page_text + space + date_text + line_break +
+                                    high_text + high_comment)
+                        text += 2 * os.linesep
                     elif format_ == MANY_CSV:
                         data = {"title": title, "authors": authors, "page": page_text,
                                 "date": date_text, "text": high_text,
@@ -2155,7 +2199,7 @@ class Base(QMainWindow, Ui_Base):
                         text += get_csv_row(data) + "\n"
                     else:
                         return
-                if html:
+                if format_ == MANY_HTML:
                     text += "\n</div>\n</body>\n</html>"
 
                 text_file.write(text)
@@ -2374,6 +2418,7 @@ class Base(QMainWindow, Ui_Base):
             self.comment_width = app_config.get("comment_width", None)
             self.last_dir = app_config.get("last_dir", os.getcwd())
             self.current_view = app_config.get("current_view", BOOKS_VIEW)
+            self.db_path = app_config.get("db_path", join(SETTINGS_DIR, "data.db"))
             self.db_mode = app_config.get("db_mode", False)
             self.fold_btn.setChecked(app_config.get("show_info", True))
             self.opened_times = app_config.get("opened_times", 0)
@@ -2411,7 +2456,7 @@ class Base(QMainWindow, Ui_Base):
                   "about_geometry": self.pickle(self.about.saveGeometry()),
                   "col_sort_asc": self.col_sort_asc, "col_sort": self.col_sort,
                   "col_sort_asc_h": self.col_sort_asc_h, "col_sort_h": self.col_sort_h,
-                  "highlight_width": self.highlight_width,
+                  "highlight_width": self.highlight_width, "db_path": self.db_path,
                   "comment_width": self.comment_width, "toolbar_size": self.toolbar_size,
                   "last_dir": self.last_dir, "alt_title_sort": self.alt_title_sort,
                   "archive_warning": self.archive_warning, "exit_msg": self.exit_msg,
@@ -2727,10 +2772,11 @@ class KOHighlights(QApplication):
         super(KOHighlights, self).__init__(*args, **kwargs)
 
         # decode app's arguments
-        try:
-            sys.argv = [i.decode(sys.getfilesystemencoding()) for i in sys.argv]
-        except AttributeError:  # i.decode does not exists in Python 3
-            pass
+        # try:
+        #     sys.argv = [i.decode(sys.getfilesystemencoding()) for i in sys.argv]
+        # except AttributeError:  # i.decode does not exists in Python 3
+        #     pass
+        sys.argv = self.arguments()
 
         self.parser = argparse.ArgumentParser(prog=APP_NAME,
                                               description=_("{} v{} - A KOReader's "
@@ -3033,7 +3079,7 @@ class KOHighlights(QApplication):
         :type data: tuple
         param: data: The highlight's data
         """
-        return int(data[3][5:]) if args.sort_page else data[0]
+        return int(data[3][5:]) if (args.sort_page and not args.no_page) else data[0]
 
     def cli_analyze_high(self, data, page, page_id, args):
         """ Get the highlight's info (text, comment, date and page)

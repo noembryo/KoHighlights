@@ -92,6 +92,7 @@ except Exception:  # IOError on first run or everything else
 
 
 BOOKS_VIEW, HIGHLIGHTS_VIEW = range(2)  # app views
+CHANGE_DB, NEW_DB, RELOAD_DB = range(3)  # db change mode
 TITLE, AUTHOR, TYPE, PERCENT, RATING, MODIFIED, PATH = range(7)  # file_table columns
 PAGE, HIGHLIGHT_TEXT, DATE, PAGE_ID, COMMENT = range(5)  # high_list item data
 (HIGHLIGHT_H, COMMENT_H,

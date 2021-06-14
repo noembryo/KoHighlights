@@ -14,6 +14,7 @@
 <file alias='file_edit.png'>stuff/file_edit.png</file>
 <file alias='folder_reader.png'>stuff/folder_reader.png</file>
 <file alias='sort.png'>stuff/sort.png</file>
+<file alias='db_open.png'>stuff/db_open.png</file>
 <file alias='db_add.png'>stuff/db_add.png</file>
 <file alias='books.png'>stuff/books.png</file>
 <file alias='view_books.png'>stuff/view_books.png</file>
