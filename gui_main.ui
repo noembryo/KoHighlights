@@ -72,8 +72,11 @@
             <bool>false</bool>
            </property>
            <property name="columnCount">
-            <number>7</number>
+            <number>8</number>
            </property>
+           <attribute name="horizontalHeaderDefaultSectionSize">
+            <number>22</number>
+           </attribute>
            <attribute name="horizontalHeaderHighlightSections">
             <bool>false</bool>
            </attribute>
@@ -115,6 +118,11 @@
            <column>
             <property name="text">
              <string>Rating</string>
+            </property>
+           </column>
+           <column>
+            <property name="text">
+             <string>Highlights</string>
             </property>
            </column>
            <column>
@@ -241,21 +249,21 @@
                  </property>
                 </widget>
                </item>
-               <item row="4" column="3">
+               <item row="4" column="2">
                 <widget class="QLabel" name="pages_lbl">
                  <property name="text">
                   <string>Pages</string>
                  </property>
                 </widget>
                </item>
-               <item row="4" column="2">
+               <item row="4" column="1">
                 <widget class="QLineEdit" name="lang_txt">
                  <property name="readOnly">
                   <bool>true</bool>
                  </property>
                 </widget>
                </item>
-               <item row="4" column="4">
+               <item row="4" column="3">
                 <widget class="QLineEdit" name="pages_txt">
                  <property name="readOnly">
                   <bool>true</bool>
@@ -269,7 +277,7 @@
                  </property>
                 </widget>
                </item>
-               <item row="4" column="5">
+               <item row="4" column="4">
                 <widget class="QToolButton" name="description_btn">
                  <property name="text">
                   <string>Description</string>
@@ -283,30 +291,56 @@
                  </property>
                 </widget>
                </item>
-               <item row="3" column="2" colspan="4">
+               <item row="3" column="1" colspan="4">
                 <widget class="QLineEdit" name="tags_txt">
                  <property name="readOnly">
                   <bool>true</bool>
                  </property>
                 </widget>
                </item>
-               <item row="2" column="2" colspan="4">
+               <item row="2" column="1" colspan="4">
                 <widget class="QLineEdit" name="series_txt">
                  <property name="readOnly">
                   <bool>true</bool>
                  </property>
                 </widget>
                </item>
-               <item row="1" column="2" colspan="4">
+               <item row="1" column="1" colspan="4">
                 <widget class="QLineEdit" name="author_txt">
                  <property name="readOnly">
                   <bool>true</bool>
                  </property>
                 </widget>
                </item>
-               <item row="0" column="2" colspan="4">
+               <item row="0" column="1" colspan="4">
                 <widget class="QLineEdit" name="title_txt">
                  <property name="readOnly">
+                  <bool>true</bool>
+                 </property>
+                </widget>
+               </item>
+               <item row="5" column="0">
+                <widget class="QLabel" name="review_lbl">
+                 <property name="text">
+                  <string>Review</string>
+                 </property>
+                 <property name="alignment">
+                  <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+                 </property>
+                </widget>
+               </item>
+               <item row="5" column="1" colspan="4">
+                <widget class="QLabel" name="review_txt">
+                 <property name="styleSheet">
+                  <string notr="true">background-color: rgb(255, 255, 255);</string>
+                 </property>
+                 <property name="frameShape">
+                  <enum>QFrame::NoFrame</enum>
+                 </property>
+                 <property name="text">
+                  <string/>
+                 </property>
+                 <property name="wordWrap">
                   <bool>true</bool>
                  </property>
                 </widget>

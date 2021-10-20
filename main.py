@@ -48,7 +48,7 @@ else:
 
 
 __author__ = "noEmbryo"
-__version__ = "1.4.2.0"
+__version__ = "1.4.4.0"
 
 
 def _(text):  # for future gettext support
@@ -245,6 +245,9 @@ class Base(QMainWindow, Ui_Base):
         self.description.high_edit_txt.setReadOnly(True)
         self.description.btn_box.hide()
         self.description_btn.setEnabled(False)
+
+        self.review_lbl.setVisible(False)
+        self.review_txt.setVisible(False)
 
         # noinspection PyTypeChecker,PyCallByClass
         QTimer.singleShot(10000, self.auto_check4update)  # check for updates
@@ -571,9 +574,10 @@ class Base(QMainWindow, Ui_Base):
             return
         row = item.row()
         data = self.file_table.item(row, TITLE).data(Qt.UserRole)
+        path = self.file_table.item(row, PATH).data(Qt.UserRole)
 
         self.high_list.clear()
-        self.populate_high_list(data)
+        self.populate_high_list(data, path)
         self.populate_book_info(data, row)
 
         description_state = False
@@ -619,6 +623,11 @@ class Base(QMainWindow, Ui_Base):
                     field.setText(stats[2])
                 else:
                     field.setText("")
+
+        review = data.get("summary", {}).get("note", "")
+        self.review_lbl.setVisible(bool(review))
+        self.review_txt.setVisible(bool(review))
+        self.review_txt.setText(review)
 
     @Slot()
     def on_description_btn_clicked(self):
@@ -944,10 +953,11 @@ class Base(QMainWindow, Ui_Base):
                 print("No data here!", filename)
                 return
             date = str(datetime.fromtimestamp(getmtime(filename))).split(".")[0]
-            icon, title, authors, percent, rating, status = self.get_item_stats(filename,
-                                                                                data)
+            stats = self.get_item_stats(filename, data)
+            icon, title, authors, percent, rating, status, high_count = stats
         else:  # for db entries
-            icon, title, authors, percent, rating, status = self.get_item_db_stats(data)
+            stats = self.get_item_db_stats(data)
+            icon, title, authors, percent, rating, status, high_count = stats
 
         color = ("#660000" if status == "abandoned" else
                  # "#005500" if status == "complete" else
@@ -983,8 +993,12 @@ class Base(QMainWindow, Ui_Base):
 
         rating_item = QTableWidgetItem(rating)
         rating_item.setToolTip(rating)
-        # rating_item.setTextAlignment(Qt.AlignRight)
         self.file_table.setItem(0, RATING, rating_item)
+
+        count_item = XTableWidgetIntItem(high_count)
+        count_item.setToolTip(high_count)
+        # count_item.setTextAlignment(Qt.AlignRight)
+        self.file_table.setItem(0, HIGH_COUNT, count_item)
 
         date_item = QTableWidgetItem(date)
         date_item.setToolTip(date)
@@ -1005,7 +1019,12 @@ class Base(QMainWindow, Ui_Base):
         :type data: dict
         :param data: The dict converted lua file
         """
-        icon = self.ico_label_green if data["highlight"] else self.ico_empty
+        if data["highlight"]:
+            icon = self.ico_label_green
+            high_count = str(len(data["highlight"]))
+        else:
+            icon = self.ico_empty
+            high_count = ""
         title = data["stats"]["title"]
         authors = data["stats"]["authors"]
         title = title if title else _("NO TITLE FOUND")
@@ -1022,7 +1041,7 @@ class Base(QMainWindow, Ui_Base):
             rating = ""
             status = None
 
-        return icon, title, authors, percent, rating, status
+        return icon, title, authors, percent, rating, status, high_count
 
     def get_item_stats(self, filename, data):
         """ Returns the title and authors of a metadata file
@@ -1032,7 +1051,12 @@ class Base(QMainWindow, Ui_Base):
         :type data: dict
         :param data: The dict converted lua file
         """
-        icon = self.ico_label_green if data["highlight"] else self.ico_empty
+        if data["highlight"]:
+            icon = self.ico_label_green
+            high_count = str(len(data["highlight"]))
+        else:
+            icon = self.ico_empty
+            high_count = ""
         try:
             title = data["stats"]["title"]
             authors = data["stats"]["authors"]
@@ -1063,7 +1087,7 @@ class Base(QMainWindow, Ui_Base):
             rating = ""
             status = None
 
-        return icon, title, authors, percent, rating, status
+        return icon, title, authors, percent, rating, status, high_count
 
     # ___ ___________________ HIGHLIGHT TABLE STUFF _________________
 
@@ -1237,7 +1261,7 @@ class Base(QMainWindow, Ui_Base):
         item.setToolTip(authors)
         self.high_table.setItem(0, AUTHOR_H, item)
 
-        page = data["page"]
+        page = str(data["page"])
         item = XTableWidgetIntItem(page)
         item.setToolTip(page)
         item.setTextAlignment(Qt.AlignRight)
@@ -1323,51 +1347,123 @@ class Base(QMainWindow, Ui_Base):
 
     # ___ ___________________ HIGHLIGHTS LIST STUFF _________________
 
-    def populate_high_list(self, data):
+    def populate_high_list(self, data, path=""):
         """ Populates the Highlights list of `Book` view
 
         :type data: dict
-        :param data: The item's data
+        :param data: The item/book's data
+        :type path: str|unicode
+        :param path: The item/book's path
         """
-        highlights = []
         space = (" " if self.status.act_page.isChecked() and
                  self.status.act_date.isChecked() else "")
         line_break = (":\n" if self.status.act_page.isChecked() or
                       self.status.act_date.isChecked() else "")
-        for page in data["highlight"]:
-            for page_id in data["highlight"][page]:
-                try:
-                    date = data["highlight"][page][page_id]["datetime"]
-                    text4check = data["highlight"][page][page_id]["text"]
-                    text = text4check.replace("\\\n", "\n")
-                    comment = ""
-                    for idx in data["bookmarks"]:
-                        if text4check == data["bookmarks"][idx]["notes"]:
-                            bkm_text = data["bookmarks"][idx].get("text", "")
-                            if not bkm_text:
-                                break
-                            bkm_text = re.sub(r"Page \d+ "
-                                              r"(.+?) @ \d+-\d+-\d+ \d+:\d+:\d+", r"\1",
-                                              bkm_text, 1, re.DOTALL | re.MULTILINE)
-
-                            if text4check != bkm_text:
-                                comment = bkm_text.replace("\\\n", "\n")
-                            break
-                except KeyError:  # blank highlight
-                    continue
-                highlights.append((page, text, date, page_id, comment))
-        for item in sorted(highlights, key=self.sort_high4view):
-            page, text, date, page_id, comment = item
-            page_text = _("Page ") + str(page) if self.status.act_page.isChecked() else ""
-            date_text = "[" + date + "]" if self.status.act_date.isChecked() else ""
-            high_text = text if self.status.act_text.isChecked() else ""
-            line_break2 = "\n" if self.status.act_comment.isChecked() and comment else ""
-            high_comment = line_break2 + "● " + comment if line_break2 else ""
+        highlights = self.parse_highlights(data, path)
+        for i in sorted(highlights, key=self.sort_high4view):
+            page_text = (_("Page ") + str(i["page"])
+                         if self.status.act_page.isChecked() else "")
+            date_text = "[" + i["date"] + "]" if self.status.act_date.isChecked() else ""
+            high_text = i["text"] if self.status.act_text.isChecked() else ""
+            line_break2 = ("\n" if self.status.act_comment.isChecked() and i["comment"]
+                           else "")
+            high_comment = line_break2 + "● " + i["comment"] if line_break2 else ""
             highlight = (page_text + space + date_text + line_break +
                          high_text + high_comment + "\n")
 
             highlight_item = QListWidgetItem(highlight, self.high_list)
-            highlight_item.setData(Qt.UserRole, item)
+            highlight_item.setData(Qt.UserRole, i)
+
+    def parse_highlights(self, data, path=""):
+        """ Get the HighLights from the .sdr data
+
+        :type data: dict
+        :param data: The lua converted book data
+        :type path: str|unicode
+        :param path: The book's path
+        """
+        authors = data.get("stats", {}).get("authors", "NO AUTHOR FOUND")
+        title = data.get("stats", {}).get("title", "NO TITLE FOUND")
+
+        highlights = []
+        for page in data["highlight"]:
+            for page_id in data["highlight"][page]:
+                highlight = self.get_highlight_info(data, page, page_id)
+                if highlight:
+                    highlight.update({"authors": authors, "title": title,
+                                      "path": path})
+                    highlights.append(highlight)
+        return highlights
+
+    @staticmethod
+    def get_highlight_info(data, page, page_id):
+        """ Get the highlight's info (text, comment, date and page)
+
+        :type data: dict
+        :param data: The highlight's data
+        :type page: int
+        :param page The page where the highlight starts
+        :type page_id: int
+        :param page_id The count of this page's highlight
+        """
+        highlight = {}
+        try:
+            date = data["highlight"][page][page_id]["datetime"]
+            text4check = data["highlight"][page][page_id]["text"]
+            text = text4check.replace("\\\n", "\n")
+            comment = ""
+            for idx in data["bookmarks"]:  # check for comment text
+                if text4check == data["bookmarks"][idx]["notes"]:
+                    bkm_text = data["bookmarks"][idx].get("text", "")
+                    if not bkm_text or (bkm_text == text4check):
+                        break
+                    bkm_text = re.sub(r"Page \d+ "
+                                      r"(.+?) @ \d+-\d+-\d+ \d+:\d+:\d+", r"\1",
+                                      bkm_text, 1, re.DOTALL | re.MULTILINE)
+                    if text4check != bkm_text:  # there is a comment
+                        comment = bkm_text.replace("\\\n", "\n")
+                        break
+            highlight["date"] = date
+            highlight["text"] = text
+            highlight["comment"] = comment
+            highlight["page"] = page
+            highlight["page_id"] = page_id
+        except KeyError:  # blank highlight
+            return
+        return highlight
+
+    @staticmethod
+    def get_high_data(data, page, page_id):  # 2check: is it better than the prev
+        """ Get the highlight's info (text, comment, date and page)
+
+        :type data: dict
+        :param data: The highlight's data
+        :type page: int
+        :param page The page where the highlight starts
+        :type page_id: int
+        :param page_id The count of this page's highlight
+        """
+        date = data["highlight"][page][page_id]["datetime"]
+        high_text = data["highlight"][page][page_id]["text"]
+        pos_0 = data["highlight"][page][page_id]["pos0"]
+        pos_1 = data["highlight"][page][page_id]["pos1"]
+        comment = ""
+        for idx in data["bookmarks"]:
+            try:
+                book_pos0 = data["bookmarks"][idx]["pos0"]
+            except KeyError:  # no [idx]["pos0"] exists (blank highlight)
+                continue
+            book_pos1 = data["bookmarks"][idx]["pos1"]
+            if (pos_0 == book_pos0) and (pos_1 == book_pos1):
+                bkm_text = data["bookmarks"][idx].get("text", "")
+                if not bkm_text or (bkm_text == high_text):
+                    break
+                bkm_text = re.sub(r"Page \d+ (.+?) @ \d+-\d+-\d+ \d+:\d+:\d+", r"\1",
+                                  bkm_text, 1, re.DOTALL | re.MULTILINE)
+                if high_text != bkm_text:
+                    comment = bkm_text
+                break
+        return comment, date, high_text
 
     @Slot(QPoint)
     def on_high_list_customContextMenuRequested(self, point):
@@ -1407,7 +1503,7 @@ class Base(QMainWindow, Ui_Base):
         """
         if self.file_table.isVisible():  # edit comments from Book View
             row = self.sel_high_list[-1].row()
-            comment = self.high_list.item(row).data(Qt.UserRole)[COMMENT]
+            comment = self.high_list.item(row).data(Qt.UserRole)["comment"]
         elif self.high_table.isVisible():  # edit comments from Highlights View
             row = self.sel_high_view[-1].row()
             high_data = self.high_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)
@@ -1426,7 +1522,7 @@ class Base(QMainWindow, Ui_Base):
             high_index = self.sel_high_list[-1]
             high_row = high_index.row()
             high_data = self.high_list.item(high_row).data(Qt.UserRole)
-            high_text = high_data[HIGHLIGHT_TEXT].replace("\n", "\\\n")
+            high_text = high_data["text"].replace("\n", "\\\n")
 
             row = self.sel_idx.row()
             item = self.file_table.item
@@ -1516,12 +1612,14 @@ class Base(QMainWindow, Ui_Base):
 
         for highlight in self.sel_high_list:
             high_row = highlight.row()
-            page = self.high_list.item(high_row).data(Qt.UserRole)[PAGE]
-            page_id = self.high_list.item(high_row).data(Qt.UserRole)[PAGE_ID]
+            high_data = self.high_list.item(high_row).data(Qt.UserRole)
+            pprint(high_data)
+            page = high_data["page"]
+            page_id = high_data["page_id"]
             del data["highlight"][page][page_id]  # delete the highlight
 
             # delete the associated bookmark
-            text = self.high_list.item(high_row).data(Qt.UserRole)[HIGHLIGHT_TEXT]
+            text = high_data["text"]
             for bookmark in data["bookmarks"].keys():
                 if text == data["bookmarks"][bookmark]["notes"]:
                     del data["bookmarks"][bookmark]
@@ -1600,7 +1698,7 @@ class Base(QMainWindow, Ui_Base):
         :type data: tuple
         param: data: The highlight's data
         """
-        return int(data[PAGE]) if self.high_by_page else data[DATE]
+        return int(data["page"]) if self.high_by_page else data["date"]
 
     def sort_high4write(self, data):
         """ Sets the sorting method of written highlights
@@ -1608,8 +1706,13 @@ class Base(QMainWindow, Ui_Base):
         :type data: tuple
         param: data: The highlight's data
         """
-        return int(data[3][5:]) if (self.high_by_page and
-                                    self.status.act_page.isChecked()) else data[0]
+        if self.high_by_page and self.status.act_page.isChecked():
+            page = data[3]
+            if page.startswith("Page"):
+                page = page[5:]
+            return int(page)
+        else:
+            return data[0]
 
     # ___ ___________________ MERGING - SYNCING STUFF _______________
 
@@ -2349,11 +2452,12 @@ class Base(QMainWindow, Ui_Base):
         :type format_: int
         :param format_ The output format idx
         """
-        comment, date, high_text = self.get_high_data(data, page, page_id)
+        highlight = self.get_highlight_info(data, page, page_id)
         linesep = "<br/>" if format_ in [ONE_HTML, MANY_HTML] else os.linesep
-        comment = comment.replace("\\\n", linesep)
-        high_text = (high_text.replace("\\\n", linesep)
+        comment = highlight["comment"].replace("\n", linesep)
+        high_text = (highlight["text"].replace("\n", linesep)
                      if self.status.act_text.isChecked() else "")
+        date = highlight["date"]
         line_break2 = (os.linesep if self.status.act_text.isChecked() and comment else "")
         if format_ in [ONE_CSV, MANY_CSV]:
             page_text = str(page) if self.status.act_page.isChecked() else ""
@@ -2366,39 +2470,6 @@ class Base(QMainWindow, Ui_Base):
             high_comment = (line_break2 + "● " + comment
                             if self.status.act_comment.isChecked() and comment else "")
         return date_text, high_comment, high_text, page_text
-
-    @staticmethod
-    def get_high_data(data, page, page_id):
-        """ Get the highlight's info (text, comment, date and page)
-
-        :type data: dict
-        :param data: The highlight's data
-        :type page: int
-        :param page The page where the highlight starts
-        :type page_id: int
-        :param page_id The count of this page's highlight
-        """
-        date = data["highlight"][page][page_id]["datetime"]
-        high_text = data["highlight"][page][page_id]["text"]
-        pos_0 = data["highlight"][page][page_id]["pos0"]
-        pos_1 = data["highlight"][page][page_id]["pos1"]
-        comment = ""
-        for bookmark_idx in data["bookmarks"]:
-            try:
-                book_pos0 = data["bookmarks"][bookmark_idx]["pos0"]
-            except KeyError:  # no [bookmark_idx]["pos0"] exists (blank highlight)
-                continue
-            book_pos1 = data["bookmarks"][bookmark_idx]["pos1"]
-            if (pos_0 == book_pos0) and (pos_1 == book_pos1):
-                book_text = data["bookmarks"][bookmark_idx].get("text", "")
-                if not book_text:
-                    break
-                book_text = re.sub(r"Page \d+ (.+?) @ \d+-\d+-\d+ \d+:\d+:\d+", r"\1",
-                                   book_text, 1, re.DOTALL | re.MULTILINE)
-                if high_text != book_text:
-                    comment = book_text
-                break
-        return comment, date, high_text
 
     # ___ ___________________ SETTINGS STUFF ________________________
 
@@ -2817,9 +2888,6 @@ class KOHighlights(QApplication):
                                  help="Use the command line interface only (exit the "
                                       "app after finishing)", action="store_true",
                                  default=False)
-        # self.parser.add_argument("-i", "--input", required="-x" in sys.argv,
-        #                          help="The path to input files or folder")
-        # sort_group = self.parser.add_mutually_exclusive_group()
         self.parser.add_argument("-s", "--sort_page", action="store_true", default=False,
                                  help="Sort highlights by page, otherwise sort by date")
         self.parser.add_argument("-m", "--merge", action="store_true", default=False,
@@ -3079,7 +3147,13 @@ class KOHighlights(QApplication):
         :type data: tuple
         param: data: The highlight's data
         """
-        return int(data[3][5:]) if (args.sort_page and not args.no_page) else data[0]
+        if args.sort_page and not args.no_page:
+            page = data[3]
+            if page.startswith("Page"):
+                page = page[5:]
+            return int(page)
+        else:
+            return data[0]
 
     def cli_analyze_high(self, data, page, page_id, args):
         """ Get the highlight's info (text, comment, date and page)
@@ -3093,10 +3167,12 @@ class KOHighlights(QApplication):
         :type args: argparse.Namespace
         :param args: The parsed cli args
         """
-        comment, date, high_text = self.base.get_high_data(data, page, page_id)
+        highlight = self.base.get_highlight_info(data, page, page_id)
         linesep = "<br/>" if args.html else os.linesep
-        high_text = high_text.replace("\\\n", linesep) if not args.no_highlight else ""
-        comment = comment.replace("\\\n", linesep)
+        high_text = highlight["text"]
+        high_text = high_text.replace("\n", linesep) if not args.no_highlight else ""
+        comment = highlight["comment"].replace("\n", linesep)
+        date = highlight["date"]
         line_break2 = os.linesep if not args.no_highlight and comment else ""
         if args.csv:
             page_text = str(page) if not args.no_page else ""

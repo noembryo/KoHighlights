@@ -41,7 +41,16 @@ class XTableWidgetIntItem(QTableWidgetItem):
     """
 
     def __lt__(self, value):
-        return int(self.data(Qt.DisplayRole)) < int(value.data(Qt.DisplayRole))
+        try:
+            return int(self.data(Qt.DisplayRole)) < int(value.data(Qt.DisplayRole))
+        except ValueError:  # no text
+            this_text = self.data(Qt.DisplayRole)
+            if not this_text:
+                this_text = "0"
+            that_text = value.data(Qt.DisplayRole)
+            if not that_text:
+                that_text = "0"
+            return int(this_text) < int(that_text)
 
 
 class XTableWidgetPercentItem(QTableWidgetItem):
@@ -127,8 +136,7 @@ class XMessageBox(QMessageBox):
         """ Override the exec_ method so
         you can return the value of the checkbox
         """
-        return (QMessageBox.exec_(self, *args, **kwargs),
-                self.check_box.isChecked())
+        return QMessageBox.exec_(self, *args, **kwargs), self.check_box.isChecked()
 
 
 class XToolButton(QToolButton):
@@ -255,43 +263,9 @@ class HighlightScanner(QObject):
         :type path: str|unicode
         :param path: The book path
         """
-        try:
-            authors = data["stats"]["authors"]
-        except KeyError:  # older type file
-            authors = ""
-        authors = authors if authors else _("NO AUTHOR FOUND")
-        try:
-            title = data["stats"]["title"]
-        except KeyError:  # older type file
-            title = ""
-        title = title if title else _("NO TITLE FOUND")
-
-        for page in sorted(data["highlight"]):
-            for page_id in data["highlight"][page]:
-                highlight = {"authors": authors, "title": title, "path": path}
-                try:
-                    highlight["date"] = data["highlight"][page][page_id]["datetime"]
-                    text4check = data["highlight"][page][page_id]["text"]
-                    text = text4check.replace("\\\n", "\n")
-                    comment = ""
-                    for idx in data["bookmarks"]:  # check for comment text
-                        if text4check == data["bookmarks"][idx]["notes"]:
-                            bkm_text = data["bookmarks"][idx].get("text", "")
-                            if not bkm_text:
-                                break
-                            bkm_text = re.sub(r"Page \d+ "
-                                              r"(.+?) @ \d+-\d+-\d+ \d+:\d+:\d+", r"\1",
-                                              bkm_text, 1, re.DOTALL | re.MULTILINE)
-                            if text4check != bkm_text:  # there is a comment
-                                comment = bkm_text.replace("\\\n", "\n")
-                            break
-                    highlight["text"] = text
-                    highlight["comment"] = comment
-                    highlight["page"] = str(page)
-                except KeyError:  # blank highlight
-                    continue
-                self.found.emit(highlight)
-
+        highlights = self.base.parse_highlights(data, path)
+        for highlight in highlights:
+            self.found.emit(highlight)
 
 # ___ _______________________ GUI STUFF _____________________________
 
