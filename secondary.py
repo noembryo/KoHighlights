@@ -12,11 +12,11 @@ if QT4:  # ___ ______________ DEPENDENCIES __________________________
     from PySide.QtCore import Qt, Slot, QObject, Signal, QSize, QPoint, QEvent
     from PySide.QtGui import (QApplication, QMessageBox, QIcon, QFileDialog, QTableWidgetItem,
                               QDialog, QWidget, QMovie, QFont, QMenu, QAction, QTableWidget,
-                              QCheckBox, QToolButton, QActionGroup, QCursor)
+                              QCheckBox, QToolButton, QActionGroup, QCursor, QLineEdit)
 else:
     from PySide2.QtCore import QObject, Qt, Signal, QPoint, Slot, QSize, QEvent
     from PySide2.QtGui import QFont, QMovie, QIcon, QCursor
-    from PySide2.QtWidgets import (QTableWidgetItem, QTableWidget, QMessageBox,
+    from PySide2.QtWidgets import (QTableWidgetItem, QTableWidget, QMessageBox, QLineEdit,
                                    QApplication, QWidget, QDialog, QFileDialog,
                                    QActionGroup, QMenu, QAction, QToolButton, QCheckBox)
 import requests
@@ -123,20 +123,57 @@ class XMessageBox(QMessageBox):
         super(XMessageBox, self).__init__(parent)
 
         self.check_box = QCheckBox()
+        self.check_box.stateChanged.connect(self.checkbox_state_changed)
         self.checked = False
 
-        if QT4:
-            # Access the Layout of the MessageBox to add a Checkbox
-            layout = self.layout()
-            layout.addWidget(self.check_box, 1, 1)
-        else:
-            self.setCheckBox(self.check_box)
+        self.input = QLineEdit()
+        self.input.textChanged.connect(self.input_text_changed)
+        self.typed_text = ""
 
-    def exec_(self, *args, **kwargs):
-        """ Override the exec_ method so
-        you can return the value of the checkbox
+    def set_check(self, text):
+        """ Sets the Popup's CheckBox
+
+        :type text: str|unicode
+        :param text: The CheckBox's text
         """
-        return QMessageBox.exec_(self, *args, **kwargs), self.check_box.isChecked()
+        self.add_to_layout(self.check_box)
+        self.check_box.setText(text)
+
+    def checkbox_state_changed(self, state):
+        """ Update the checked variable
+
+        :type state: bool
+        :param state: The CheckBox's state
+        """
+        self.checked = bool(state)
+
+    def set_input(self, text):
+        """ Sets the Popup's text input
+
+        :type text: str|unicode|bool
+        :param text: The QLineEdit's text
+        """
+        self.add_to_layout(self.input)
+        if not isinstance(text, bool):
+            self.input.setText(text)
+
+    def input_text_changed(self, text):
+        """ Update the typed_text variable
+
+        :type text: str|unicode
+        :param text: The QLineEdit's text
+        """
+        self.typed_text = text
+
+    def add_to_layout(self, widget):
+        """ Add the given widget to the popup's layout
+        Only one widget can be added in a popup instance
+
+        :type widget: QWidget
+        :param widget: The widget to be added
+        """
+        # noinspection PyArgumentList
+        self.layout().addWidget(widget, 1, 1 if PYTHON2 else 2)
 
 
 class XToolButton(QToolButton):
@@ -268,6 +305,7 @@ class HighlightScanner(QObject):
             self.found.emit(highlight)
 
 # ___ _______________________ GUI STUFF _____________________________
+
 
 from gui_about import Ui_About
 from gui_auto_info import Ui_AutoInfo
@@ -725,6 +763,11 @@ class Status(QWidget, Ui_Status):
             i.triggered.connect(self.on_show_items)
             i.setChecked(True)
 
+        action = QAction(_("Date Format"), self.show_menu)
+        action.setIcon(QIcon(":/stuff/calendar.png"))
+        action.triggered.connect(self.set_date_format)
+        self.show_menu.addAction(action)
+
         sort_menu = QMenu(self)
         ico_sort = QIcon(":/stuff/sort.png")
         group = QActionGroup(self)
@@ -760,6 +803,26 @@ class Status(QWidget, Ui_Status):
             return
         item = self.base.file_table.item(idx.row(), 0)
         self.base.on_file_table_itemClicked(item)
+
+    def set_date_format(self):
+        """ Changes the date format
+        """
+        popup = self.base.popup(_("Set custom Date format"),
+                                _("The default format is %Y-%m-%d %H:%M:%S\nUse these "
+                                  "symbols in any order, combined with any other "
+                                  "character.\nFor more info about the supported symbols "
+                                  "press Help."),
+                                icon=QMessageBox.Information, buttons=2,
+                                extra_text=_("Help"), input_text=self.base.date_format,
+                                button_text=(_("OK"), _("Use Default")))
+        if popup.buttonRole(popup.clickedButton()) == QMessageBox.AcceptRole:
+            self.base.date_format = popup.typed_text
+        elif popup.buttonRole(popup.clickedButton()) == QMessageBox.RejectRole:
+            self.base.date_format = DATE_FORMAT
+        elif popup.buttonRole(popup.clickedButton()) == QMessageBox.ApplyRole:
+            webbrowser.open("https://docs.python.org/2.7/library/datetime.html"
+                            "#strftime-strptime-behavior")
+        self.on_show_items()
 
     def animation(self, run):
         """ Creates or deletes temporary files and folders

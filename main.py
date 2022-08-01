@@ -48,7 +48,7 @@ else:
 
 
 __author__ = "noEmbryo"
-__version__ = "1.4.4.0"
+__version__ = "1.5.0.0"
 
 
 def _(text):  # for future gettext support
@@ -113,7 +113,7 @@ def get_csv_row(data):
 #     def hide_console():
 #         """ Hides the console window in GUI mode. Necessary for frozen application,
 #         because this application support both, command line processing AND GUI mode
-#         and therefor cannot be run via pythonw.exe.
+#         and therefore cannot be run via pythonw.exe.
 #         """
 #
 #         win_handles = ctypes.windll.kernel32.GetConsoleWindow()
@@ -159,6 +159,7 @@ class Base(QMainWindow, Ui_Base):
         self.exit_msg = True
         self.db_path = join(SETTINGS_DIR, "data.db")
         self.date_vacuumed = datetime.now().strftime(DATE_FORMAT)
+        self.date_format = DATE_FORMAT
         # ___ ___________________________________
 
         self.file_selection = None
@@ -959,9 +960,10 @@ class Base(QMainWindow, Ui_Base):
             stats = self.get_item_db_stats(data)
             icon, title, authors, percent, rating, status, high_count = stats
 
+        # noinspection PyArgumentList
         color = ("#660000" if status == "abandoned" else
                  # "#005500" if status == "complete" else
-                 None)
+                 QApplication.palette().text().color())
 
         self.file_table.setSortingEnabled(False)
         self.file_table.insertRow(0)
@@ -1359,11 +1361,13 @@ class Base(QMainWindow, Ui_Base):
                  self.status.act_date.isChecked() else "")
         line_break = (":\n" if self.status.act_page.isChecked() or
                       self.status.act_date.isChecked() else "")
+        def_date_format = self.date_format == DATE_FORMAT
         highlights = self.parse_highlights(data, path)
         for i in sorted(highlights, key=self.sort_high4view):
             page_text = (_("Page ") + str(i["page"])
                          if self.status.act_page.isChecked() else "")
-            date_text = "[" + i["date"] + "]" if self.status.act_date.isChecked() else ""
+            date = i["date"] if def_date_format else self.get_date_text(i["date"])
+            date_text = "[" + date + "]" if self.status.act_date.isChecked() else ""
             high_text = i["text"] if self.status.act_text.isChecked() else ""
             line_break2 = ("\n" if self.status.act_comment.isChecked() and i["comment"]
                            else "")
@@ -1426,14 +1430,14 @@ class Base(QMainWindow, Ui_Base):
             highlight["date"] = date
             highlight["text"] = text
             highlight["comment"] = comment
-            highlight["page"] = page
+            highlight["page"] = str(page)  # 2check for problems elsewhere
             highlight["page_id"] = page_id
         except KeyError:  # blank highlight
             return
         return highlight
 
     @staticmethod
-    def get_high_data(data, page, page_id):  # 2check: is it better than the prev
+    def get_high_data(data, page, page_id):  # 2check: is it better than the prev def
         """ Get the highlight's info (text, comment, date and page)
 
         :type data: dict
@@ -2202,7 +2206,6 @@ class Base(QMainWindow, Ui_Base):
             idx = MANY_CSV if multi else ONE_CSV
         else:
             return
-
         self.export(idx)
 
     # noinspection PyCallByClass
@@ -2414,10 +2417,15 @@ class Base(QMainWindow, Ui_Base):
 
         text = HTML_HEAD if html_out else CSV_HEAD if csv_out else ""
         encoding = "utf-8-sig" if csv_out else "utf-8"
+        def_date_format = self.date_format == DATE_FORMAT
         for i in sorted(self.sel_high_view):
             row = i.row()
             data = self.high_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)
             comment = "\n● " + data["comment"] if data["comment"] else ""
+
+            if not def_date_format:
+                data["date"] = self.get_date_text(data["date"])
+
             if text_out:
                 txt = ("{} [{}]\nPage {} [{}]\n{}{}"
                        .format(data["title"], data["authors"], data["page"],
@@ -2458,6 +2466,7 @@ class Base(QMainWindow, Ui_Base):
         high_text = (highlight["text"].replace("\n", linesep)
                      if self.status.act_text.isChecked() else "")
         date = highlight["date"]
+        date = date if self.date_format == DATE_FORMAT else self.get_date_text(date)
         line_break2 = (os.linesep if self.status.act_text.isChecked() and comment else "")
         if format_ in [ONE_CSV, MANY_CSV]:
             page_text = str(page) if self.status.act_page.isChecked() else ""
@@ -2470,6 +2479,11 @@ class Base(QMainWindow, Ui_Base):
             high_comment = (line_break2 + "● " + comment
                             if self.status.act_comment.isChecked() and comment else "")
         return date_text, high_comment, high_text, page_text
+
+    def get_date_text(self, date):
+        dt_obj = datetime.strptime(date, DATE_FORMAT)
+        date = dt_obj.strftime(self.date_format)
+        return date
 
     # ___ ___________________ SETTINGS STUFF ________________________
 
@@ -2497,6 +2511,7 @@ class Base(QMainWindow, Ui_Base):
             self.toolbar_size = app_config.get("toolbar_size", 48)
             self.skip_version = app_config.get("skip_version", None)
             self.date_vacuumed = app_config.get("date_vacuumed", self.date_vacuumed)
+            self.date_format = app_config.get("date_format", DATE_FORMAT)
             self.archive_warning = app_config.get("archive_warning", True)
             self.exit_msg = app_config.get("exit_msg", True)
             self.high_merge_warning = app_config.get("high_merge_warning", True)
@@ -2533,7 +2548,7 @@ class Base(QMainWindow, Ui_Base):
                   "archive_warning": self.archive_warning, "exit_msg": self.exit_msg,
                   "current_view": self.current_view, "db_mode": self.db_mode,
                   "high_by_page": self.high_by_page, "date_vacuumed": self.date_vacuumed,
-                  "show_info": self.fold_btn.isChecked(),
+                  "show_info": self.fold_btn.isChecked(), "date_format": self.date_format,
                   "show_items": (self.status.act_page.isChecked(),
                                  self.status.act_date.isChecked(),
                                  self.status.act_text.isChecked(),
@@ -2605,7 +2620,8 @@ class Base(QMainWindow, Ui_Base):
                 self.threads.remove(thread)
 
     def popup(self, title, text, icon=QMessageBox.Warning, buttons=1,
-              extra_text="", button_text=(_("OK"), _("Cancel")), check_text=""):
+              extra_text="", button_text=(_("OK"), _("Cancel")),
+              check_text=False, input_text=False):
         """ Creates and returns a Popup dialog
 
         :type title: str|unicode
@@ -2619,7 +2635,9 @@ class Base(QMainWindow, Ui_Base):
         :type extra_text: str|unicode
         :parameter extra_text: The extra button's text (button is omitted if "")
         :type check_text: str|unicode
-        :parameter check_text: The checkbox's text (checkbox is omitted if "")
+        :parameter check_text: The checkbox's text (checkbox is omitted if False)
+        :type input_text: str | unicode | bool
+        :parameter input_text: The input text's text (input text is omitted if False)
         """
         popup = XMessageBox(self)
         popup.setWindowIcon(self.ico_app)
@@ -2633,19 +2651,22 @@ class Base(QMainWindow, Ui_Base):
             raise TypeError("Wrong icon type!")
         popup.setWindowTitle(title)
         popup.setText(text + "\n" if check_text else text)
+
         if buttons == 1:
             popup.addButton(_("Close"), QMessageBox.RejectRole)
         elif buttons == 2:
             popup.addButton(button_text[0], QMessageBox.AcceptRole)
             popup.addButton(button_text[1], QMessageBox.RejectRole)
+
         if extra_text:  # add an extra button
             popup.addButton(extra_text, QMessageBox.ApplyRole)
-        if check_text:  # hide check_box if no text for it
-            popup.check_box.setText(check_text)
-        else:
-            popup.check_box.hide()
-        popup.checked = popup.exec_()[1]
 
+        if check_text:  # Show check_box
+            popup.set_check(check_text)
+        elif input_text:  # Show input QLineEdit
+            popup.set_input(input_text)
+
+        popup.exec_()
         return popup
 
     def passed_files(self):
