@@ -30,7 +30,7 @@ def _(text):  # for future gettext support
 __all__ = ("XTableWidgetIntItem", "XTableWidgetPercentItem", "XTableWidgetTitleItem",
            "DropTableWidget", "XMessageBox", "About", "AutoInfo", "ToolBar", "TextDialog",
            "Status", "LogStream", "Scanner", "HighlightScanner", "ReLoader", "DBLoader",
-           "XToolButton")
+           "XToolButton", "Filter")
 
 
 # ___ _______________________ SUBCLASSING ___________________________
@@ -229,18 +229,17 @@ class Scanner(QObject):
 
     def start_scan(self):
         try:
-            for dir_tuple in os.walk(self.path):
-                dir_path = dir_tuple[0]
+            for dir_path, dirs, files in os.walk(self.path):
                 if dir_path.lower().endswith(".sdr"):  # a book's metadata folder
                     if dir_path.lower().endswith("evernote.sdr"):
                         continue
-                    for file_ in dir_tuple[2]:  # get the .lua file not the .old (backup)
+                    for file_ in files:  # get the .lua file not the .old (backup)
                         if splitext(file_)[1].lower() == ".lua":
                             self.found.emit(join(dir_path, file_))
                 # older metadata storage or android history folder
                 elif (dir_path.lower().endswith(join("koreader", "history"))
                       or basename(dir_path).lower() == "history"):
-                    for file_ in dir_tuple[2]:
+                    for file_ in files:
                         if splitext(file_)[1].lower() == ".lua":
                             self.found.emit(join(dir_path, file_))
                     continue
@@ -300,7 +299,7 @@ class HighlightScanner(QObject):
         :type path: str|unicode
         :param path: The book path
         """
-        highlights = self.base.parse_highlights(data, path)
+        highlights = self.base.get_highlights_from_data(data, path)
         for highlight in highlights:
             self.found.emit(highlight)
 
@@ -312,6 +311,7 @@ from gui_auto_info import Ui_AutoInfo
 from gui_toolbar import Ui_ToolBar
 from gui_status import Ui_Status
 from gui_edit import Ui_TextDialog
+from gui_filter import Ui_Filter
 
 
 class ToolBar(QWidget, Ui_ToolBar):
@@ -323,8 +323,10 @@ class ToolBar(QWidget, Ui_ToolBar):
 
         self.buttons = (self.check_btn, self.scan_btn, self.export_btn, self.open_btn,
                         self.merge_btn, self.delete_btn, self.clear_btn, self.about_btn,
-                        self.books_view_btn, self.high_view_btn)
+                        self.books_view_btn, self.high_view_btn, self.filter_btn)
         self.size_menu = self.create_size_menu()
+        self.db_menu = self.create_db_menu()
+        self.db_btn.setMenu(self.db_menu)
 
         for btn in [self.loaded_btn, self.db_btn,
                     self.books_view_btn, self.high_view_btn]:
@@ -418,6 +420,19 @@ class ToolBar(QWidget, Ui_ToolBar):
             data = self.base.high_table.item(idx.row(), HIGHLIGHT_H).data(Qt.UserRole)
             self.base.open_file(data["path"])
 
+    @Slot(bool)
+    def on_filter_btn_toggled(self, state):
+        """ The `Find` button is pressed
+
+        :type state: bool
+        :param state: Pressed or not
+        """
+        if state:
+            self.base.filter.show()
+        else:
+            self.base.filter.hide()
+            self.base.filter.on_clear_filter_btn_clicked()
+
     @Slot()
     def on_merge_btn_clicked(self):
         """ The `Merge` button is pressed
@@ -451,9 +466,8 @@ class ToolBar(QWidget, Ui_ToolBar):
     def on_db_btn_right_clicked(self):
         """ The context menu of the "Archived" button is pressed
         """
-        menu = self.create_db_menu()
         # noinspection PyArgumentList
-        menu.exec_(QCursor.pos())
+        self.db_menu.exec_(QCursor.pos())
 
     def create_db_menu(self):
         """ Create the database menu
@@ -497,6 +511,9 @@ class ToolBar(QWidget, Ui_ToolBar):
         self.base.views.setCurrentIndex(self.base.current_view)
         self.setup_buttons()
         self.activate_buttons()
+        if self.base.filter.isVisible():
+            self.filter_btn.setChecked(False)
+        self.base.filter.show_all()
 
     def update_loaded(self):
         """ Reloads the previously scanned metadata
@@ -605,6 +622,159 @@ class ToolBar(QWidget, Ui_ToolBar):
         self.base.about.show()
 
 
+class Filter(QDialog, Ui_Filter):
+
+    def __init__(self, parent=None):
+        super(Filter, self).__init__(parent)
+        self.setupUi(self)
+        # Remove the question mark widget from dialog
+        self.setWindowFlags(self.windowFlags() ^
+                            Qt.WindowContextHelpButtonHint)
+        self.setWindowTitle(_("Filter").format(APP_NAME))
+        self.base = parent
+
+    def keyPressEvent(self, event):
+        """ Handles the key press events
+
+        :type event: QKeyEvent
+        :param event: The key press event
+        """
+        key, mod = event.key(), event.modifiers()
+        # print(key, mod, QKeySequence(key).toString())
+        if mod == Qt.ControlModifier:  # if control is pressed
+            if key == Qt.Key_F:
+                self.close()
+                return True
+        if key == Qt.Key_Escape:
+            self.close()
+            return True
+
+    @Slot()
+    def on_filter_txt_returnPressed(self):
+        self.on_filter()
+
+    @Slot()
+    def on_filter_btn_clicked(self):
+        """ The `Filter` button is pressed
+        """
+        self.filtered_lbl.setText("")
+        self.on_filter()
+
+    def on_filter(self):
+        """ Filter the table's rows
+        """
+        txt = self.filter_txt.text().lower()
+        filtered = 0
+        if self.base.toolbar.books_view_btn.isChecked():
+            row_count = self.base.file_table.rowCount()
+            for row in range(row_count):
+                title = self.base.file_table.item(row, TITLE).data(0)
+                if title == _("NO TITLE FOUND"):
+                    title = ""
+                data = self.base.file_table.item(row, TITLE).data(Qt.UserRole)
+                highlights = self.base.get_highlights_from_data(data)
+
+                if self.filter_box.currentIndex() == FILTER_ALL:
+                    if txt in title.lower():
+                        self.base.file_table.setRowHidden(row, False)
+                        continue
+                    for high in highlights:
+                        if txt in high["text"].lower() or txt in high["comment"].lower():
+                            self.base.file_table.setRowHidden(row, False)
+                            break
+                    else:
+                        self.base.file_table.setRowHidden(row, True)
+                        filtered += 1
+                elif self.filter_box.currentIndex() == FILTER_HIGH:
+                    for high in highlights:
+                        if txt in high["text"].lower():
+                            self.base.file_table.setRowHidden(row, False)
+                            break
+                    else:
+                        self.base.file_table.setRowHidden(row, True)
+                        filtered += 1
+                elif self.filter_box.currentIndex() == FILTER_COMM:
+                    for high in highlights:
+                        if txt in high["comment"].lower():
+                            self.base.file_table.setRowHidden(row, False)
+                            break
+                    else:
+                        self.base.file_table.setRowHidden(row, True)
+                        filtered += 1
+                elif self.filter_box.currentIndex() == FILTER_TITLES:
+                    if txt in title.lower():
+                        self.base.file_table.setRowHidden(row, False)
+                    else:
+                        self.base.file_table.setRowHidden(row, True)
+                        filtered += 1
+        else:
+            row_count = self.base.high_table.rowCount()
+            for row in range(row_count):
+                title = self.base.high_table.item(row, TITLE_H).data(0)
+                if title == _("NO TITLE FOUND"):
+                    title = ""
+                high_txt = self.base.high_table.item(row, HIGHLIGHT_H).data(0)
+                high_comm = self.base.high_table.item(row, COMMENT_H).data(0)
+
+                if self.filter_box.currentIndex() == FILTER_ALL:
+                    if (txt in title.lower() or txt in high_txt.lower()
+                            or txt in high_comm.lower()):
+                        self.base.high_table.setRowHidden(row, False)
+                    else:
+                        self.base.high_table.setRowHidden(row, True)
+                        filtered += 1
+                elif self.filter_box.currentIndex() == FILTER_HIGH:
+                    if txt in high_txt.lower():
+                        self.base.high_table.setRowHidden(row, False)
+                    else:
+                        self.base.high_table.setRowHidden(row, True)
+                        filtered += 1
+                elif self.filter_box.currentIndex() == FILTER_COMM:
+                    if txt in high_comm.lower():
+                        self.base.high_table.setRowHidden(row, False)
+                    else:
+                        self.base.high_table.setRowHidden(row, True)
+                        filtered += 1
+                elif self.filter_box.currentIndex() == FILTER_TITLES:
+                    if txt in title.lower():
+                        self.base.high_table.setRowHidden(row, False)
+                        continue
+                    else:
+                        self.base.high_table.setRowHidden(row, True)
+                        filtered += 1
+        self.filtered_lbl.setText(_("Showing {}/{}").format(row_count - filtered,
+                                                            row_count))
+
+    @Slot()
+    def on_clear_filter_btn_clicked(self):
+        """ The `Clear` button is pressed
+        """
+        self.filter_txt.clear()
+        self.filtered_lbl.setText("")
+        self.show_all()
+
+    def show_all(self):
+        """ Shows all the rows of a table
+        """
+        if self.base.toolbar.books_view_btn.isChecked():
+            table = self.base.file_table
+        else:
+            table = self.base.high_table
+
+        for row in range(table.rowCount()):
+            table.setRowHidden(row, False)
+
+    def closeEvent(self, event):
+        """ Accepts or rejects the `close` command
+
+        :type event: QCloseEvent
+        :parameter event: The `exit` event
+        """
+        self.base.toolbar.filter_btn.setChecked(False)
+        self.on_clear_filter_btn_clicked()
+        event.accept()
+
+
 class About(QDialog, Ui_About):
 
     def __init__(self, parent=None):
@@ -693,8 +863,8 @@ class About(QDialog, Ui_About):
                 <p align="center">Visit
                     <a href="https://github.com/noEmbryo/KoHighlights">
                     {3} page at GitHub</a>, or</p>
-                <p align="center"><a href="http://www.noEmbryo.com"> noEmbryo's page</a>
-                    with more Apps and stuff...</p>
+                <p align="center"><a href="http://www.noembryo.com/apps.php?app_index">
+                   noEmbryo's page</a> with more Apps and stuff...</p>
                 <p align="center">Use it and if you like it, consider to
                 <p align="center"><a href="https://www.paypal.com/cgi-bin/webscr?
                     cmd=_s-xclick &hosted_button_id=RBYLVRYG9RU2S">

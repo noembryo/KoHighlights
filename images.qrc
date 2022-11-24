@@ -7,8 +7,9 @@
 <file alias='file_exists.png'>stuff/file_exists.png</file>
 <file alias='delete.png'>stuff/delete.png</file>
 <file alias='logo64.png'>stuff/logo64.png</file>
-<file alias='wait.gif'>stuff/wait.gif</file>
+<file alias='filter.png'>stuff/filter.png</file>
 <file alias='paypal.png'>stuff/paypal.png</file>
+<file alias='wait.gif'>stuff/wait.gif</file>
 <file alias='file_missing.png'>stuff/file_missing.png</file>
 <file alias='trans32.png'>stuff/trans32.png</file>
 <file alias='file_edit.png'>stuff/file_edit.png</file>

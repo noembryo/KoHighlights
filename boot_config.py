@@ -100,6 +100,7 @@ PAGE, HIGHLIGHT_TEXT, DATE, PAGE_ID, COMMENT = range(5)  # high_list item data
 (MANY_TEXT, ONE_TEXT, MANY_HTML, ONE_HTML,
  MANY_CSV, ONE_CSV, MERGED_HIGH) = range(7)  # save_actions
 DB_MD5, DB_DATE, DB_PATH, DB_DATA = range(4)  # db data (columns)
+FILTER_ALL, FILTER_HIGH, FILTER_COMM, FILTER_TITLES = range(4)  # db data (columns)
 
 DB_VERSION = 0
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"

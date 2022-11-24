@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_auto_info.ui'
 #
-# Created: Sun Mar  3 11:56:15 2019
+# Created: Thu Nov 24 15:53:16 2022
 #      by: pyside-uic 0.2.15 running on PySide 1.2.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -35,6 +35,7 @@ class Ui_AutoInfo(object):
         self.label.setText("")
         self.label.setTextFormat(QtCore.Qt.AutoText)
         self.label.setAlignment(QtCore.Qt.AlignCenter)
+        self.label.setMargin(6)
         self.label.setObjectName("label")
         self.verticalLayout.addWidget(self.label)
 

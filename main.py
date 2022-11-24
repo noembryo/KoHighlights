@@ -48,7 +48,7 @@ else:
 
 
 __author__ = "noEmbryo"
-__version__ = "1.5.0.0"
+__version__ = "1.6.0.0"
 
 
 def _(text):  # for future gettext support
@@ -227,6 +227,7 @@ class Base(QMainWindow, Ui_Base):
 
         self.about = About(self)
         self.auto_info = AutoInfo(self)
+        self.filter = Filter(self)
 
         self.toolbar = ToolBar(self)
         self.tool_bar.addWidget(self.toolbar)
@@ -335,6 +336,9 @@ class Base(QMainWindow, Ui_Base):
                 return True
             if key == Qt.Key_O:
                 self.toolbar.on_info_btn_clicked()
+                return True
+            if key == Qt.Key_F:
+                self.toolbar.filter_btn.click()
                 return True
             if key == Qt.Key_Q:
                 self.close()
@@ -772,13 +776,15 @@ class Base(QMainWindow, Ui_Base):
         :parameter deselected: The deselected row
         """
         try:
-            self.sel_indexes = self.file_selection.selectedRows()
+            if not self.filter.isVisible():
+                self.sel_indexes = self.file_selection.selectedRows()
+            else:
+                self.sel_indexes = [i for i in self.file_selection.selectedRows()
+                                    if not self.file_table.isRowHidden(i.row())]
             self.sel_idx = self.sel_indexes[-1]
         except IndexError:  # empty table
             self.sel_indexes = []
             self.sel_idx = None
-        # if self.file_selection.selectedRows():
-        #     idx = selected.indexes()[0]
         if self.sel_indexes:
             item = self.file_table.item(self.sel_idx.row(), self.sel_idx.column())
             self.on_file_table_itemClicked(item)
@@ -793,7 +799,7 @@ class Base(QMainWindow, Ui_Base):
         """ Sets the current sorting column
 
         :type column: int
-        :parameter column: The column where the filtering is applied
+        :parameter column: The column where the sorting is applied
         """
         if column == self.col_sort:
             self.col_sort_asc = not self.col_sort_asc
@@ -1101,11 +1107,11 @@ class Base(QMainWindow, Ui_Base):
         :param item: The item (cell) that is clicked
         """
         row = item.row()
-        data = self.high_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)
+        path = self.high_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)["path"]
 
         # needed for edit "Comments" or "Find in Books" in Highlight View
         for row in range(self.file_table.rowCount()):  # 2check: need to optimize?
-            if data["path"] == self.file_table.item(row, TYPE).data(Qt.UserRole)[0]:
+            if path == self.file_table.item(row, TYPE).data(Qt.UserRole)[0]:
                 self.parent_book_data = self.file_table.item(row, TITLE).data(Qt.UserRole)
                 break
 
@@ -1263,7 +1269,7 @@ class Base(QMainWindow, Ui_Base):
         item.setToolTip(authors)
         self.high_table.setItem(0, AUTHOR_H, item)
 
-        page = str(data["page"])
+        page = data["page"]
         item = XTableWidgetIntItem(page)
         item.setToolTip(page)
         item.setTextAlignment(Qt.AlignRight)
@@ -1286,7 +1292,11 @@ class Base(QMainWindow, Ui_Base):
         :parameter deselected: The deselected row
         """
         try:
-            self.sel_high_view = self.high_view_selection.selectedRows()
+            if not self.filter.isVisible():
+                self.sel_high_view = self.high_view_selection.selectedRows()
+            else:
+                self.sel_high_view = [i for i in self.high_view_selection.selectedRows()
+                                      if not self.high_table.isRowHidden(i.row())]
         except IndexError:  # empty table
             self.sel_high_view = []
         self.toolbar.activate_buttons()
@@ -1295,7 +1305,7 @@ class Base(QMainWindow, Ui_Base):
         """ Sets the current sorting column
 
         :type column: int
-        :parameter column: The column where the filtering is applied
+        :parameter column: The column where the sorting is applied
         """
         if column == self.col_sort_h:
             self.col_sort_asc_h = not self.col_sort_asc_h
@@ -1362,9 +1372,9 @@ class Base(QMainWindow, Ui_Base):
         line_break = (":\n" if self.status.act_page.isChecked() or
                       self.status.act_date.isChecked() else "")
         def_date_format = self.date_format == DATE_FORMAT
-        highlights = self.parse_highlights(data, path)
+        highlights = self.get_highlights_from_data(data, path)
         for i in sorted(highlights, key=self.sort_high4view):
-            page_text = (_("Page ") + str(i["page"])
+            page_text = (_("Page ") + i["page"]
                          if self.status.act_page.isChecked() else "")
             date = i["date"] if def_date_format else self.get_date_text(i["date"])
             date_text = "[" + date + "]" if self.status.act_date.isChecked() else ""
@@ -1378,7 +1388,7 @@ class Base(QMainWindow, Ui_Base):
             highlight_item = QListWidgetItem(highlight, self.high_list)
             highlight_item.setData(Qt.UserRole, i)
 
-    def parse_highlights(self, data, path=""):
+    def get_highlights_from_data(self, data, path=""):
         """ Get the HighLights from the .sdr data
 
         :type data: dict
@@ -1386,8 +1396,8 @@ class Base(QMainWindow, Ui_Base):
         :type path: str|unicode
         :param path: The book's path
         """
-        authors = data.get("stats", {}).get("authors", "NO AUTHOR FOUND")
-        title = data.get("stats", {}).get("title", "NO TITLE FOUND")
+        authors = data.get("stats", {}).get("authors", _("NO AUTHOR FOUND"))
+        title = data.get("stats", {}).get("title", _("NO TITLE FOUND"))
 
         highlights = []
         for page in data["highlight"]:
@@ -1430,14 +1440,14 @@ class Base(QMainWindow, Ui_Base):
             highlight["date"] = date
             highlight["text"] = text
             highlight["comment"] = comment
-            highlight["page"] = str(page)  # 2check for problems elsewhere
+            highlight["page"] = str(page)
             highlight["page_id"] = page_id
         except KeyError:  # blank highlight
             return
         return highlight
 
     @staticmethod
-    def get_high_data(data, page, page_id):  # 2check: is it better than the prev def
+    def get_highlight_info_old(data, page, page_id):  # 2check: is it better than prev def
         """ Get the highlight's info (text, comment, date and page)
 
         :type data: dict
@@ -2244,7 +2254,7 @@ class Base(QMainWindow, Ui_Base):
             saved = self.save_merged_file(filename, format_=idx)
 
         self.status.animation(False)
-        all_files = len(self.file_table.selectionModel().selectedRows())
+        all_files = len(self.sel_indexes)
         self.popup(_("Finished!"), _("{} texts were exported from the {} processed.\n"
                                      "{} files with no highlights.")
                    .format(saved, all_files, all_files - saved),
@@ -2286,30 +2296,33 @@ class Base(QMainWindow, Ui_Base):
             else:
                 return
             filename = join(dir_path, sanitize_filename(name) + ext)
-            with open(filename, "w+", encoding=encoding, newline="") as text_file:
-                for highlight in sorted(highlights, key=self.sort_high4write):
-                    date_text, high_comment, high_text, page_text = highlight
+            try:
+                with open(filename, "w+", encoding=encoding, newline="") as text_file:
+                    for highlight in sorted(highlights, key=self.sort_high4write):
+                        date_text, high_comment, high_text, page_text = highlight
+                        if format_ == MANY_HTML:
+                            text += HIGH_BLOCK % {"page": page_text, "date": date_text,
+                                                  "highlight": high_text,
+                                                  "comment": high_comment}
+                        elif format_ == MANY_TEXT:
+                            text += (page_text + space + date_text + line_break +
+                                     high_text + high_comment)
+                            text += 2 * os.linesep
+                        elif format_ == MANY_CSV:
+                            data = {"title": title, "authors": authors, "page": page_text,
+                                    "date": date_text, "text": high_text,
+                                    "comment": high_comment}
+                            text += get_csv_row(data) + "\n"
+                        else:
+                            return
                     if format_ == MANY_HTML:
-                        text += HIGH_BLOCK % {"page": page_text, "date": date_text,
-                                              "highlight": high_text,
-                                              "comment": high_comment}
-                    elif format_ == MANY_TEXT:
-                        text += (
-                                    page_text + space + date_text + line_break +
-                                    high_text + high_comment)
-                        text += 2 * os.linesep
-                    elif format_ == MANY_CSV:
-                        data = {"title": title, "authors": authors, "page": page_text,
-                                "date": date_text, "text": high_text,
-                                "comment": high_comment}
-                        text += get_csv_row(data) + "\n"
-                    else:
-                        return
-                if format_ == MANY_HTML:
-                    text += "\n</div>\n</body>\n</html>"
+                        text += "\n</div>\n</body>\n</html>"
 
-                text_file.write(text)
-                saved += 1
+                    text_file.write(text)
+                    saved += 1
+            except IOError:  # any problem when writing (like long filename, etc)
+                self.popup(_("Warning!"),
+                           _('Could not save to disk the file\n"{}"').format(filename))
         return saved
 
     def save_merged_file(self, filename, format_):
@@ -2385,15 +2398,47 @@ class Base(QMainWindow, Ui_Base):
         highlights = []
         for page in data["highlight"]:
             for page_id in data["highlight"][page]:
-                highlights.append(self.analyze_high(data, page, page_id, format_))
-        title = self.file_table.item(row, 0).data(0)
+                highlights.append(self.get_formated_high(data, page, page_id, format_))
+        title = self.file_table.item(row, TITLE).data(0)
         if title == _("NO TITLE FOUND"):
             title += str(title_counter)
             title_counter += 1
-        authors = self.file_table.item(row, 1).data(0)
+        authors = self.file_table.item(row, AUTHOR).data(0)
         if authors in [_("OLD TYPE FILE"), _("NO AUTHOR FOUND")]:
             authors = ""
         return authors, title, highlights, title_counter
+
+    def get_formated_high(self, data, page, page_id, format_):
+        """ Create the highlight's texts
+
+        :type data: dict
+        :param data: The highlight's data
+        :type page: int
+        :param page The page where the highlight starts
+        :type page_id: int
+        :param page_id The idx of this page's highlight
+        :type format_: int
+        :param format_ The output format idx
+        """
+        highlight = self.get_highlight_info(data, page, page_id)
+        linesep = "<br/>" if format_ in [ONE_HTML, MANY_HTML] else os.linesep
+        comment = highlight["comment"].replace("\n", linesep)
+        high_text = (highlight["text"].replace("\n", linesep)
+                     if self.status.act_text.isChecked() else "")
+        date = highlight["date"]
+        date = date if self.date_format == DATE_FORMAT else self.get_date_text(date)
+        line_break2 = (os.linesep if self.status.act_text.isChecked() and comment else "")
+        if format_ in [ONE_CSV, MANY_CSV]:
+            page_text = str(page) if self.status.act_page.isChecked() else ""
+            date_text = date if self.status.act_date.isChecked() else ""
+            high_comment = (comment if self.status.act_comment.isChecked()
+                            and comment else "")
+        else:
+            page_text = "Page " + str(page) if self.status.act_page.isChecked() else ""
+            date_text = "[" + date + "]" if self.status.act_date.isChecked() else ""
+            high_comment = (line_break2 + "● " + comment
+                            if self.status.act_comment.isChecked() and comment else "")
+        return date_text, high_comment, high_text, page_text
 
     def save_sel_highlights(self):
         """ Save the selected highlights to a text file (from high_table)
@@ -2447,38 +2492,6 @@ class Base(QMainWindow, Ui_Base):
         with open(filename, "w+", encoding=encoding, newline="") as file2save:
             file2save.write(text)
         return True
-
-    def analyze_high(self, data, page, page_id, format_):
-        """ Create the highlight's texts
-
-        :type data: dict
-        :param data: The highlight's data
-        :type page: int
-        :param page The page where the highlight starts
-        :type page_id: int
-        :param page_id The count of this page's highlight
-        :type format_: int
-        :param format_ The output format idx
-        """
-        highlight = self.get_highlight_info(data, page, page_id)
-        linesep = "<br/>" if format_ in [ONE_HTML, MANY_HTML] else os.linesep
-        comment = highlight["comment"].replace("\n", linesep)
-        high_text = (highlight["text"].replace("\n", linesep)
-                     if self.status.act_text.isChecked() else "")
-        date = highlight["date"]
-        date = date if self.date_format == DATE_FORMAT else self.get_date_text(date)
-        line_break2 = (os.linesep if self.status.act_text.isChecked() and comment else "")
-        if format_ in [ONE_CSV, MANY_CSV]:
-            page_text = str(page) if self.status.act_page.isChecked() else ""
-            date_text = date if self.status.act_date.isChecked() else ""
-            high_comment = (comment if self.status.act_comment.isChecked()
-                            and comment else "")
-        else:
-            page_text = "Page " + str(page) if self.status.act_page.isChecked() else ""
-            date_text = "[" + date + "]" if self.status.act_date.isChecked() else ""
-            high_comment = (line_break2 + "● " + comment
-                            if self.status.act_comment.isChecked() and comment else "")
-        return date_text, high_comment, high_text, page_text
 
     def get_date_text(self, date):
         dt_obj = datetime.strptime(date, DATE_FORMAT)
@@ -3003,29 +3016,33 @@ class KOHighlights(QApplication):
                 ext = ".txt"
                 text = ""
             filename = join(path, sanitize_filename(name) + ext)
-            with open(filename, "w+", encoding=encoding, newline="") as text_file:
-                # noinspection PyTypeChecker
-                for highlight in sorted(highlights, key=partial(self.cli_sort, args)):
-                    date_text, high_comment, high_text, page_text = highlight
+            try:
+                with open(filename, "w+", encoding=encoding, newline="") as text_file:
+                    # noinspection PyTypeChecker
+                    for highlight in sorted(highlights, key=partial(self.cli_sort, args)):
+                        date_text, high_comment, high_text, page_text = highlight
+                        if args.html:
+                            text += HIGH_BLOCK % {"page": page_text, "date": date_text,
+                                                  "highlight": high_text,
+                                                  "comment": high_comment}
+                        elif args.csv:
+                            data = {"title": title, "authors": authors, "page": page_text,
+                                    "date": date_text, "text": high_text,
+                                    "comment": high_comment}
+                            text += get_csv_row(data) + "\n"
+                        else:
+                            text += (page_text + space + date_text +
+                                     line_break + high_text + high_comment)
+                            text += 2 * os.linesep
                     if args.html:
-                        text += HIGH_BLOCK % {"page": page_text, "date": date_text,
-                                              "highlight": high_text,
-                                              "comment": high_comment}
-                    elif args.csv:
-                        data = {"title": title, "authors": authors, "page": page_text,
-                                "date": date_text, "text": high_text,
-                                "comment": high_comment}
-                        text += get_csv_row(data) + "\n"
-                    else:
-                        text += (page_text + space + date_text +
-                                 line_break + high_text + high_comment)
-                        text += 2 * os.linesep
-                if args.html:
-                    text += "\n</div>\n</body>\n</html>"
+                        text += "\n</div>\n</body>\n</html>"
 
-                text_file.write(text)
-                sys.stdout.write(str("Created {}\n").format(basename(filename)))
-                saved += 1
+                    text_file.write(text)
+                    sys.stdout.write(str("Created {}\n").format(basename(filename)))
+                    saved += 1
+            except IOError:  # any problem when writing (like long filename, etc)
+                sys.stdout.write(str('Could not save the file "{}" to disk')
+                                 .format(filename))
         return saved
 
     def cli_save_merged_file(self, args, files):
@@ -3098,7 +3115,7 @@ class KOHighlights(QApplication):
         highlights = []
         for page in data["highlight"]:
             for page_id in data["highlight"][page]:
-                highlights.append(self.cli_analyze_high(data, page, page_id, args))
+                highlights.append(self.cli_get_formated_high(data, page, page_id, args))
         authors = ""
         try:
             title = data["stats"]["title"]
@@ -3118,6 +3135,36 @@ class KOHighlights(QApplication):
                 title = _("NO TITLE FOUND") + str(title_counter)
                 title_counter += 1
         return authors, title, highlights, title_counter
+
+    def cli_get_formated_high(self, data, page, page_id, args):
+        """ Get the highlight's info (text, comment, date and page)
+
+        :type data: dict
+        :param data: The highlight's data
+        :type page: int
+        :param page The page where the highlight starts
+        :type page_id: int
+        :param page_id The count of this page's highlight
+        :type args: argparse.Namespace
+        :param args: The parsed cli args
+        """
+        highlight = self.base.get_highlight_info(data, page, page_id)
+        linesep = "<br/>" if args.html else os.linesep
+        high_text = highlight["text"]
+        high_text = high_text.replace("\n", linesep) if not args.no_highlight else ""
+        comment = highlight["comment"].replace("\n", linesep)
+        date = highlight["date"]
+        line_break2 = os.linesep if not args.no_highlight and comment else ""
+        if args.csv:
+            page_text = str(page) if not args.no_page else ""
+            date_text = date if not args.no_date else ""
+            high_comment = comment if not args.no_comment and comment else ""
+        else:
+            page_text = "Page " + str(page) if not args.no_page else ""
+            date_text = "[" + date + "]" if not args.no_date else ""
+            high_comment = (line_break2 + "● " + comment
+                            if not args.no_comment and comment else "")
+        return date_text, high_comment, high_text, page_text
 
     @staticmethod
     def get_lua_files(dropped):
@@ -3175,36 +3222,6 @@ class KOHighlights(QApplication):
             return int(page)
         else:
             return data[0]
-
-    def cli_analyze_high(self, data, page, page_id, args):
-        """ Get the highlight's info (text, comment, date and page)
-
-        :type data: dict
-        :param data: The highlight's data
-        :type page: int
-        :param page The page where the highlight starts
-        :type page_id: int
-        :param page_id The count of this page's highlight
-        :type args: argparse.Namespace
-        :param args: The parsed cli args
-        """
-        highlight = self.base.get_highlight_info(data, page, page_id)
-        linesep = "<br/>" if args.html else os.linesep
-        high_text = highlight["text"]
-        high_text = high_text.replace("\n", linesep) if not args.no_highlight else ""
-        comment = highlight["comment"].replace("\n", linesep)
-        date = highlight["date"]
-        line_break2 = os.linesep if not args.no_highlight and comment else ""
-        if args.csv:
-            page_text = str(page) if not args.no_page else ""
-            date_text = date if not args.no_date else ""
-            high_comment = comment if not args.no_comment and comment else ""
-        else:
-            page_text = "Page " + str(page) if not args.no_page else ""
-            date_text = "[" + date + "]" if not args.no_date else ""
-            high_comment = (line_break2 + "● " + comment
-                            if not args.no_comment and comment else "")
-        return date_text, high_comment, high_text, page_text
 
     @staticmethod
     def get_name(data, meta_path, title_counter):
