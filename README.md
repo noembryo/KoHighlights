@@ -35,7 +35,7 @@ The original KOHighlights (using the wxPython) can be found
     * Selecting the reader's drive or any folder that contains books that where opened with Koreader. This will automatically load all the metadata files from all subdirectories.
     * Drag and drop files or folders. This will load the files and/or all the files inside the folders.  
 * Export the highlights of the selected books to individual files or to one merged file.
-* Supported formats:
+* Supported formats for exporting:
     * Plain text files (.txt)
     * Hypertext document files (.html)
     * Comma-separated values files (.csv)
