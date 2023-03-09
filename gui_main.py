@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_main.ui'
 #
-# Created: Wed Oct 20 12:47:43 2021
+# Created: Thu Mar  9 14:39:40 2023
 #      by: pyside-uic 0.2.15 running on PySide 1.2.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -12,7 +12,7 @@ from PySide import QtCore, QtGui
 class Ui_Base(object):
     def setupUi(self, Base):
         Base.setObjectName("Base")
-        Base.resize(624, 412)
+        Base.resize(640, 512)
         icon = QtGui.QIcon()
         icon.addPixmap(QtGui.QPixmap(":/stuff/logo64.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         Base.setWindowIcon(icon)
@@ -196,9 +196,9 @@ class Ui_Base(object):
         self.high_table.setHorizontalScrollMode(QtGui.QAbstractItemView.ScrollPerPixel)
         self.high_table.setWordWrap(False)
         self.high_table.setCornerButtonEnabled(False)
-        self.high_table.setColumnCount(7)
+        self.high_table.setColumnCount(8)
         self.high_table.setObjectName("high_table")
-        self.high_table.setColumnCount(7)
+        self.high_table.setColumnCount(8)
         self.high_table.setRowCount(0)
         item = QtGui.QTableWidgetItem()
         self.high_table.setHorizontalHeaderItem(0, item)
@@ -214,6 +214,8 @@ class Ui_Base(object):
         self.high_table.setHorizontalHeaderItem(5, item)
         item = QtGui.QTableWidgetItem()
         self.high_table.setHorizontalHeaderItem(6, item)
+        item = QtGui.QTableWidgetItem()
+        self.high_table.setHorizontalHeaderItem(7, item)
         self.high_table.horizontalHeader().setHighlightSections(False)
         self.high_table.horizontalHeader().setMinimumSectionSize(22)
         self.high_table.horizontalHeader().setSortIndicatorShown(True)
@@ -281,7 +283,8 @@ class Ui_Base(object):
         self.high_table.horizontalHeaderItem(3).setText(QtGui.QApplication.translate("Base", "Title", None, QtGui.QApplication.UnicodeUTF8))
         self.high_table.horizontalHeaderItem(4).setText(QtGui.QApplication.translate("Base", "Author", None, QtGui.QApplication.UnicodeUTF8))
         self.high_table.horizontalHeaderItem(5).setText(QtGui.QApplication.translate("Base", "Page", None, QtGui.QApplication.UnicodeUTF8))
-        self.high_table.horizontalHeaderItem(6).setText(QtGui.QApplication.translate("Base", "Book path", None, QtGui.QApplication.UnicodeUTF8))
+        self.high_table.horizontalHeaderItem(6).setText(QtGui.QApplication.translate("Base", "Chapter", None, QtGui.QApplication.UnicodeUTF8))
+        self.high_table.horizontalHeaderItem(7).setText(QtGui.QApplication.translate("Base", "Book path", None, QtGui.QApplication.UnicodeUTF8))
         self.act_english.setText(QtGui.QApplication.translate("Base", "English", None, QtGui.QApplication.UnicodeUTF8))
         self.act_greek.setText(QtGui.QApplication.translate("Base", "Greek", None, QtGui.QApplication.UnicodeUTF8))
         self.act_view_book.setText(QtGui.QApplication.translate("Base", "View Book", None, QtGui.QApplication.UnicodeUTF8))

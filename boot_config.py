@@ -58,9 +58,11 @@ os.makedirs(SETTINGS_DIR) if not isdir(SETTINGS_DIR) else None
 PYTHON2 = True if sys.version_info < (3, 0) else False
 if PYTHON2:
     from io import open
+    from codecs import open as c_open
 else:
     # noinspection PyShadowingBuiltins
     unicode, basestring = str, str
+    c_open = open
 
 
 def except_hook(class_type, value, trace_back):
@@ -69,7 +71,7 @@ def except_hook(class_type, value, trace_back):
     name = join(SETTINGS_DIR, "error_log_{}.txt".format(time.strftime(str("%Y-%m-%d"))))
     with open(name, "a", encoding="utf8") as log:
         log.write("\nCrash@{}\n".format(time.strftime(str("%Y-%m-%d %H:%M:%S"))))
-    traceback.print_exception(class_type, value, trace_back, file=open(name, "a"))
+    traceback.print_exception(class_type, value, trace_back, file=c_open(name, str("a")))
     sys.__excepthook__(class_type, value, trace_back)
 
 
@@ -93,19 +95,20 @@ except Exception:  # IOError on first run or everything else
 
 BOOKS_VIEW, HIGHLIGHTS_VIEW = range(2)  # app views
 CHANGE_DB, NEW_DB, RELOAD_DB = range(3)  # db change mode
-TITLE, AUTHOR, TYPE, PERCENT, RATING, HIGH_COUNT, MODIFIED, PATH = range(8)  # file_table columns
+(TITLE, AUTHOR, TYPE, PERCENT, RATING,
+ HIGH_COUNT, MODIFIED, PATH) = range(8)  # file_table columns
 PAGE, HIGHLIGHT_TEXT, DATE, PAGE_ID, COMMENT = range(5)  # high_list item data
-(HIGHLIGHT_H, COMMENT_H,
- DATE_H, TITLE_H, AUTHOR_H, PAGE_H, PATH_H) = range(7)  # high_table columns
+(HIGHLIGHT_H, COMMENT_H, DATE_H, TITLE_H,
+ AUTHOR_H, PAGE_H, CHAPTER_H, PATH_H) = range(8)  # high_table columns
 (MANY_TEXT, ONE_TEXT, MANY_HTML, ONE_HTML,
- MANY_CSV, ONE_CSV, MERGED_HIGH) = range(7)  # save_actions
+ MANY_CSV, ONE_CSV, MANY_MD, ONE_MD) = range(8)  # save_actions
 DB_MD5, DB_DATE, DB_PATH, DB_DATA = range(4)  # db data (columns)
 FILTER_ALL, FILTER_HIGH, FILTER_COMM, FILTER_TITLES = range(4)  # db data (columns)
 
 DB_VERSION = 0
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
-CSV_HEAD = "Title\tAuthors\tPage\tDate\tHighlight\tComment\n"
-CSV_KEYS = ["title", "authors", "page", "date", "text", "comment"]
+CSV_HEAD = "Title\tAuthors\tPage\tDate\tChapter\tHighlight\tComment\n"
+CSV_KEYS = ["title", "authors", "page", "date", "chapter", "text", "comment"]
 HTML_HEAD = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -143,6 +146,7 @@ HIGH_BLOCK = """
     <p style="text-align:left;float:left;padding:1px; margin:0;">%(page)s</p>
     <p style="text-align:right;float:right;padding:1px; margin:0;">%(date)s</p>
     <hr style="clear:both;"/>
+    <h4>%(chapter)s</h4>
     <p>%(highlight)s</p>
     <p>%(comment)s</p>
 </div>

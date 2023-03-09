@@ -15,8 +15,8 @@ from datetime import datetime
 from functools import partial
 from collections import defaultdict
 from distutils.version import LooseVersion
-from os.path import (isdir, isfile, join, basename, splitext, dirname, split,
-                     getmtime, abspath)
+from os.path import (isdir, isfile, join, basename, splitext, dirname, split, getmtime,
+                     abspath, splitdrive)
 from pprint import pprint
 
 
@@ -48,7 +48,7 @@ else:
 
 
 __author__ = "noEmbryo"
-__version__ = "1.6.0.0"
+__version__ = "1.7.0.0"
 
 
 def _(text):  # for future gettext support
@@ -105,6 +105,122 @@ def get_csv_row(data):
             value = '"' + value.lstrip() + '"'
         values.append(value if value else "")
     return "\t".join(values)
+
+
+def get_book_text(title, authors, highlights, format_, line_break, space, text):
+    """ Create the book's contents to be added to a single merged exported file
+    """
+    nl = os.linesep
+    if format_ == ONE_HTML:
+        text += BOOK_BLOCK % {"title": title, "authors": authors}
+        for high in highlights:
+            date_text, high_comment, high_text, page_text, chapter = high
+            text += HIGH_BLOCK % {"page": page_text, "date": date_text,
+                                  "highlight": high_text, "comment": high_comment,
+                                  "chapter": chapter}
+        text += "</div>\n"
+    elif format_ == ONE_TEXT:
+        name = title
+        if authors:
+            name = "{} - {}".format(authors, title)
+        line = "-" * 80
+        text += line + nl + name + nl + line + nl
+        highlights = [i[3] + space + i[0] + line_break +
+                      ("[{}]{}".format(i[4], nl) if i[4] else "") +
+                      i[2] + i[1] for i in highlights]
+        text += (nl * 2).join(highlights) + nl * 2
+    elif format_ == ONE_CSV:
+        for high in highlights:
+            date_text, high_comment, high_text, page_text, chapter = high
+            data = {"title": title, "authors": authors, "page": page_text,
+                    "date": date_text, "text": high_text, "comment": high_comment,
+                    "chapter": chapter}
+            # data = {k.encode("utf8"): v.encode("utf8") for k, v in data.items()}
+            text += get_csv_row(data) + "\n"
+    elif format_ == ONE_MD:
+        text += "\n---\n## {}  \n##### {}  \n---\n".format(title, authors)
+        highs = []
+        for i in highlights:
+            comment = i[1].replace(nl, "  " + nl)
+            if comment:
+                comment = "  " + comment
+            chapter = i[4]
+            if chapter:
+                chapter = "***{0}***{1}{1}".format(chapter, nl).replace(nl, "  " + nl)
+            high = i[2].replace(nl, "  " + nl)
+            h = ("*" + i[3] + space + i[0] + line_break + chapter +
+                 high + comment + "  \n&nbsp;  \n")
+            h = h.replace("-", "\\-")
+            highs.append(h)
+        text += nl.join(highs) + "\n---\n"
+    return text
+
+
+def save_file(title, authors, highlights, path, format_, line_break, space, sort_by):
+    """ Saves the book's exported file
+    """
+    nl = os.linesep
+    ext = text = ""
+    encoding = "utf-8"
+    name = title
+    if authors:
+        name = "{} - {}".format(authors, title)
+    if format_ == MANY_TEXT:
+        ext = ".txt"
+        line = "-" * 80
+        text = line + nl + name + nl + line + (2 * nl)
+    elif format_ == MANY_HTML:
+        ext = ".html"
+        text = HTML_HEAD + BOOK_BLOCK % {"title": title, "authors": authors}
+    elif format_ == MANY_CSV:
+        ext = ".csv"
+        text = CSV_HEAD
+        encoding = "utf-8-sig"
+    elif format_ == MANY_MD:
+        ext = ".md"
+        text = "\n---\n## {}  \n##### {}  \n---\n".format(title, authors)
+
+    filename = join(path, sanitize_filename(name))
+    if _("NO TITLE FOUND") in title:  # don't overwrite unknown title files
+        while isfile(filename + ext):
+            match = re.match(r"(.+?) \[(\d+?)]$", filename)
+            if match:
+                filename = "{} [{:02}]".format(match.group(1), int(match.group(2)) + 1)
+            else:
+                filename += " [01]"
+    filename = filename + ext
+
+    with open(filename, "w+", encoding=encoding, newline="") as text_file:
+        for highlight in sorted(highlights, key=sort_by):
+            date_text, high_comment, high_text, page_text, chapter = highlight
+            if format_ == MANY_HTML:
+                text += HIGH_BLOCK % {"page": page_text, "date": date_text,
+                                      "highlight": high_text, "comment": high_comment,
+                                      "chapter": chapter}
+            elif format_ == MANY_TEXT:
+                text += (page_text + space + date_text + line_break +
+                         ("[{}]{}".format(chapter, nl) if chapter else "") +
+                         high_text + high_comment)
+                text += 2 * nl
+            elif format_ == MANY_CSV:
+                data = {"title": title, "authors": authors, "page": page_text,
+                        "date": date_text, "text": high_text, "comment": high_comment,
+                        "chapter": chapter}
+                text += get_csv_row(data) + "\n"
+            elif format_ == MANY_MD:
+                high_text = high_text.replace(nl, "  " + nl)
+                high_comment = high_comment.replace(nl, "  " + nl)
+                if high_comment:
+                    high_comment = "  " + high_comment
+                if chapter:
+                    chapter = "***{0}***{1}{1}".format(chapter, nl).replace(nl, "  " + nl)
+                text += ("*" + page_text + space + date_text + line_break +
+                         chapter + high_text + high_comment +
+                         "  \n&nbsp;  \n\n").replace("-", "\\-")
+        if format_ == MANY_HTML:
+            text += "\n</div>\n</body>\n</html>"
+
+        text_file.write(text)
 
 
 # if sys.platform.lower().startswith("win"):
@@ -269,7 +385,7 @@ class Base(QMainWindow, Ui_Base):
         if FIRST_RUN:  # on first run
             self.toolbar.loaded_btn.click()
             self.splitter.setSizes((500, 250))
-        # self.toolbar.export_btn.setMenu(self.save_menu())  # assign/create menu
+        self.toolbar.export_btn.setMenu(self.get_export_menu())  # assign/create menu
         self.toolbar.merge_btn.setMenu(self.merge_menu())  # assign/create menu
         self.toolbar.delete_btn.setMenu(self.delete_menu())  # assign/create menu
         self.connect_gui()
@@ -329,13 +445,13 @@ class Base(QMainWindow, Ui_Base):
                 self.toolbar.on_clear_btn_clicked()
                 return True
             if key == Qt.Key_L:
-                self.toolbar.on_select_btn_clicked()
+                self.toolbar.on_scan_btn_clicked()
                 return True
             if key == Qt.Key_S:
                 self.on_export()
                 return True
-            if key == Qt.Key_O:
-                self.toolbar.on_info_btn_clicked()
+            if key == Qt.Key_I:
+                self.toolbar.on_about_btn_clicked()
                 return True
             if key == Qt.Key_F:
                 self.toolbar.filter_btn.click()
@@ -579,7 +695,7 @@ class Base(QMainWindow, Ui_Base):
             return
         row = item.row()
         data = self.file_table.item(row, TITLE).data(Qt.UserRole)
-        path = self.file_table.item(row, PATH).data(Qt.UserRole)
+        path = self.file_table.item(row, TYPE).data(Qt.UserRole)[0]
 
         self.high_list.clear()
         self.populate_high_list(data, path)
@@ -660,28 +776,10 @@ class Base(QMainWindow, Ui_Base):
         self.act_view_book.setData(row)
         menu.addAction(self.act_view_book)
 
-        action = QAction(_("Export"), menu)
-        action.setIcon(self.ico_file_save)
-        action.triggered.connect(self.on_export)
-        menu.addAction(action)
-
-        # if len(self.sel_indexes) > 1:  # many items selected
-        #     save_menu = self.save_menu()
-        #     save_menu.setIcon(self.ico_file_save)
-        #     save_menu.setTitle(_("Export"))
-        #     menu.addMenu(save_menu)
-        # else:  # only one item selected
-        #     action = QAction(_("Export to text"), menu)
-        #     action.setIcon(self.ico_file_save)
-        #     action.triggered.connect(self.on_save_actions)
-        #     action.setData(MANY_TEXT)
-        #     menu.addAction(action)
-        #
-        #     action = QAction(_("Export to html"), menu)
-        #     action.setIcon(self.ico_file_save)
-        #     action.triggered.connect(self.on_save_actions)
-        #     action.setData(MANY_HTML)
-        #     menu.addAction(action)
+        export_menu = self.get_export_menu()
+        export_menu.setIcon(self.ico_file_save)
+        export_menu.setTitle(_("Export"))
+        menu.addMenu(export_menu)
 
         if not self.db_mode:
             action = QAction(_("Archive") + "\tAlt+A", menu)
@@ -727,8 +825,6 @@ class Base(QMainWindow, Ui_Base):
             action.triggered.connect(partial(self.delete_actions, 0))
             menu.addAction(action)
 
-        # # noinspection PyArgumentList
-        # menu.exec_(QCursor.pos())
         menu.exec_(self.file_table.mapToGlobal(point))
 
     @Slot(QTableWidgetItem)
@@ -739,20 +835,29 @@ class Base(QMainWindow, Ui_Base):
         :param item: The item (cell) that is double-clicked
         """
         row = item.row()
-        meta_path = splitext(self.file_table.item(row, PATH).data(0))[0]
-        book_path = self.get_book_path(meta_path)
+        meta_path = self.file_table.item(row, PATH).data(0)
+        data = self.file_table.item(row, TITLE).data(Qt.UserRole)
+        book_path = self.get_book_path(meta_path, data)
         self.open_file(book_path)
 
     @staticmethod
-    def get_book_path(path):
+    def get_book_path(meta_path, data):
         """ Returns the filename of the book that the metadata refers to
 
-        :type path: str|unicode
-        :param path: The path of the metadata file
+        :type meta_path: str|unicode
+        :param meta_path: The path of the metadata file
+        :type data: dict
+        :param data: The book's metadata
         """
-        path, ext = splitext(path)
-        path = splitext(split(path)[0])[0] + ext
-        return path
+        book_path = data.get("doc_path")
+        if not book_path:  # use the metadata file path
+            ext = splitext(splitext(meta_path)[0])[1]
+            meta_path = splitext(meta_path)[0]
+            book_path = splitext(split(meta_path)[0])[0] + ext
+        else:  # use the recorded file path
+            drive = splitdrive(meta_path)[0]
+            book_path = join(drive, os.sep, *(book_path.split("/")[3:]))
+        return book_path
 
     @Slot()
     def on_act_view_book_triggered(self):
@@ -944,27 +1049,25 @@ class Base(QMainWindow, Ui_Base):
         order = Qt.AscendingOrder if self.col_sort_asc else Qt.DescendingOrder
         self.file_table.sortByColumn(self.col_sort, order)
 
-    def create_row(self, filename, data=None, date=None):
+    def create_row(self, meta_path, data=None, date=None):
         """ Creates a table row from the given file
 
-        :type filename: str|unicode
-        :param filename: The metadata file to be read
+        :type meta_path: str|unicode
+        :param meta_path: The metadata file to be read
         """
         if not self.db_mode:  # for files
-            # if exists(filename) and splitext(filename)[1].lower() == '.lua':
-            if filename in self.loaded_paths:
+            if meta_path in self.loaded_paths:
                 return  # already loaded file
-            self.loaded_paths.add(filename)
-            data = decode_data(filename)
+            self.loaded_paths.add(meta_path)
+            data = decode_data(meta_path)
             if not data:
-                print("No data here!", filename)
+                print("No data here!", meta_path)
                 return
-            date = str(datetime.fromtimestamp(getmtime(filename))).split(".")[0]
-            stats = self.get_item_stats(filename, data)
-            icon, title, authors, percent, rating, status, high_count = stats
+            date = str(datetime.fromtimestamp(getmtime(meta_path))).split(".")[0]
+            stats = self.get_item_stats(meta_path, data)
         else:  # for db entries
             stats = self.get_item_db_stats(data)
-            icon, title, authors, percent, rating, status, high_count = stats
+        icon, title, authors, percent, rating, status, high_count = stats
 
         # noinspection PyArgumentList
         color = ("#660000" if status == "abandoned" else
@@ -984,8 +1087,8 @@ class Base(QMainWindow, Ui_Base):
         author_item.setToolTip(authors)
         self.file_table.setItem(0, AUTHOR, author_item)
 
-        ext = splitext(splitext(filename)[0])[1][1:]
-        book_path = splitext(self.get_book_path(filename))[0] + "." + ext
+        book_path = self.get_book_path(meta_path, data)
+        ext = splitext(book_path)[1]
         book_exists = isfile(book_path)
         book_icon = self.ico_file_exists if book_exists else self.ico_file_missing
         type_item = QTableWidgetItem(book_icon, ext)
@@ -1012,11 +1115,11 @@ class Base(QMainWindow, Ui_Base):
         date_item.setToolTip(date)
         self.file_table.setItem(0, MODIFIED, date_item)
 
-        path_item = QTableWidgetItem(filename)
-        path_item.setToolTip(filename)
+        path_item = QTableWidgetItem(meta_path)
+        path_item.setToolTip(meta_path)
         self.file_table.setItem(0, PATH, path_item)
 
-        for i in range(7):  # colorize row
+        for i in range(8):  # colorize row
             item = self.file_table.item(0, i)
             item.setForeground(QBrush(QColor(color)))
         self.file_table.setSortingEnabled(True)
@@ -1275,6 +1378,11 @@ class Base(QMainWindow, Ui_Base):
         item.setTextAlignment(Qt.AlignRight)
         self.high_table.setItem(0, PAGE_H, item)
 
+        chapter = data["chapter"]
+        item = XTableWidgetIntItem(chapter)
+        item.setToolTip(chapter)
+        self.high_table.setItem(0, CHAPTER_H, item)
+
         path = data["path"]
         item = QTableWidgetItem(path)
         item.setToolTip(path)
@@ -1374,6 +1482,9 @@ class Base(QMainWindow, Ui_Base):
         def_date_format = self.date_format == DATE_FORMAT
         highlights = self.get_highlights_from_data(data, path)
         for i in sorted(highlights, key=self.sort_high4view):
+            chapter_text = i["chapter"]
+            if chapter_text and self.status.act_chapter.isChecked():
+                chapter_text = "[{0}]\n".format(chapter_text)
             page_text = (_("Page ") + i["page"]
                          if self.status.act_page.isChecked() else "")
             date = i["date"] if def_date_format else self.get_date_text(i["date"])
@@ -1382,7 +1493,7 @@ class Base(QMainWindow, Ui_Base):
             line_break2 = ("\n" if self.status.act_comment.isChecked() and i["comment"]
                            else "")
             high_comment = line_break2 + "● " + i["comment"] if line_break2 else ""
-            highlight = (page_text + space + date_text + line_break +
+            highlight = (page_text + space + date_text + line_break + chapter_text +
                          high_text + high_comment + "\n")
 
             highlight_item = QListWidgetItem(highlight, self.high_list)
@@ -1422,8 +1533,11 @@ class Base(QMainWindow, Ui_Base):
         """
         highlight = {}
         try:
-            date = data["highlight"][page][page_id]["datetime"]
-            text4check = data["highlight"][page][page_id]["text"]
+            high_stuf = data["highlight"][page][page_id]
+            date = high_stuf["datetime"]
+            text4check = high_stuf["text"]
+            chapter = high_stuf.get("chapter", "")
+            pat = r"Page \d+ (.+?) @ \d+-\d+-\d+ \d+:\d+:\d+"
             text = text4check.replace("\\\n", "\n")
             comment = ""
             for idx in data["bookmarks"]:  # check for comment text
@@ -1431,53 +1545,19 @@ class Base(QMainWindow, Ui_Base):
                     bkm_text = data["bookmarks"][idx].get("text", "")
                     if not bkm_text or (bkm_text == text4check):
                         break
-                    bkm_text = re.sub(r"Page \d+ "
-                                      r"(.+?) @ \d+-\d+-\d+ \d+:\d+:\d+", r"\1",
-                                      bkm_text, 1, re.DOTALL | re.MULTILINE)
+                    bkm_text = re.sub(pat, r"\1", bkm_text, 1, re.DOTALL | re.MULTILINE)
                     if text4check != bkm_text:  # there is a comment
                         comment = bkm_text.replace("\\\n", "\n")
                         break
             highlight["date"] = date
             highlight["text"] = text
             highlight["comment"] = comment
+            highlight["chapter"] = chapter
             highlight["page"] = str(page)
             highlight["page_id"] = page_id
         except KeyError:  # blank highlight
             return
         return highlight
-
-    @staticmethod
-    def get_highlight_info_old(data, page, page_id):  # 2check: is it better than prev def
-        """ Get the highlight's info (text, comment, date and page)
-
-        :type data: dict
-        :param data: The highlight's data
-        :type page: int
-        :param page The page where the highlight starts
-        :type page_id: int
-        :param page_id The count of this page's highlight
-        """
-        date = data["highlight"][page][page_id]["datetime"]
-        high_text = data["highlight"][page][page_id]["text"]
-        pos_0 = data["highlight"][page][page_id]["pos0"]
-        pos_1 = data["highlight"][page][page_id]["pos1"]
-        comment = ""
-        for idx in data["bookmarks"]:
-            try:
-                book_pos0 = data["bookmarks"][idx]["pos0"]
-            except KeyError:  # no [idx]["pos0"] exists (blank highlight)
-                continue
-            book_pos1 = data["bookmarks"][idx]["pos1"]
-            if (pos_0 == book_pos0) and (pos_1 == book_pos1):
-                bkm_text = data["bookmarks"][idx].get("text", "")
-                if not bkm_text or (bkm_text == high_text):
-                    break
-                bkm_text = re.sub(r"Page \d+ (.+?) @ \d+-\d+-\d+ \d+:\d+:\d+", r"\1",
-                                  bkm_text, 1, re.DOTALL | re.MULTILINE)
-                if high_text != bkm_text:
-                    comment = bkm_text
-                break
-        return comment, date, high_text
 
     @Slot(QPoint)
     def on_high_list_customContextMenuRequested(self, point):
@@ -2159,27 +2239,26 @@ class Base(QMainWindow, Ui_Base):
 
     # ___ ___________________ SAVING STUFF __________________________
 
-    def save_menu(self):
+    def get_export_menu(self):
         """ Creates the `Export Files` button menu
         """
         menu = QMenu(self)
-        for idx, item in enumerate([_("To individual text files"),
-                                    _("Combined to one text file"),
-                                    _("To individual html files"),
-                                    _("Combined to one html file")
-                                    ]):
-            action = QAction(item, menu)
-            action.triggered.connect(self.on_save_actions)
-            action.setData(idx)
+        for idx, item in enumerate([(_("To individual text files"), MANY_TEXT),
+                                    (_("Combined to one text file"), ONE_TEXT),
+                                    (_("To individual html files"), MANY_HTML),
+                                    (_("Combined to one html file"), ONE_HTML),
+                                    (_("To individual csv files"), MANY_CSV),
+                                    (_("Combined to one csv file"), ONE_CSV),
+                                    (_("To individual markdown files"), MANY_MD),
+                                    (_("Combined to one markdown file"), ONE_MD)]):
+            action = QAction(item[0], menu)
+            action.triggered.connect(self.export_actions)
+            action.setData(item[1])
             action.setIcon(self.ico_file_save)
+            if idx and (idx % 2 == 0):
+                menu.addSeparator()
             menu.addAction(action)
         return menu
-
-    def on_save_actions(self):
-        """ A `Export selected...` menu item is clicked
-        """
-        idx = self.sender().data()
-        self.export(idx)
 
     # noinspection PyCallByClass
     def on_export(self):
@@ -2194,28 +2273,12 @@ class Base(QMainWindow, Ui_Base):
                            _("The Highlights were exported successfully!"),
                            icon=QMessageBox.Information)
             return
-        multi = False
-        title = _("Exporting..")
-        if len(self.sel_indexes) > 1:
-            popup = self.popup(title, _("How should the Highlights be exported?"),
-                               button_text=(_("As individual book files"), _("Cancel")),
-                               buttons=2, extra_text=_("Combined to one file"),
-                               icon=QMessageBox.Question)
-            if popup.buttonRole(popup.clickedButton()) == QMessageBox.AcceptRole:
-                multi = True
-            elif popup.buttonRole(popup.clickedButton()) == QMessageBox.RejectRole:
-                return
-        popup = self.popup(title, _("Using what file format?"), icon=QMessageBox.Question,
-                           buttons=2, button_text=(_("Text"), _("Html")),
-                           extra_text=_("CSV"))
-        if popup.buttonRole(popup.clickedButton()) == QMessageBox.AcceptRole:
-            idx = MANY_TEXT if multi else ONE_TEXT
-        elif popup.buttonRole(popup.clickedButton()) == QMessageBox.RejectRole:
-            idx = MANY_HTML if multi else ONE_HTML
-        elif popup.buttonRole(popup.clickedButton()) == QMessageBox.ApplyRole:
-            idx = MANY_CSV if multi else ONE_CSV
-        else:
-            return
+        self.toolbar.export_btn.showMenu()
+
+    def export_actions(self):
+        """ An `Export as...` menu item is clicked
+        """
+        idx = self.sender().data()
         self.export(idx)
 
     # noinspection PyCallByClass
@@ -2226,23 +2289,33 @@ class Base(QMainWindow, Ui_Base):
         :param idx: The action type
         """
         saved = 0
+        space = (" " if self.status.act_page.isChecked() and
+                 self.status.act_date.isChecked() else "")
+        if idx not in [MANY_MD, ONE_MD]:
+            line_break = (":" + os.linesep if self.status.act_page.isChecked() or
+                          self.status.act_date.isChecked() else "")
+        else:
+            line_break = (":*  " + os.linesep if self.status.act_page.isChecked() or
+                          self.status.act_date.isChecked() else " ")
         # Save from file_table to different files
-        if idx in [MANY_TEXT, MANY_HTML, MANY_CSV]:
+        if idx in [MANY_TEXT, MANY_HTML, MANY_CSV, MANY_MD]:
             text = _("Select destination folder for the exported file(s)")
             dir_path = QFileDialog.getExistingDirectory(self, text, self.last_dir,
                                                         QFileDialog.ShowDirsOnly)
             if not dir_path:
                 return
             self.last_dir = dir_path
-            saved = self.save_multi_files(dir_path, idx)
+            saved = self.save_multi_files(dir_path, idx, line_break, space)
         # Save from file_table, combine to one file
-        elif idx in [ONE_TEXT, ONE_HTML, ONE_CSV]:
+        elif idx in [ONE_TEXT, ONE_HTML, ONE_CSV, ONE_MD]:
             if idx == ONE_TEXT:
                 ext = "txt"
             elif idx == ONE_HTML:
                 ext = "html"
             elif idx == ONE_CSV:
                 ext = "csv"
+            elif idx == ONE_MD:
+                ext = "md"
             else:
                 return
             filename = QFileDialog.getSaveFileName(self,
@@ -2251,7 +2324,7 @@ class Base(QMainWindow, Ui_Base):
             if not filename:
                 return
             self.last_dir = dirname(filename)
-            saved = self.save_merged_file(filename, format_=idx)
+            saved = self.save_merged_file(filename, idx, line_break, space)
 
         self.status.animation(False)
         all_files = len(self.sel_indexes)
@@ -2260,137 +2333,74 @@ class Base(QMainWindow, Ui_Base):
                    .format(saved, all_files, all_files - saved),
                    icon=QMessageBox.Information)
 
-    def save_multi_files(self, dir_path, format_):
+    def save_multi_files(self, dir_path, format_, line_break, space):
         """ Save each selected book's highlights to a different file
 
         :type dir_path: str|unicode
         :param dir_path: The directory where the files will be saved
         :type format_: int
         :param format_: The file format to save
+        :type line_break: str|unicode
+        :param line_break: The line break used, depending on the file format
+        :type space: str|unicode
+        :param space: The space used at the header, depending on the contents
         """
         self.status.animation(True)
         saved = 0
-        title_counter = 0  # needed for the Book's title if none found
-        space = (" " if self.status.act_page.isChecked() and
-                 self.status.act_date.isChecked() else "")
-        line_break = (":" + os.linesep if self.status.act_page.isChecked() or
-                      self.status.act_date.isChecked() else "")
-        encoding = "utf-8-sig" if format_ == MANY_CSV else "utf-8"
+        sort_by = self.sort_high4write
         for idx in self.sel_indexes:
-            (authors, title, highlights,
-             title_counter) = self.get_item_data(idx, format_, title_counter)
+            authors, title, highlights = self.get_item_data(idx, format_)
             if not highlights:  # no highlights in book
                 continue
-            name = title
-            if authors:
-                name = "{} - {}".format(authors, title)
-            if format_ == MANY_TEXT:
-                ext = ".txt"
-                text = ""
-            elif format_ == MANY_HTML:
-                ext = ".html"
-                text = HTML_HEAD + BOOK_BLOCK % {"title": title, "authors": authors}
-            elif format_ == MANY_CSV:
-                ext = ".csv"
-                text = CSV_HEAD
-            else:
-                return
-            filename = join(dir_path, sanitize_filename(name) + ext)
             try:
-                with open(filename, "w+", encoding=encoding, newline="") as text_file:
-                    for highlight in sorted(highlights, key=self.sort_high4write):
-                        date_text, high_comment, high_text, page_text = highlight
-                        if format_ == MANY_HTML:
-                            text += HIGH_BLOCK % {"page": page_text, "date": date_text,
-                                                  "highlight": high_text,
-                                                  "comment": high_comment}
-                        elif format_ == MANY_TEXT:
-                            text += (page_text + space + date_text + line_break +
-                                     high_text + high_comment)
-                            text += 2 * os.linesep
-                        elif format_ == MANY_CSV:
-                            data = {"title": title, "authors": authors, "page": page_text,
-                                    "date": date_text, "text": high_text,
-                                    "comment": high_comment}
-                            text += get_csv_row(data) + "\n"
-                        else:
-                            return
-                    if format_ == MANY_HTML:
-                        text += "\n</div>\n</body>\n</html>"
-
-                    text_file.write(text)
-                    saved += 1
-            except IOError:  # any problem when writing (like long filename, etc)
+                save_file(title, authors, highlights, dir_path,
+                          format_, line_break, space, sort_by)
+                saved += 1
+            except IOError as err:  # any problem when writing (like long filename, etc)
                 self.popup(_("Warning!"),
-                           _('Could not save to disk the file\n"{}"').format(filename))
+                           _("Could not save the file to disk!\n{}").format(err))
         return saved
 
-    def save_merged_file(self, filename, format_):
+    def save_merged_file(self, filename, format_, line_break, space):
         """ Save the selected books' highlights to a single file
 
         :type filename: str|unicode
         :param filename: The name of the file we export the highlights
         :type format_: int
         :param format_: The filetype to export
+        :type line_break: str|unicode
+        :param line_break: The line break used, depending on the file format
+        :type space: str|unicode
+        :param space: The space used at the header, depending on the contents
         """
         self.status.animation(True)
         saved = 0
-        title_counter = 0  # needed for the Book's title if none found
-        space = (" " if self.status.act_page.isChecked() and
-                 self.status.act_date.isChecked() else "")
-        line_break = (":" + os.linesep if self.status.act_page.isChecked() or
-                      self.status.act_date.isChecked() else "")
-        html = format_ == ONE_HTML
-        text = HTML_HEAD if html else CSV_HEAD if format_ == ONE_CSV else ""
-        encoding = "utf-8-sig" if format_ == ONE_CSV else "utf-8"
+        text = (HTML_HEAD if format_ == ONE_HTML
+                else CSV_HEAD if format_ == ONE_CSV else "")
+        encoding = "utf-8-sig" if ONE_CSV else "utf-8"
 
         for idx in sorted(self.sel_indexes):
-            (authors, title, highlights,
-             title_counter) = self.get_item_data(idx, format_, title_counter)
+            authors, title, highlights = self.get_item_data(idx, format_)
             if not highlights:  # no highlights
                 continue
             highlights = sorted(highlights, key=self.sort_high4write)
-            if html:
-                text += BOOK_BLOCK % {"title": title, "authors": authors}
-                for high in highlights:
-                    date_text, high_comment, high_text, page_text = high
-                    text += HIGH_BLOCK % {"page": page_text, "date": date_text,
-                                          "highlight": high_text, "comment": high_comment}
-                text += "</div>\n"
-            elif format_ == ONE_TEXT:
-                name = title
-                if authors:
-                    name = "{} - {}".format(authors, title)
-                line = "-" * 80
-                text += line + os.linesep + name + os.linesep + line + os.linesep
-                highlights = [i[3] + space + i[0] + line_break + i[2] + i[1]
-                              for i in highlights]
-                text += (os.linesep * 2).join(highlights) + os.linesep * 2
-            elif format_ == ONE_CSV:
-                for high in highlights:
-                    date_text, high_comment, high_text, page_text = high
-                    data = {"title": title, "authors": authors, "page": page_text,
-                            "date": date_text, "text": high_text, "comment": high_comment}
-                    # data = {k.encode("utf8"): v.encode("utf8") for k, v in data.items()}
-                    text += get_csv_row(data) + "\n"
-            else:
-                return
+            text = get_book_text(title, authors, highlights, format_,
+                                 line_break, space, text)
             saved += 1
-        text += "\n</body>\n</html>" if html else ""
+        if format_ == ONE_HTML:
+            text += "\n</body>\n</html>"
 
         with open(filename, "w+", encoding=encoding, newline="") as text_file:
             text_file.write(text)
         return saved
 
-    def get_item_data(self, idx, format_, title_counter):
+    def get_item_data(self, idx, format_):
         """ Get the highlight data for an item
 
         :type idx: QModelIndex
         :param idx: The item's index
         :type format_: int
         :param format_: The output format idx
-        :type title_counter: int
-        :param title_counter: The non-found Title counter
         """
         row = idx.row()
         data = self.file_table.item(row, 0).data(Qt.UserRole)
@@ -2398,17 +2408,14 @@ class Base(QMainWindow, Ui_Base):
         highlights = []
         for page in data["highlight"]:
             for page_id in data["highlight"][page]:
-                highlights.append(self.get_formated_high(data, page, page_id, format_))
+                highlights.append(self.get_formatted_high(data, page, page_id, format_))
         title = self.file_table.item(row, TITLE).data(0)
-        if title == _("NO TITLE FOUND"):
-            title += str(title_counter)
-            title_counter += 1
         authors = self.file_table.item(row, AUTHOR).data(0)
         if authors in [_("OLD TYPE FILE"), _("NO AUTHOR FOUND")]:
             authors = ""
-        return authors, title, highlights, title_counter
+        return authors, title, highlights
 
-    def get_formated_high(self, data, page, page_id, format_):
+    def get_formatted_high(self, data, page, page_id, format_):
         """ Create the highlight's texts
 
         :type data: dict
@@ -2423,6 +2430,8 @@ class Base(QMainWindow, Ui_Base):
         highlight = self.get_highlight_info(data, page, page_id)
         linesep = "<br/>" if format_ in [ONE_HTML, MANY_HTML] else os.linesep
         comment = highlight["comment"].replace("\n", linesep)
+        chapter = (highlight["chapter"].replace("\n", linesep)
+                   if self.status.act_chapter.isChecked() else "")
         high_text = (highlight["text"].replace("\n", linesep)
                      if self.status.act_text.isChecked() else "")
         date = highlight["date"]
@@ -2438,7 +2447,7 @@ class Base(QMainWindow, Ui_Base):
             date_text = "[" + date + "]" if self.status.act_date.isChecked() else ""
             high_comment = (line_break2 + "● " + comment
                             if self.status.act_comment.isChecked() and comment else "")
-        return date_text, high_comment, high_text, page_text
+        return date_text, high_comment, high_text, page_text, chapter
 
     def save_sel_highlights(self):
         """ Save the selected highlights to a text file (from high_table)
@@ -2448,42 +2457,68 @@ class Base(QMainWindow, Ui_Base):
         # noinspection PyCallByClass
         filename = QFileDialog.getSaveFileName(self, _("Export to file"), self.last_dir,
                                                "text file (*.txt);;html file (*.html);;"
-                                               "csv file (*.csv)")
+                                               "csv file (*.csv);;markdown file (*.md)")
         if filename[0]:
             filename, extra = filename
+            encoding = "utf-8"
             text_out = extra.startswith("text")
             html_out = extra.startswith("html")
             csv_out = extra.startswith("csv")
-            ext = ".html" if html_out else ".csv" if csv_out else ".txt"
+            md_out = extra.startswith("mark")
+            if text_out:
+                ext = ".txt"
+                text = ""
+            elif html_out:
+                ext = ".html"
+                text = HTML_HEAD
+            elif csv_out:
+                ext = ".csv"
+                text = CSV_HEAD
+                encoding = "utf-8-sig"
+            elif md_out:
+                ext = ".md"
+                text = ""
+            else:
+                return
             filename = splitext(filename)[0] + ext
             self.last_dir = dirname(filename)
         else:
             return
 
-        text = HTML_HEAD if html_out else CSV_HEAD if csv_out else ""
-        encoding = "utf-8-sig" if csv_out else "utf-8"
         def_date_format = self.date_format == DATE_FORMAT
         for i in sorted(self.sel_high_view):
             row = i.row()
             data = self.high_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)
-            comment = "\n● " + data["comment"] if data["comment"] else ""
 
             if not def_date_format:
                 data["date"] = self.get_date_text(data["date"])
 
+            comment = "\n● " + data["comment"] if data["comment"] else ""
+            if md_out and comment:
+                comment = comment.replace("\n", "  \n")
+
             if text_out:
-                txt = ("{} [{}]\nPage {} [{}]\n{}{}"
+                txt = ("{} [{}]\nPage {} [{}]\n[{}]\n{}{}"
                        .format(data["title"], data["authors"], data["page"],
-                               data["date"], data["text"], comment))
+                               data["date"], data["chapter"], data["text"], comment))
                 text += txt + "\n\n"
             elif html_out:
                 left = "{} [{}]".format(data["title"], data["authors"])
                 right = "Page {} [{}]".format(data["page"], data["date"])
-                text += HIGH_BLOCK % {"page": left, "date": right,
-                                      "highlight": data["text"], "comment": comment}
+                text += HIGH_BLOCK % {"page": left, "date": right, "comment": comment,
+                                      "highlight": data["text"],
+                                      "chapter": data["chapter"]}
                 text += "</div>\n"
             elif csv_out:
                 text += get_csv_row(data) + "\n"
+            elif md_out:
+                txt = data["text"].replace("\n", "  \n")
+                chapter = data["chapter"]
+                if chapter:
+                    chapter = "***{0}***\n\n".format(chapter).replace("\n", "  \n")
+                text += ("\n---\n### {} [{}]  \n*Page {} [{}]*  \n{}{}{}\n"
+                         .format(data["title"], data["authors"], data["page"],
+                                 data["date"], chapter, txt, comment))
             else:
                 print("Unknown format export!")
                 return
@@ -2530,13 +2565,14 @@ class Base(QMainWindow, Ui_Base):
             self.high_merge_warning = app_config.get("high_merge_warning", True)
             self.edit_lua_file_warning = app_config.get("edit_lua_file_warning", True)
 
-            checked = app_config.get("show_items", (True, True, True, True))
-            # noinspection PyTypeChecker
-            checked = checked if len(checked) == 4 else checked + [True]  # 4compatibility
+            checked = app_config.get("show_items", (True, True, True, True, True))
+            if len(checked) != 5:  # settings from older versions
+                checked = (True, True, True, True, True)
             self.status.act_page.setChecked(checked[0])
             self.status.act_date.setChecked(checked[1])
-            self.status.act_text.setChecked(checked[2])
-            self.status.act_comment.setChecked(checked[3])
+            self.status.act_chapter.setChecked(checked[2])
+            self.status.act_text.setChecked(checked[3])
+            self.status.act_comment.setChecked(checked[4])
             self.high_by_page = app_config.get("high_by_page", False)
         else:
             self.resize(800, 600)
@@ -2564,6 +2600,7 @@ class Base(QMainWindow, Ui_Base):
                   "show_info": self.fold_btn.isChecked(), "date_format": self.date_format,
                   "show_items": (self.status.act_page.isChecked(),
                                  self.status.act_date.isChecked(),
+                                 self.status.act_chapter.isChecked(),
                                  self.status.act_text.isChecked(),
                                  self.status.act_comment.isChecked()),
                   "skip_version": self.skip_version, "opened_times": self.opened_times,
@@ -2576,7 +2613,7 @@ class Base(QMainWindow, Ui_Base):
                 for k, v in config.items():
                     if type(v) == bytes:
                         # noinspection PyArgumentList
-                        config[k] = str(v, encoding="utf8")
+                        config[k] = str(v, encoding="latin")
             config_json = json.dumps(config, sort_keys=True, indent=4)
             with gzip.GzipFile(join(SETTINGS_DIR, "settings.json.gz"), "w+") as gz_file:
                 try:
@@ -2593,31 +2630,30 @@ class Base(QMainWindow, Ui_Base):
         :type array: QByteArray
         :param array: The data
         """
-        if PYTHON2:
-            return pickle.dumps(array.data())
-        # noinspection PyArgumentList
-        return str(pickle.dumps(array.data()), encoding="unicode_escape")  # Python3
+        return pickle.dumps(bytes(array), protocol=0)
 
     @staticmethod
     def unpickle(key):
         """ Un-serialize some binary settings
 
         :type key: str|unicode
-        :param key: The dict key to be un-pickled
+        :parameter key: The dict key to be un-pickled
         """
         try:
+            value = app_config.get(key)
+            if not value:
+                return
             if PYTHON2:
                 try:
-                    value = pickle.loads(str(app_config.get(key)))
-                except UnicodeEncodeError:  # settings file from Python3
+                    # noinspection PyTypeChecker
+                    value = pickle.loads(str(value))
+                except UnicodeEncodeError:  # settings from Python 3.x
                     return
             else:
-                try:
-                    # noinspection PyArgumentList
-                    pickled = pickle.loads(bytes(app_config.get(key), encoding="latin"))
-                    value = QByteArray(pickled)
-                except (UnicodeDecodeError, ImportError):  # settings file from Python2
-                    return
+                # noinspection PyUnresolvedReferences
+                value = value.encode("latin1")
+                # noinspection PyTypeChecker
+                value = pickle.loads(value, encoding="bytes")
         except pickle.UnpicklingError as err:
             print("While unPickling:", err)
             return
@@ -2875,14 +2911,16 @@ class KOHighlights(QApplication):
 
     def __init__(self, *args, **kwargs):
         super(KOHighlights, self).__init__(*args, **kwargs)
-
         # decode app's arguments
         # try:
         #     sys.argv = [i.decode(sys.getfilesystemencoding()) for i in sys.argv]
         # except AttributeError:  # i.decode does not exists in Python 3
         #     pass
-        sys.argv = self.arguments()
-
+        argv = self.arguments()
+        if argv[0].endswith("python.exe") or argv[0].endswith("python3.exe"):
+            sys.argv = argv[1:]
+        else:
+            sys.argv = argv
         self.parser = argparse.ArgumentParser(prog=APP_NAME,
                                               description=_("{} v{} - A KOReader's "
                                                             "highlights converter")
@@ -2893,7 +2931,7 @@ class KOHighlights(QApplication):
 
         self.base = Base()
         if getattr(sys, "frozen", False):  # the app is compiled
-            if not sys.platform.lower().startswith("win"):
+            if not sys.platform.lower().startswith("win"):  # no cli in windows
                 self.parse_args()
         else:
             self.parse_args()
@@ -2907,7 +2945,6 @@ class KOHighlights(QApplication):
         #     self.parse_args()
         self.base.setWindowTitle(APP_NAME)
         self.exec_()
-
         # show_console() if on_windows and compiled else None
 
     # ___ ___________________ CLI STUFF _____________________________
@@ -2934,11 +2971,17 @@ class KOHighlights(QApplication):
         self.parser.add_argument("-c", "--csv", action="store_true", default=False,
                                  help="Exports highlights in .csv format "
                                       "instead of .txt")
+        self.parser.add_argument("-md", "--markdown", action="store_true", default=False,
+                                 help="Exports highlights in markdown .md format "
+                                      "instead of .txt")
 
         self.parser.add_argument("-np", "--no_page", action="store_true", default=False,
                                  help="Exclude the page number of the highlight")
         self.parser.add_argument("-nd", "--no_date", action="store_true", default=False,
                                  help="Exclude the date of the highlight")
+        self.parser.add_argument("-nt", "--no_chapter", action="store_true",
+                                 default=False,
+                                 help="Exclude the chapter of the highlight")
         self.parser.add_argument("-nh", "--no_highlight",
                                  action="store_true", default=False,
                                  help="Exclude the highlighted text of the highlight")
@@ -2965,135 +3008,109 @@ class KOHighlights(QApplication):
         files = self.get_lua_files(args.paths)
         if not files:
             return
+        space = " " if not args.no_page and not args.no_date else ""
+        if not args.markdown:
+            line_break = ":" + os.linesep if not args.no_page or not args.no_date else ""
+        else:
+            line_break = (":*  " + os.linesep
+                          if not args.no_page or not args.no_date else " ")
         path = abspath(args.output)
         if not args.merge:  # save to different files
             if not isdir(path):
                 self.parser.error("The output path (-o/--output) must point "
                                   "to an existing directory!")
-            saved = self.cli_save_multi_files(args, files)
+            saved = self.cli_save_multi_files(args, files, line_break, space)
         else:  # save combined highlights to one file
             if isdir(path):
-                ext = "an .html" if args.html else "a .csv" if args.csv else "a .txt"
+                ext = ("an .html" if args.html else "a .csv" if args.csv
+                       else "an .md" if args.markdown else "a .txt")
                 self.parser.error("The output path (-o/--output) must be {} filename "
                                   "not a directory!".format(ext))
                 return
-            saved = self.cli_save_merged_file(args, files)
+            saved = self.cli_save_merged_file(args, files, line_break, space)
 
         all_files = len(files)
         sys.stdout.write(_("\n{} files were exported from the {} processed.\n"
                            "{} files with no highlights.\n").format(saved, all_files,
                                                                     all_files - saved))
 
-    def cli_save_multi_files(self, args, files):
+    def cli_save_multi_files(self, args, files, line_break, space):
         """ Save each selected book's highlights to a different file
 
         :type args: argparse.Namespace
         :param args: The parsed cli args
         :type files: list
         :param files: A list with the metadata files to get converted
+        :type line_break: str|unicode
+        :param line_break: The line break used, depending on the file format
+        :type space: str|unicode
+        :param space: The space used at the header, depending on the contents
         """
         saved = 0
-        title_counter = 0
-        space = " " if not args.no_page and not args.no_date else ""
-        line_break = ":" + os.linesep if not args.no_page or not args.no_date else ""
-        encoding = "utf-8-sig" if args.csv else "utf-8"
+        if args.html:
+            format_ = MANY_HTML
+        elif args.csv:
+            format_ = MANY_CSV
+        elif args.markdown:
+            format_ = MANY_MD
+        else:
+            format_ = MANY_TEXT
+        sort_by = self.cli_sort
         path = abspath(args.output)
         for file_ in files:
-            (authors, title, highlights,
-             title_counter) = self.cli_get_item_data(file_, args, title_counter)
+            authors, title, highlights = self.cli_get_item_data(file_, args)
             if not highlights:  # no highlights
                 continue
-            name = title
-            if authors:
-                name = "{} - {}".format(authors, title)
-            if args.html:
-                ext = ".html"
-                text = HTML_HEAD + BOOK_BLOCK % {"title": title, "authors": authors}
-            elif args.csv:
-                ext = ".csv"
-                text = CSV_HEAD
-            else:
-                ext = ".txt"
-                text = ""
-            filename = join(path, sanitize_filename(name) + ext)
             try:
-                with open(filename, "w+", encoding=encoding, newline="") as text_file:
-                    # noinspection PyTypeChecker
-                    for highlight in sorted(highlights, key=partial(self.cli_sort, args)):
-                        date_text, high_comment, high_text, page_text = highlight
-                        if args.html:
-                            text += HIGH_BLOCK % {"page": page_text, "date": date_text,
-                                                  "highlight": high_text,
-                                                  "comment": high_comment}
-                        elif args.csv:
-                            data = {"title": title, "authors": authors, "page": page_text,
-                                    "date": date_text, "text": high_text,
-                                    "comment": high_comment}
-                            text += get_csv_row(data) + "\n"
-                        else:
-                            text += (page_text + space + date_text +
-                                     line_break + high_text + high_comment)
-                            text += 2 * os.linesep
-                    if args.html:
-                        text += "\n</div>\n</body>\n</html>"
-
-                    text_file.write(text)
-                    sys.stdout.write(str("Created {}\n").format(basename(filename)))
-                    saved += 1
-            except IOError:  # any problem when writing (like long filename, etc)
-                sys.stdout.write(str('Could not save the file "{}" to disk')
-                                 .format(filename))
+                save_file(title, authors, highlights, path,
+                          format_, line_break, space, sort_by)
+            except IOError as err:  # any problem when writing (like long filename, etc)
+                sys.stdout.write(str("Could not save the file to disk!\n{}").format(err))
         return saved
 
-    def cli_save_merged_file(self, args, files):
+    def cli_save_merged_file(self, args, files, line_break, space):
         """ Save the selected book's highlights to a single html file
 
         :type args: argparse.Namespace
         :param args: The parsed cli args
         :type files: list
         :param files: A list with the metadata files to get converted
+        :type line_break: str|unicode
+        :param line_break: The line break used, depending on the file format
+        :type space: str|unicode
+        :param space: The space used at the header, depending on the contents
         """
         saved = 0
-        title_counter = 0
-        space = " " if not args.no_page and not args.no_date else ""
-        line_break = ":" + os.linesep if not args.no_page or not args.no_date else ""
-        text = HTML_HEAD if args.html else CSV_HEAD if args.csv else ""
-        encoding = "utf-8-sig" if args.csv else "utf-8"
+        text = ""
+        encoding = "utf-8"
+        if args.html:
+            format_ = ONE_HTML
+            text = HTML_HEAD
+            new_ext = ".html"
+        elif args.csv:
+            format_ = ONE_CSV
+            text = CSV_HEAD
+            new_ext = ".csv"
+            encoding = "utf-8-sig"
+        elif args.markdown:
+            format_ = ONE_MD
+            new_ext = ".md"
+        else:
+            format_ = ONE_TEXT
+            new_ext = ".txt"
+
         for file_ in files:
-            (authors, title, highlights,
-             title_counter) = self.cli_get_item_data(file_, args, title_counter)
+            authors, title, highlights = self.cli_get_item_data(file_, args)
             if not highlights:  # no highlights
                 continue
-            if args.html:
-                text += BOOK_BLOCK % {"title": title, "authors": authors}
-                # noinspection PyTypeChecker
-                for high in sorted(highlights, key=partial(self.cli_sort, args)):
-                    date_text, high_comment, high_text, page_text = high
-                    text += HIGH_BLOCK % {"page": page_text, "date": date_text,
-                                          "highlight": high_text, "comment": high_comment}
-                text += "</div>\n"
-            elif args.csv:
-                for high in highlights:
-                    date_text, high_comment, high_text, page_text = high
-                    data = {"title": title, "authors": authors, "page": page_text,
-                            "date": date_text, "text": high_text, "comment": high_comment}
-                    # data = {k.encode("utf8"): v.encode("utf8") for k, v in data.items()}
-                    text += get_csv_row(data) + "\n"
-            else:
-                name = title
-                if authors:
-                    name = "{} - {}".format(authors, title)
-                line = "-" * 80
-                text += line + os.linesep + name + os.linesep + line + os.linesep
-                # noinspection PyTypeChecker
-                highlights = [i[3] + space + i[0] + line_break + i[2] + i[1] for i in
-                              sorted(highlights, key=partial(self.cli_sort, args))]
-                text += (os.linesep * 2).join(highlights) + os.linesep * 2
+            highlights = sorted(highlights, key=partial(self.cli_sort, args))
+            text = get_book_text(title, authors, highlights, format_,
+                                 line_break, space, text)
             saved += 1
-        text += "\n</body>\n</html>" if args.html else ""
+        if args.html:
+            text += "\n</body>\n</html>"
         path = abspath(args.output)
         name, ext = splitext(path)
-        new_ext = ".html" if args.html else ".csv" if args.csv else ".txt"
         if ext.lower() != new_ext:
             path = name + new_ext
         with open(path, "w+", encoding=encoding, newline="") as text_file:
@@ -3101,21 +3118,19 @@ class KOHighlights(QApplication):
             sys.stdout.write(str("Created {}\n\n").format(path))
         return saved
 
-    def cli_get_item_data(self, file_, args, title_counter):
+    def cli_get_item_data(self, file_, args):
         """ Get the highlight data for an item
 
         :type file_: str|unicode
         :param file_: The item's path
         :type args: argparse.Namespace
         :param args: The item's arguments
-        :type title_counter: int
-        :param title_counter: The non-found Title counter
         """
         data = decode_data(file_)
         highlights = []
         for page in data["highlight"]:
             for page_id in data["highlight"][page]:
-                highlights.append(self.cli_get_formated_high(data, page, page_id, args))
+                highlights.append(self.cli_get_formatted_high(data, page, page_id, args))
         authors = ""
         try:
             title = data["stats"]["title"]
@@ -3132,11 +3147,10 @@ class KOHighlights(QApplication):
                 name = file_.split("#] ")[1]
                 title = splitext(name)[0]
             except IndexError:  # no "#] " in filename
-                title = _("NO TITLE FOUND") + str(title_counter)
-                title_counter += 1
-        return authors, title, highlights, title_counter
+                title = _("NO TITLE FOUND")
+        return authors, title, highlights
 
-    def cli_get_formated_high(self, data, page, page_id, args):
+    def cli_get_formatted_high(self, data, page, page_id, args):
         """ Get the highlight's info (text, comment, date and page)
 
         :type data: dict
@@ -3149,10 +3163,11 @@ class KOHighlights(QApplication):
         :param args: The parsed cli args
         """
         highlight = self.base.get_highlight_info(data, page, page_id)
-        linesep = "<br/>" if args.html else os.linesep
+        nl = "<br/>" if args.html else os.linesep
+        chapter = highlight["chapter"].replace("\n", nl) if not args.no_chapter else ""
         high_text = highlight["text"]
-        high_text = high_text.replace("\n", linesep) if not args.no_highlight else ""
-        comment = highlight["comment"].replace("\n", linesep)
+        high_text = high_text.replace("\n", nl) if not args.no_highlight else ""
+        comment = highlight["comment"].replace("\n", nl)
         date = highlight["date"]
         line_break2 = os.linesep if not args.no_highlight and comment else ""
         if args.csv:
@@ -3164,7 +3179,7 @@ class KOHighlights(QApplication):
             date_text = "[" + date + "]" if not args.no_date else ""
             high_comment = (line_break2 + "● " + comment
                             if not args.no_comment and comment else "")
-        return date_text, high_comment, high_text, page_text
+        return date_text, high_comment, high_text, page_text, chapter
 
     @staticmethod
     def get_lua_files(dropped):
@@ -3191,7 +3206,11 @@ class KOHighlights(QApplication):
                             if splitext(file_)[1].lower() == ".lua":
                                 path = abspath(join(dir_path, file_))
                                 paths.append(path)
-                                sys.stdout.write(fount_txt.format(path))
+                                try:
+                                    sys.stdout.write(fount_txt.format(path))
+                                except UnicodeEncodeError:
+                                    sys.stdout.write(fount_txt.format(
+                                                     path.encode("utf8")))
                                 break
                     # older metadata storage or android history folder
                     elif (dir_path.lower().endswith(join("koreader", "history"))

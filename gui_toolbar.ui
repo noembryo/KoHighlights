@@ -560,10 +560,10 @@ Activated only if two entries of the same book are selected.</string>
            </property>
            <property name="toolTip">
             <string>Show the archived files in the database
-(Right click to change the database file)</string>
+(Right click for database actions menu)</string>
            </property>
            <property name="statusTip">
-            <string>Show the archived files in the database (Right click to change the database file)</string>
+            <string>Show the archived files in the database (Right click for database actions menu)</string>
            </property>
            <property name="text">
             <string>Archived</string>
@@ -613,10 +613,10 @@ Activated only if two entries of the same book are selected.</string>
          </size>
         </property>
         <property name="toolTip">
-         <string>Info about the KoHighlights</string>
+         <string>Info about the KoHighlights (Ctrl+I)</string>
         </property>
         <property name="statusTip">
-         <string>Info about the KoHighlights</string>
+         <string>Info about the KoHighlights (Ctrl+I)</string>
         </property>
         <property name="text">
          <string>About</string>
@@ -652,7 +652,7 @@ Activated only if two entries of the same book are selected.</string>
   </customwidget>
  </customwidgets>
  <resources>
-  <include location="images.qrc"/>
+ <include location="images.qrc"/>
  </resources>
  <connections/>
 </ui>

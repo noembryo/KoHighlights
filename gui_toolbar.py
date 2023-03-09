@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_toolbar.ui'
 #
-# Created: Thu Nov 24 15:53:16 2022
+# Created: Thu Mar  9 14:39:30 2023
 #      by: pyside-uic 0.2.15 running on PySide 1.2.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -290,11 +290,11 @@ class Ui_ToolBar(object):
         self.loaded_btn.setStatusTip(QtGui.QApplication.translate("ToolBar", "Show the loaded files", None, QtGui.QApplication.UnicodeUTF8))
         self.loaded_btn.setText(QtGui.QApplication.translate("ToolBar", "Loaded", None, QtGui.QApplication.UnicodeUTF8))
         self.db_btn.setToolTip(QtGui.QApplication.translate("ToolBar", "Show the archived files in the database\n"
-"(Right click to change the database file)", None, QtGui.QApplication.UnicodeUTF8))
-        self.db_btn.setStatusTip(QtGui.QApplication.translate("ToolBar", "Show the archived files in the database (Right click to change the database file)", None, QtGui.QApplication.UnicodeUTF8))
+"(Right click for database actions menu)", None, QtGui.QApplication.UnicodeUTF8))
+        self.db_btn.setStatusTip(QtGui.QApplication.translate("ToolBar", "Show the archived files in the database (Right click for database actions menu)", None, QtGui.QApplication.UnicodeUTF8))
         self.db_btn.setText(QtGui.QApplication.translate("ToolBar", "Archived", None, QtGui.QApplication.UnicodeUTF8))
-        self.about_btn.setToolTip(QtGui.QApplication.translate("ToolBar", "Info about the KoHighlights", None, QtGui.QApplication.UnicodeUTF8))
-        self.about_btn.setStatusTip(QtGui.QApplication.translate("ToolBar", "Info about the KoHighlights", None, QtGui.QApplication.UnicodeUTF8))
+        self.about_btn.setToolTip(QtGui.QApplication.translate("ToolBar", "Info about the KoHighlights (Ctrl+I)", None, QtGui.QApplication.UnicodeUTF8))
+        self.about_btn.setStatusTip(QtGui.QApplication.translate("ToolBar", "Info about the KoHighlights (Ctrl+I)", None, QtGui.QApplication.UnicodeUTF8))
         self.about_btn.setText(QtGui.QApplication.translate("ToolBar", "About", None, QtGui.QApplication.UnicodeUTF8))
 
 from secondary import XToolButton

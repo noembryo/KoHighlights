@@ -108,6 +108,17 @@ what will be saved to the text/html files.</string>
     <string>Comment</string>
    </property>
   </action>
+  <action name="act_chapter">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Chapter</string>
+   </property>
+   <property name="toolTip">
+    <string>Chapter</string>
+   </property>
+  </action>
  </widget>
  <resources>
  <include location="images.qrc"/>

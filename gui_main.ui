@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>624</width>
-    <height>412</height>
+    <width>640</width>
+    <height>512</height>
    </rect>
   </property>
   <property name="windowIcon">
@@ -417,7 +417,7 @@
            <bool>false</bool>
           </property>
           <property name="columnCount">
-           <number>7</number>
+           <number>8</number>
           </property>
           <attribute name="horizontalHeaderHighlightSections">
            <bool>false</bool>
@@ -468,6 +468,11 @@
           <column>
            <property name="text">
             <string>Page</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>Chapter</string>
            </property>
           </column>
           <column>

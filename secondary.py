@@ -10,9 +10,10 @@ from pprint import pprint
 
 if QT4:  # ___ ______________ DEPENDENCIES __________________________
     from PySide.QtCore import Qt, Slot, QObject, Signal, QSize, QPoint, QEvent
-    from PySide.QtGui import (QApplication, QMessageBox, QIcon, QFileDialog, QTableWidgetItem,
-                              QDialog, QWidget, QMovie, QFont, QMenu, QAction, QTableWidget,
-                              QCheckBox, QToolButton, QActionGroup, QCursor, QLineEdit)
+    from PySide.QtGui import (QApplication, QMessageBox, QIcon, QFileDialog, QLineEdit,
+                              QDialog, QWidget, QMovie, QFont, QMenu, QAction, QCursor,
+                              QTableWidget, QCheckBox, QToolButton, QActionGroup,
+                              QTableWidgetItem)
 else:
     from PySide2.QtCore import QObject, Qt, Signal, QPoint, Slot, QSize, QEvent
     from PySide2.QtGui import QFont, QMovie, QIcon, QCursor
@@ -927,7 +928,8 @@ class Status(QWidget, Ui_Status):
         self.anim_lbl.hide()
 
         self.show_menu = QMenu(self)
-        for i in [self.act_page, self.act_date, self.act_text, self.act_comment]:
+        for i in [self.act_page, self.act_date, self.act_text, self.act_chapter,
+                  self.act_comment]:
             self.show_menu.addAction(i)
             # noinspection PyUnresolvedReferences
             i.triggered.connect(self.on_show_items)
