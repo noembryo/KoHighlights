@@ -30,9 +30,6 @@ The original KOHighlights (using the wxPython) can be found
     <img src="https://raw.githubusercontent.com/noembryo/KoHighlights/master/screen3.png" height="180"></a>
 </p>
 
-### Prerequisites
-* Progress sync plugin must be enabled in KOReader
-
 ## Usage
 * Load items by:
     * Selecting the reader's drive or any folder that contains books that where opened with Koreader. This will automatically load all the metadata files from all subdirectories.
@@ -55,6 +52,9 @@ The original KOHighlights (using the wxPython) can be found
 * Double click or press the Open Book button to view the book in your system's reader.
 * Delete some or all the highlights of any book.
 * Clear/reset the .sdr folders with the metadata or the books in the eReader.
+
+### Prerequisites
+* Progress sync plugin must be enabled in KOReader
 
 ## Downloads
 Check the latest release on the [Downloads Page][ReleaseLink].  
