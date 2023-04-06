@@ -5,11 +5,21 @@ import time
 import sys, os
 import traceback
 import gzip, json
-from os.path import dirname, join, isdir, expanduser
+from os.path import dirname, join, isdir, expanduser, exists
 
 APP_NAME = "KOHighlights"
 APP_DIR = dirname(os.path.abspath(sys.argv[0]))
 os.chdir(APP_DIR)  # Set the current working directory to the app's directory
+
+PORTABLE = False
+PYTHON2 = True if sys.version_info < (3, 0) else False
+if PYTHON2:
+    from io import open
+    from codecs import open as c_open
+else:
+    # noinspection PyShadowingBuiltins
+    unicode, basestring = str, str
+    c_open = open
 
 if sys.platform == "win32":  # Windows
     import win32api
@@ -33,7 +43,14 @@ if sys.platform == "win32":  # Windows
     my_app = SingleInstance(APP_NAME)
     if my_app.already_running():  # another instance is running
         sys.exit(0)
-    SETTINGS_DIR = join(os.environ["APPDATA"], APP_NAME)
+    try:
+        portable_arg = sys.argv[1] if not PYTHON2 else sys.argv[1].decode("mbcs")
+        PORTABLE = portable_arg == "-p"
+    except IndexError:  # no arguments in the call
+        pass
+    PROFILE_DIR = join(os.environ[str("APPDATA")], APP_NAME)
+    PORTABLE_DIR = join(APP_DIR, "portable_settings")
+    SETTINGS_DIR = PORTABLE_DIR if PORTABLE else PROFILE_DIR
 elif sys.platform == "darwin":  # MacOS 2check: needs to be tested
     import socket
     app_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -55,14 +72,6 @@ else:  # Linux+
 os.makedirs(SETTINGS_DIR) if not isdir(SETTINGS_DIR) else None
 
 
-PYTHON2 = True if sys.version_info < (3, 0) else False
-if PYTHON2:
-    from io import open
-    from codecs import open as c_open
-else:
-    # noinspection PyShadowingBuiltins
-    unicode, basestring = str, str
-    c_open = open
 
 
 def except_hook(class_type, value, trace_back):

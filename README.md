@@ -10,7 +10,7 @@
 
 
 **KOHighlights** is a utility for viewing and exporting the
-[Koreader](https://github.com/koreader/koreader)'s highlights to simple text, csv or html files.  
+[Koreader](https://github.com/koreader/koreader)'s highlights to simple text, html, csv or markdown files.  
 This is a totally re-written application using the Qt framework (PySide).  
 The original KOHighlights (using the wxPython) can be found
 [here](https://github.com/noonkey/KoHighlights), but is considered deprecated..
@@ -30,36 +30,39 @@ The original KOHighlights (using the wxPython) can be found
     <img src="https://raw.githubusercontent.com/noembryo/KoHighlights/master/screen3.png" height="180"></a>
 </p>
 
+## Usage
+* Load items by:
+    * Selecting the reader's drive or any folder that contains books that where opened with Koreader. This will automatically load all the metadata files from all subdirectories.
+    * Drag and drop files or folders. This will load the files and/or all the files inside the folders.  
+* Export the highlights of the selected books to individual files or to one merged file.
+* Supported formats for exporting:
+    * Plain text files (.txt)
+    * Hypertext document files (.html)
+    * Comma-separated values files (.csv)
+    * Markdown files (.md)
+* View the highlights and various info for a book by selecting it in the list.
+* Save the highlights to the "Archive" and view them, even if your reader is not connected.
+* Merge highlights/Sync position from the same book that is read in two different devices and/or sync its reading position. To do it you have to:
+    * Load both metadata (e.g. by scanning your reader's _and_ your tablet's books).
+    * Select the relevant rows of the (same) book.
+    * If the book has the same cre_dom_version (version of the CREngine), then the "Merge/Sync" button gets activated and you get the options to sync the highlights or the position or both.
+* Merge highlights/Sync position of a book with its archived version
+  (book's right click menu) 
+* Show/hide the page, date, chapter or even the highlight text while viewing or saving the highlights of the books. 
+* Double click or press the Open Book button to view the book in your system's reader.
+* Delete some or all the highlights of any book.
+* Clear/reset the .sdr folders with the metadata or the books in the eReader.
+
 ### Prerequisites
 * Progress sync plugin must be enabled in KOReader
 
-## Usage
-* Load items by:
-    * Selecting the reader's drive or any folder that contains books that where opened
-      with Koreader. This will automatically load all the metadata files from all
-      subdirectories.
-    * Drag and drop files or folders. This will load the files and/or all the files
-      inside the folders.
-* View the highlights and various info for a book by selecting it in the list.
-* Save the highlights to the "Archive" and view them, even if your reader is not
-connected.
-* Merge highlights/Sync position from the same book that is read in two different devices
-  and/or sync its reading position. To do it you have to:
-    * Load both metadata (e.g. by scanning your reader's _and_ your tablet's books).
-    * Select the relevant rows of the (same) book.
-    * If the book has the same cre_dom_version (version of the CREngine), then the
-      "Merge/Sync" button gets activated and you get the options to sync the highlights
-      or the position or both.
-* Merge highlights/Sync position of a book with its archived version
-  (book's right click menu) 
-* Show/hide the page, date or even the highlight text while viewing or saving the
-  highlights of the books. 
-* Double click or press the Open Book button to view the book in your system's reader.
-* Save all the selected books' highlights in:
-    * A text/html/csv file for every selected book or
-    * A single text/html/csv file with all highlights combined
-* Delete some or all the highlights of any book.
-* Clear the .sdr folders with the metadata or the books in the eReader.
+### Portable
+In Windows, KOHighlights can run in Portable mode using a `portable_settings` directory to store its settings, that is located inside the installation directory of the app.  
+Because of this, it is advised to not install the app inside the `Program Files` folder if you indent to use it as portable.  
+There are two ways to start the app in Portable mode:
+* Run the `KoHighlights Portable.exe` that is located next to the `KoHighlights.exe`.  
+* Run `KoHighlights.exe` with a `-p` argument.  
+E.g. create a shortcut for the `KoHighlights.exe` and add a space and a `-p` argument at the end of the target filename.
 
 ## Downloads
 Check the latest release on the [Downloads Page][ReleaseLink].  

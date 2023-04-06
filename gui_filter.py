@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_filter.ui'
 #
-# Created: Thu Nov 24 15:53:16 2022
+# Created: Thu Apr  6 23:38:59 2023
 #      by: pyside-uic 0.2.15 running on PySide 1.2.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -12,7 +12,7 @@ from PySide import QtCore, QtGui
 class Ui_Filter(object):
     def setupUi(self, Filter):
         Filter.setObjectName("Filter")
-        Filter.resize(210, 66)
+        Filter.resize(215, 66)
         Filter.setLocale(QtCore.QLocale(QtCore.QLocale.English, QtCore.QLocale.UnitedStates))
         self.verticalLayout = QtGui.QVBoxLayout(Filter)
         self.verticalLayout.setContentsMargins(4, 4, 4, 4)

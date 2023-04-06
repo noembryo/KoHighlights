@@ -22,16 +22,186 @@ else:
                                    QActionGroup, QMenu, QAction, QToolButton, QCheckBox)
 import requests
 from bs4 import BeautifulSoup
+from slppu import slppu as lua  # https://github.com/noembryo/slppu
 
 
 def _(text):  # for future gettext support
     return text
 
 
-__all__ = ("XTableWidgetIntItem", "XTableWidgetPercentItem", "XTableWidgetTitleItem",
-           "DropTableWidget", "XMessageBox", "About", "AutoInfo", "ToolBar", "TextDialog",
-           "Status", "LogStream", "Scanner", "HighlightScanner", "ReLoader", "DBLoader",
-           "XToolButton", "Filter")
+def decode_data(path):
+    """ Converts a lua table to a Python dict
+
+    :type path: str|unicode
+    :param path: The path to the lua file
+    """
+    with open(path, "r", encoding="utf8", newline=None) as txt_file:
+        txt = txt_file.read()[39:]  # offset the first words of the file
+        data = lua.decode(txt.replace("--", "—"))
+        if type(data) == dict:
+            return data
+
+
+def encode_data(path, dict_data):
+    """ Converts a Python dict to a lua table
+
+    :type path: str|unicode
+    :param path: The path to the lua file
+    :type dict_data: dict
+    :param dict_data: The dictionary to be encoded as lua table
+    """
+    with open(path, "w+", encoding="utf8", newline="") as txt_file:
+        lua_text = "-- we can read Lua syntax here!\nreturn "
+        lua_text += lua.encode(dict_data)
+        txt_file.write(lua_text)
+
+
+def sanitize_filename(filename):
+    """ Creates a safe filename
+
+    :type filename: str|unicode
+    :param filename: The filename to be sanitized
+    """
+    filename = re.sub(r'[/:*?"<>|\\]', "_", filename)
+    return filename
+
+
+def get_csv_row(data):
+    """ Return an RFC 4180 compliant csv row
+
+    :type data: dict
+    :param data: The highlight's data
+    """
+    values = []
+    for key in CSV_KEYS:
+        value = data[key].replace('"', '""')
+        if "\n" in value or '"' in value:
+            value = '"' + value.lstrip() + '"'
+        values.append(value if value else "")
+    return "\t".join(values)
+
+
+def get_book_text(title, authors, highlights, format_, line_break, space, text):
+    """ Create the book's contents to be added to a single merged exported file
+    """
+    nl = os.linesep
+    if format_ == ONE_HTML:
+        text += BOOK_BLOCK % {"title": title, "authors": authors}
+        for high in highlights:
+            date_text, high_comment, high_text, page_text, chapter = high
+            text += HIGH_BLOCK % {"page": page_text, "date": date_text,
+                                  "highlight": high_text, "comment": high_comment,
+                                  "chapter": chapter}
+        text += "</div>\n"
+    elif format_ == ONE_TEXT:
+        name = title
+        if authors:
+            name = "{} - {}".format(authors, title)
+        line = "-" * 80
+        text += line + nl + name + nl + line + nl
+        highlights = [i[3] + space + i[0] + line_break +
+                      ("[{}]{}".format(i[4], nl) if i[4] else "") +
+                      i[2] + i[1] for i in highlights]
+        text += (nl * 2).join(highlights) + nl * 2
+    elif format_ == ONE_CSV:
+        for high in highlights:
+            date_text, high_comment, high_text, page_text, chapter = high
+            data = {"title": title, "authors": authors, "page": page_text,
+                    "date": date_text, "text": high_text, "comment": high_comment,
+                    "chapter": chapter}
+            # data = {k.encode("utf8"): v.encode("utf8") for k, v in data.items()}
+            text += get_csv_row(data) + "\n"
+    elif format_ == ONE_MD:
+        text += "\n---\n## {}  \n##### {}  \n---\n".format(title, authors)
+        highs = []
+        for i in highlights:
+            comment = i[1].replace(nl, "  " + nl)
+            if comment:
+                comment = "  " + comment
+            chapter = i[4]
+            if chapter:
+                chapter = "***{0}***{1}{1}".format(chapter, nl).replace(nl, "  " + nl)
+            high = i[2].replace(nl, "  " + nl)
+            h = ("*" + i[3] + space + i[0] + line_break + chapter +
+                 high + comment + "  \n&nbsp;  \n")
+            h = h.replace("-", "\\-")
+            highs.append(h)
+        text += nl.join(highs) + "\n---\n"
+    return text
+
+
+def save_file(title, authors, highlights, path, format_, line_break, space, sort_by):
+    """ Saves the book's exported file
+    """
+    nl = os.linesep
+    ext = text = ""
+    encoding = "utf-8"
+    name = title
+    if authors:
+        name = "{} - {}".format(authors, title)
+    if format_ == MANY_TEXT:
+        ext = ".txt"
+        line = "-" * 80
+        text = line + nl + name + nl + line + (2 * nl)
+    elif format_ == MANY_HTML:
+        ext = ".html"
+        text = HTML_HEAD + BOOK_BLOCK % {"title": title, "authors": authors}
+    elif format_ == MANY_CSV:
+        ext = ".csv"
+        text = CSV_HEAD
+        encoding = "utf-8-sig"
+    elif format_ == MANY_MD:
+        ext = ".md"
+        text = "\n---\n## {}  \n##### {}  \n---\n".format(title, authors)
+
+    filename = join(path, sanitize_filename(name))
+    if _("NO TITLE FOUND") in title:  # don't overwrite unknown title files
+        while isfile(filename + ext):
+            match = re.match(r"(.+?) \[(\d+?)]$", filename)
+            if match:
+                filename = "{} [{:02}]".format(match.group(1), int(match.group(2)) + 1)
+            else:
+                filename += " [01]"
+    filename = filename + ext
+
+    with open(filename, "w+", encoding=encoding, newline="") as text_file:
+        for highlight in sorted(highlights, key=sort_by):
+            date_text, high_comment, high_text, page_text, chapter = highlight
+            if format_ == MANY_HTML:
+                text += HIGH_BLOCK % {"page": page_text, "date": date_text,
+                                      "highlight": high_text, "comment": high_comment,
+                                      "chapter": chapter}
+            elif format_ == MANY_TEXT:
+                text += (page_text + space + date_text + line_break +
+                         ("[{}]{}".format(chapter, nl) if chapter else "") +
+                         high_text + high_comment)
+                text += 2 * nl
+            elif format_ == MANY_CSV:
+                data = {"title": title, "authors": authors, "page": page_text,
+                        "date": date_text, "text": high_text, "comment": high_comment,
+                        "chapter": chapter}
+                text += get_csv_row(data) + "\n"
+            elif format_ == MANY_MD:
+                high_text = high_text.replace(nl, "  " + nl)
+                high_comment = high_comment.replace(nl, "  " + nl)
+                if high_comment:
+                    high_comment = "  " + high_comment
+                if chapter:
+                    chapter = "***{0}***{1}{1}".format(chapter, nl).replace(nl, "  " + nl)
+                text += ("*" + page_text + space + date_text + line_break +
+                         chapter + high_text + high_comment +
+                         "  \n&nbsp;  \n\n").replace("-", "\\-")
+        if format_ == MANY_HTML:
+            text += "\n</div>\n</body>\n</html>"
+
+        text_file.write(text)
+
+
+__all__ = ("_", "decode_data", "encode_data", "sanitize_filename", "get_csv_row",
+           "get_book_text", "save_file", "XTableWidgetIntItem", "XTableWidgetPercentItem",
+           "XTableWidgetTitleItem", "DropTableWidget", "XMessageBox", "About", "AutoInfo",
+           "ToolBar", "TextDialog", "Status", "LogStream", "Scanner", "HighlightScanner",
+           "ReLoader", "DBLoader", "XToolButton", "Filter")
 
 
 # ___ _______________________ SUBCLASSING ___________________________
