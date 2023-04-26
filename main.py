@@ -47,7 +47,7 @@ else:
 
 
 __author__ = "noEmbryo"
-__version__ = "1.7.1.0"
+__version__ = "1.7.2.0"
 
 
 # if sys.platform.lower().startswith("win"):
@@ -2457,7 +2457,7 @@ class Base(QMainWindow, Ui_Base):
         :type array: QByteArray
         :param array: The data
         """
-        return pickle.dumps(bytes(array), protocol=0)
+        return pickle.dumps(bytes(array), protocol=0)  # type: ignore
 
     @staticmethod
     def unpickle(key):
@@ -2738,6 +2738,8 @@ class KOHighlights(QApplication):
 
     def __init__(self, *args, **kwargs):
         super(KOHighlights, self).__init__(*args, **kwargs)
+        if not QT4:
+            self.setAttribute(Qt.AA_DisableWindowContextHelpButton)
         # decode app's arguments
         # try:
         #     sys.argv = [i.decode(sys.getfilesystemencoding()) for i in sys.argv]
@@ -2746,7 +2748,7 @@ class KOHighlights(QApplication):
         argv = self.arguments()
         if argv[0].endswith("python.exe") or argv[0].endswith("python3.exe"):
             argv = argv[1:]
-        if argv[1] == "-p":
+        if len(argv) > 1 and argv[1] == "-p":
             del argv[1]
         sys.argv = argv
         self.parser = argparse.ArgumentParser(prog=APP_NAME,

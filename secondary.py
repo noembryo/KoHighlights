@@ -539,7 +539,7 @@ class ToolBar(QWidget, Ui_ToolBar):
         """
         self.base.toolbar_size = size
         button_size = QSize(size, size)
-        half_size = QSize(size * .5, size * .5)
+        half_size = QSize(int(size * .5), int(size * .5))
 
         for btn in self.buttons:
             btn.setMinimumWidth(size + 10)
@@ -798,9 +798,9 @@ class Filter(QDialog, Ui_Filter):
     def __init__(self, parent=None):
         super(Filter, self).__init__(parent)
         self.setupUi(self)
-        # Remove the question mark widget from dialog
-        self.setWindowFlags(self.windowFlags() ^
-                            Qt.WindowContextHelpButtonHint)
+        if QT4:  # Remove the question mark widget from dialog
+            # noinspection PyUnresolvedReferences
+            self.setWindowFlags(self.windowFlags() ^ Qt.WindowContextHelpButtonHint)
         self.setWindowTitle(_("Filter").format(APP_NAME))
         self.base = parent
 
@@ -951,9 +951,9 @@ class About(QDialog, Ui_About):
     def __init__(self, parent=None):
         super(About, self).__init__(parent)
         self.setupUi(self)
-        # Remove the question mark widget from dialog
-        self.setWindowFlags(self.windowFlags() ^
-                            Qt.WindowContextHelpButtonHint)
+        if QT4:  # Remove the question mark widget from dialog
+            # noinspection PyUnresolvedReferences
+            self.setWindowFlags(self.windowFlags() ^ Qt.WindowContextHelpButtonHint)
         self.setWindowTitle(_("About {}").format(APP_NAME))
         self.base = parent
 
@@ -1002,7 +1002,7 @@ class About(QDialog, Ui_About):
     def get_online_version():
         header = {"User-Agent": "Mozilla/5.0 (Windows NT 5.1; rv:14.0) "
                                 "Gecko/20100101 Firefox/24.0.1",
-                  "Referer": "http://whateveritis.com"}
+                  "Referer": "http://noembryo.com"}
         url = "http://www.noembryo.com/apps.php?kohighlights"
         try:
             html_text = requests.get(url, headers=header).content
@@ -1072,8 +1072,9 @@ class TextDialog(QDialog, Ui_TextDialog):
 
     def __init__(self, parent=None):
         super(TextDialog, self).__init__(parent)
-        # Remove the question mark widget from dialog
-        self.setWindowFlags(self.windowFlags() ^ Qt.WindowContextHelpButtonHint)
+        if QT4:  # Remove the question mark widget from dialog
+            # noinspection PyUnresolvedReferences
+            self.setWindowFlags(self.windowFlags() ^ Qt.WindowContextHelpButtonHint)
         self.setupUi(self)
 
         self.base = parent

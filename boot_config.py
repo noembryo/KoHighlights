@@ -44,6 +44,7 @@ if sys.platform == "win32":  # Windows
     if my_app.already_running():  # another instance is running
         sys.exit(0)
     try:
+        # noinspection PyUnresolvedReferences
         portable_arg = sys.argv[1] if not PYTHON2 else sys.argv[1].decode("mbcs")
         PORTABLE = portable_arg == "-p"
     except IndexError:  # no arguments in the call
@@ -70,8 +71,6 @@ else:  # Linux+
         sys.exit(0)
     SETTINGS_DIR = join(expanduser("~"), ".config", APP_NAME)
 os.makedirs(SETTINGS_DIR) if not isdir(SETTINGS_DIR) else None
-
-
 
 
 def except_hook(class_type, value, trace_back):
