@@ -35,10 +35,11 @@ def decode_data(path):
     :type path: str|unicode
     :param path: The path to the lua file
     """
-    with open(path, "r", encoding="utf8", newline=None) as txt_file:
-        txt = txt_file.read()[39:]  # offset the first words of the file
-        data = lua.decode(txt.replace("--", "—"))
+    with open(path, "r", encoding="utf8", newline="\n") as txt_file:
+        header, data = txt_file.read().split("\n", 1)
+        data = lua.decode(data[7:].replace("--", "—"))
         if type(data) == dict:
+            data["original_header"] = header
             return data
 
 
@@ -51,7 +52,7 @@ def encode_data(path, dict_data):
     :param dict_data: The dictionary to be encoded as lua table
     """
     with open(path, "w+", encoding="utf8", newline="") as txt_file:
-        lua_text = "-- we can read Lua syntax here!\nreturn "
+        lua_text = dict_data.pop("original_header", "") + "\nreturn "
         lua_text += lua.encode(dict_data)
         txt_file.write(lua_text)
 

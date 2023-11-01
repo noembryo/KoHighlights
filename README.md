@@ -1,5 +1,5 @@
 ## General
-![kohighlights128w](https://cloud.githubusercontent.com/assets/14363074/9978678/22e01940-5f49-11e5-8112-bc58b8f0f56f.png)
+![kohighlights128w](https://user-images.githubusercontent.com/24675403/234561476-97283ff8-5437-49cd-b4c5-3929886cf182.png)
 
 [![made-with-python][Python]](https://www.python.org/)
 [![Generic badge][OS]][ReleaseLink]

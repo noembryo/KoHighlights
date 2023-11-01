@@ -47,7 +47,7 @@ else:
 
 
 __author__ = "noEmbryo"
-__version__ = "1.7.2.0"
+__version__ = "1.7.3.0"
 
 
 # if sys.platform.lower().startswith("win"):
@@ -2775,6 +2775,7 @@ class KOHighlights(QApplication):
         #     self.parse_args()
         self.base.setWindowTitle(APP_NAME + " portable" if PORTABLE else APP_NAME)
         self.exec_()
+        self.deleteLater()  # avoids some QThread messages in the shell on exit
         # show_console() if on_windows and compiled else None
 
     # ___ ___________________ CLI STUFF _____________________________
