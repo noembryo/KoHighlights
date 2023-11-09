@@ -1,99 +1,140 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_filter.ui'
-#
-# Created: Thu Apr  6 23:38:59 2023
-#      by: pyside-uic 0.2.15 running on PySide 1.2.4
-#
-# WARNING! All changes made in this file will be lost!
+################################################################################
+## Form generated from reading UI file 'gui_filter.ui'
+##
+## Created by: Qt User Interface Compiler version 6.6.0
+##
+## WARNING! All changes made in this file will be lost when recompiling UI file!
+################################################################################
 
-from PySide import QtCore, QtGui
+from PySide6.QtCore import (QCoreApplication, QDate, QDateTime, QLocale,
+    QMetaObject, QObject, QPoint, QRect,
+    QSize, QTime, QUrl, Qt)
+from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QCursor,
+    QFont, QFontDatabase, QGradient, QIcon,
+    QImage, QKeySequence, QLinearGradient, QPainter,
+    QPalette, QPixmap, QRadialGradient, QTransform)
+from PySide6.QtWidgets import (QApplication, QComboBox, QDialog, QFrame,
+    QHBoxLayout, QLabel, QLineEdit, QPushButton,
+    QSizePolicy, QSpacerItem, QVBoxLayout, QWidget)
+import images_rc
 
 class Ui_Filter(object):
     def setupUi(self, Filter):
-        Filter.setObjectName("Filter")
+        if not Filter.objectName():
+            Filter.setObjectName(u"Filter")
         Filter.resize(215, 66)
-        Filter.setLocale(QtCore.QLocale(QtCore.QLocale.English, QtCore.QLocale.UnitedStates))
-        self.verticalLayout = QtGui.QVBoxLayout(Filter)
+        Filter.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
+        self.verticalLayout = QVBoxLayout(Filter)
         self.verticalLayout.setContentsMargins(4, 4, 4, 4)
-        self.verticalLayout.setObjectName("verticalLayout")
-        self.filter_frm1 = QtGui.QFrame(Filter)
-        self.filter_frm1.setFrameShape(QtGui.QFrame.StyledPanel)
-        self.filter_frm1.setFrameShadow(QtGui.QFrame.Raised)
-        self.filter_frm1.setObjectName("filter_frm1")
-        self.horizontalLayout_4 = QtGui.QHBoxLayout(self.filter_frm1)
+        self.verticalLayout.setObjectName(u"verticalLayout")
+        self.filter_frm1 = QFrame(Filter)
+        self.filter_frm1.setObjectName(u"filter_frm1")
+        self.filter_frm1.setFrameShape(QFrame.StyledPanel)
+        self.filter_frm1.setFrameShadow(QFrame.Raised)
+        self.horizontalLayout_4 = QHBoxLayout(self.filter_frm1)
         self.horizontalLayout_4.setContentsMargins(0, 0, 0, 0)
-        self.horizontalLayout_4.setObjectName("horizontalLayout_4")
-        self.filter_txt = QtGui.QLineEdit(self.filter_frm1)
-        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Preferred)
+        self.horizontalLayout_4.setObjectName(u"horizontalLayout_4")
+        self.filter_txt = QLineEdit(self.filter_frm1)
+        self.filter_txt.setObjectName(u"filter_txt")
+        sizePolicy = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.filter_txt.sizePolicy().hasHeightForWidth())
         self.filter_txt.setSizePolicy(sizePolicy)
-        self.filter_txt.setText("")
-        self.filter_txt.setObjectName("filter_txt")
+
         self.horizontalLayout_4.addWidget(self.filter_txt)
-        self.filter_btn = QtGui.QPushButton(self.filter_frm1)
-        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Fixed, QtGui.QSizePolicy.Fixed)
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.filter_btn.sizePolicy().hasHeightForWidth())
-        self.filter_btn.setSizePolicy(sizePolicy)
-        icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(":/stuff/filter.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+
+        self.filter_btn = QPushButton(self.filter_frm1)
+        self.filter_btn.setObjectName(u"filter_btn")
+        sizePolicy1 = QSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        sizePolicy1.setHorizontalStretch(0)
+        sizePolicy1.setVerticalStretch(0)
+        sizePolicy1.setHeightForWidth(self.filter_btn.sizePolicy().hasHeightForWidth())
+        self.filter_btn.setSizePolicy(sizePolicy1)
+        icon = QIcon()
+        icon.addFile(u":/stuff/filter.png", QSize(), QIcon.Normal, QIcon.Off)
         self.filter_btn.setIcon(icon)
-        self.filter_btn.setObjectName("filter_btn")
+
         self.horizontalLayout_4.addWidget(self.filter_btn)
+
+
         self.verticalLayout.addWidget(self.filter_frm1)
-        self.filter_frm2 = QtGui.QFrame(Filter)
-        self.filter_frm2.setFrameShape(QtGui.QFrame.StyledPanel)
-        self.filter_frm2.setFrameShadow(QtGui.QFrame.Raised)
-        self.filter_frm2.setObjectName("filter_frm2")
-        self.horizontalLayout = QtGui.QHBoxLayout(self.filter_frm2)
+
+        self.filter_frm2 = QFrame(Filter)
+        self.filter_frm2.setObjectName(u"filter_frm2")
+        self.filter_frm2.setFrameShape(QFrame.StyledPanel)
+        self.filter_frm2.setFrameShadow(QFrame.Raised)
+        self.horizontalLayout = QHBoxLayout(self.filter_frm2)
         self.horizontalLayout.setContentsMargins(0, 0, 0, 0)
-        self.horizontalLayout.setObjectName("horizontalLayout")
-        self.filter_box = QtGui.QComboBox(self.filter_frm2)
-        self.filter_box.setObjectName("filter_box")
+        self.horizontalLayout.setObjectName(u"horizontalLayout")
+        self.filter_box = QComboBox(self.filter_frm2)
         self.filter_box.addItem("")
         self.filter_box.addItem("")
         self.filter_box.addItem("")
         self.filter_box.addItem("")
+        self.filter_box.setObjectName(u"filter_box")
+
         self.horizontalLayout.addWidget(self.filter_box)
-        self.filtered_lbl = QtGui.QLabel(self.filter_frm2)
-        self.filtered_lbl.setText("")
-        self.filtered_lbl.setObjectName("filtered_lbl")
+
+        self.filtered_lbl = QLabel(self.filter_frm2)
+        self.filtered_lbl.setObjectName(u"filtered_lbl")
+
         self.horizontalLayout.addWidget(self.filtered_lbl)
-        spacerItem = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
-        self.horizontalLayout.addItem(spacerItem)
-        self.clear_filter_btn = QtGui.QPushButton(self.filter_frm2)
-        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Fixed, QtGui.QSizePolicy.Fixed)
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.clear_filter_btn.sizePolicy().hasHeightForWidth())
-        self.clear_filter_btn.setSizePolicy(sizePolicy)
-        icon1 = QtGui.QIcon()
-        icon1.addPixmap(QtGui.QPixmap(":/stuff/trash.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+
+        self.horizontalSpacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+
+        self.horizontalLayout.addItem(self.horizontalSpacer)
+
+        self.clear_filter_btn = QPushButton(self.filter_frm2)
+        self.clear_filter_btn.setObjectName(u"clear_filter_btn")
+        sizePolicy1.setHeightForWidth(self.clear_filter_btn.sizePolicy().hasHeightForWidth())
+        self.clear_filter_btn.setSizePolicy(sizePolicy1)
+        icon1 = QIcon()
+        icon1.addFile(u":/stuff/trash.png", QSize(), QIcon.Normal, QIcon.Off)
         self.clear_filter_btn.setIcon(icon1)
-        self.clear_filter_btn.setObjectName("clear_filter_btn")
+
         self.horizontalLayout.addWidget(self.clear_filter_btn)
+
+
         self.verticalLayout.addWidget(self.filter_frm2)
 
+
         self.retranslateUi(Filter)
+
         self.filter_box.setCurrentIndex(0)
-        QtCore.QMetaObject.connectSlotsByName(Filter)
+
+
+        QMetaObject.connectSlotsByName(Filter)
+    # setupUi
 
     def retranslateUi(self, Filter):
-        self.filter_txt.setToolTip(QtGui.QApplication.translate("Filter", "Type the keywords to filter the visible items", None, QtGui.QApplication.UnicodeUTF8))
-        self.filter_txt.setPlaceholderText(QtGui.QApplication.translate("Filter", "Type here to filter...", None, QtGui.QApplication.UnicodeUTF8))
-        self.filter_btn.setToolTip(QtGui.QApplication.translate("Filter", "Set filter", None, QtGui.QApplication.UnicodeUTF8))
-        self.filter_btn.setText(QtGui.QApplication.translate("Filter", "Filter", None, QtGui.QApplication.UnicodeUTF8))
-        self.filter_box.setToolTip(QtGui.QApplication.translate("Filter", "Select where to search for the keywords", None, QtGui.QApplication.UnicodeUTF8))
-        self.filter_box.setItemText(0, QtGui.QApplication.translate("Filter", "Filter All:", None, QtGui.QApplication.UnicodeUTF8))
-        self.filter_box.setItemText(1, QtGui.QApplication.translate("Filter", "Filter Highlights:", None, QtGui.QApplication.UnicodeUTF8))
-        self.filter_box.setItemText(2, QtGui.QApplication.translate("Filter", "Filter Comments:", None, QtGui.QApplication.UnicodeUTF8))
-        self.filter_box.setItemText(3, QtGui.QApplication.translate("Filter", "Filter Book Titles:", None, QtGui.QApplication.UnicodeUTF8))
-        self.clear_filter_btn.setToolTip(QtGui.QApplication.translate("Filter", "Clear the filter field", None, QtGui.QApplication.UnicodeUTF8))
-        self.clear_filter_btn.setStatusTip(QtGui.QApplication.translate("Filter", "Clears the filter field", None, QtGui.QApplication.UnicodeUTF8))
-        self.clear_filter_btn.setText(QtGui.QApplication.translate("Filter", "Clear", None, QtGui.QApplication.UnicodeUTF8))
+#if QT_CONFIG(tooltip)
+        self.filter_txt.setToolTip(QCoreApplication.translate("Filter", u"Type the keywords to filter the visible items", None))
+#endif // QT_CONFIG(tooltip)
+        self.filter_txt.setText("")
+        self.filter_txt.setPlaceholderText(QCoreApplication.translate("Filter", u"Type here to filter...", None))
+#if QT_CONFIG(tooltip)
+        self.filter_btn.setToolTip(QCoreApplication.translate("Filter", u"Set filter", None))
+#endif // QT_CONFIG(tooltip)
+        self.filter_btn.setText(QCoreApplication.translate("Filter", u"Filter", None))
+        self.filter_box.setItemText(0, QCoreApplication.translate("Filter", u"Filter All:", None))
+        self.filter_box.setItemText(1, QCoreApplication.translate("Filter", u"Filter Highlights:", None))
+        self.filter_box.setItemText(2, QCoreApplication.translate("Filter", u"Filter Comments:", None))
+        self.filter_box.setItemText(3, QCoreApplication.translate("Filter", u"Filter Book Titles:", None))
 
-import images_rc
+#if QT_CONFIG(tooltip)
+        self.filter_box.setToolTip(QCoreApplication.translate("Filter", u"Select where to search for the keywords", None))
+#endif // QT_CONFIG(tooltip)
+        self.filtered_lbl.setText("")
+#if QT_CONFIG(tooltip)
+        self.clear_filter_btn.setToolTip(QCoreApplication.translate("Filter", u"Clear the filter field", None))
+#endif // QT_CONFIG(tooltip)
+#if QT_CONFIG(statustip)
+        self.clear_filter_btn.setStatusTip(QCoreApplication.translate("Filter", u"Clears the filter field", None))
+#endif // QT_CONFIG(statustip)
+        self.clear_filter_btn.setText(QCoreApplication.translate("Filter", u"Clear", None))
+        pass
+    # retranslateUi
+

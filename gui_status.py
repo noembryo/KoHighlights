@@ -1,74 +1,100 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_status.ui'
-#
-# Created: Thu Mar  9 14:39:35 2023
-#      by: pyside-uic 0.2.15 running on PySide 1.2.4
-#
-# WARNING! All changes made in this file will be lost!
+################################################################################
+## Form generated from reading UI file 'gui_status.ui'
+##
+## Created by: Qt User Interface Compiler version 6.6.0
+##
+## WARNING! All changes made in this file will be lost when recompiling UI file!
+################################################################################
 
-from PySide import QtCore, QtGui
+from PySide6.QtCore import (QCoreApplication, QDate, QDateTime, QLocale,
+    QMetaObject, QObject, QPoint, QRect,
+    QSize, QTime, QUrl, Qt)
+from PySide6.QtGui import (QAction, QBrush, QColor, QConicalGradient,
+    QCursor, QFont, QFontDatabase, QGradient,
+    QIcon, QImage, QKeySequence, QLinearGradient,
+    QPainter, QPalette, QPixmap, QRadialGradient,
+    QTransform)
+from PySide6.QtWidgets import (QApplication, QFrame, QHBoxLayout, QLabel,
+    QSizePolicy, QToolButton, QWidget)
+import images_rc
 
 class Ui_Status(object):
     def setupUi(self, Status):
-        Status.setObjectName("Status")
+        if not Status.objectName():
+            Status.setObjectName(u"Status")
         Status.resize(277, 55)
-        Status.setWindowTitle("")
-        self.horizontalLayout_2 = QtGui.QHBoxLayout(Status)
-        self.horizontalLayout_2.setContentsMargins(0, 0, 0, 0)
-        self.horizontalLayout_2.setObjectName("horizontalLayout_2")
-        self.frame = QtGui.QFrame(Status)
-        self.frame.setFrameShape(QtGui.QFrame.StyledPanel)
-        self.frame.setFrameShadow(QtGui.QFrame.Raised)
-        self.frame.setObjectName("frame")
-        self.horizontalLayout = QtGui.QHBoxLayout(self.frame)
-        self.horizontalLayout.setContentsMargins(0, 0, 0, 0)
-        self.horizontalLayout.setObjectName("horizontalLayout")
-        self.anim_lbl = QtGui.QLabel(self.frame)
-        self.anim_lbl.setText("")
-        self.anim_lbl.setObjectName("anim_lbl")
-        self.horizontalLayout.addWidget(self.anim_lbl)
-        self.show_items_btn = QtGui.QToolButton(self.frame)
-        self.show_items_btn.setLocale(QtCore.QLocale(QtCore.QLocale.English, QtCore.QLocale.UnitedStates))
-        icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(":/stuff/show_pages.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
-        self.show_items_btn.setIcon(icon)
-        self.show_items_btn.setIconSize(QtCore.QSize(24, 24))
-        self.show_items_btn.setChecked(False)
-        self.show_items_btn.setPopupMode(QtGui.QToolButton.InstantPopup)
-        self.show_items_btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
-        self.show_items_btn.setObjectName("show_items_btn")
-        self.horizontalLayout.addWidget(self.show_items_btn)
-        self.horizontalLayout_2.addWidget(self.frame)
-        self.act_page = QtGui.QAction(Status)
+        self.act_page = QAction(Status)
+        self.act_page.setObjectName(u"act_page")
         self.act_page.setCheckable(True)
-        self.act_page.setObjectName("act_page")
-        self.act_date = QtGui.QAction(Status)
+        self.act_date = QAction(Status)
+        self.act_date.setObjectName(u"act_date")
         self.act_date.setCheckable(True)
-        self.act_date.setObjectName("act_date")
-        self.act_text = QtGui.QAction(Status)
+        self.act_text = QAction(Status)
+        self.act_text.setObjectName(u"act_text")
         self.act_text.setCheckable(True)
-        self.act_text.setObjectName("act_text")
-        self.act_comment = QtGui.QAction(Status)
+        self.act_comment = QAction(Status)
+        self.act_comment.setObjectName(u"act_comment")
         self.act_comment.setCheckable(True)
-        self.act_comment.setObjectName("act_comment")
-        self.act_chapter = QtGui.QAction(Status)
+        self.act_chapter = QAction(Status)
+        self.act_chapter.setObjectName(u"act_chapter")
         self.act_chapter.setCheckable(True)
-        self.act_chapter.setObjectName("act_chapter")
+        self.horizontalLayout_2 = QHBoxLayout(Status)
+        self.horizontalLayout_2.setContentsMargins(0, 0, 0, 0)
+        self.horizontalLayout_2.setObjectName(u"horizontalLayout_2")
+        self.frame = QFrame(Status)
+        self.frame.setObjectName(u"frame")
+        self.frame.setFrameShape(QFrame.StyledPanel)
+        self.frame.setFrameShadow(QFrame.Raised)
+        self.horizontalLayout = QHBoxLayout(self.frame)
+        self.horizontalLayout.setContentsMargins(0, 0, 0, 0)
+        self.horizontalLayout.setObjectName(u"horizontalLayout")
+        self.anim_lbl = QLabel(self.frame)
+        self.anim_lbl.setObjectName(u"anim_lbl")
+
+        self.horizontalLayout.addWidget(self.anim_lbl)
+
+        self.show_items_btn = QToolButton(self.frame)
+        self.show_items_btn.setObjectName(u"show_items_btn")
+        self.show_items_btn.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
+        icon = QIcon()
+        icon.addFile(u":/stuff/show_pages.png", QSize(), QIcon.Normal, QIcon.Off)
+        self.show_items_btn.setIcon(icon)
+        self.show_items_btn.setIconSize(QSize(24, 24))
+        self.show_items_btn.setChecked(False)
+        self.show_items_btn.setPopupMode(QToolButton.InstantPopup)
+        self.show_items_btn.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+
+        self.horizontalLayout.addWidget(self.show_items_btn)
+
+
+        self.horizontalLayout_2.addWidget(self.frame)
+
 
         self.retranslateUi(Status)
-        QtCore.QMetaObject.connectSlotsByName(Status)
+
+        QMetaObject.connectSlotsByName(Status)
+    # setupUi
 
     def retranslateUi(self, Status):
-        self.show_items_btn.setToolTip(QtGui.QApplication.translate("Status", "Show/Hide elements of Highlights. Also affects\n"
-"what will be saved to the text/html files.", None, QtGui.QApplication.UnicodeUTF8))
-        self.show_items_btn.setStatusTip(QtGui.QApplication.translate("Status", "Show/Hide elements of Highlights. Also affects what will be saved to the text/html files.", None, QtGui.QApplication.UnicodeUTF8))
-        self.show_items_btn.setText(QtGui.QApplication.translate("Status", "Show in Highlights", None, QtGui.QApplication.UnicodeUTF8))
-        self.act_page.setText(QtGui.QApplication.translate("Status", "Page", None, QtGui.QApplication.UnicodeUTF8))
-        self.act_date.setText(QtGui.QApplication.translate("Status", "Date", None, QtGui.QApplication.UnicodeUTF8))
-        self.act_text.setText(QtGui.QApplication.translate("Status", "Highlight", None, QtGui.QApplication.UnicodeUTF8))
-        self.act_comment.setText(QtGui.QApplication.translate("Status", "Comment", None, QtGui.QApplication.UnicodeUTF8))
-        self.act_chapter.setText(QtGui.QApplication.translate("Status", "Chapter", None, QtGui.QApplication.UnicodeUTF8))
-        self.act_chapter.setToolTip(QtGui.QApplication.translate("Status", "Chapter", None, QtGui.QApplication.UnicodeUTF8))
+        Status.setWindowTitle("")
+        self.act_page.setText(QCoreApplication.translate("Status", u"Page", None))
+        self.act_date.setText(QCoreApplication.translate("Status", u"Date", None))
+        self.act_text.setText(QCoreApplication.translate("Status", u"Highlight", None))
+        self.act_comment.setText(QCoreApplication.translate("Status", u"Comment", None))
+        self.act_chapter.setText(QCoreApplication.translate("Status", u"Chapter", None))
+#if QT_CONFIG(tooltip)
+        self.act_chapter.setToolTip(QCoreApplication.translate("Status", u"Chapter", None))
+#endif // QT_CONFIG(tooltip)
+        self.anim_lbl.setText("")
+#if QT_CONFIG(tooltip)
+        self.show_items_btn.setToolTip(QCoreApplication.translate("Status", u"Show/Hide elements of Highlights. Also affects\n"
+"what will be saved to the text/html files.", None))
+#endif // QT_CONFIG(tooltip)
+#if QT_CONFIG(statustip)
+        self.show_items_btn.setStatusTip(QCoreApplication.translate("Status", u"Show/Hide elements of Highlights. Also affects what will be saved to the text/html files.", None))
+#endif // QT_CONFIG(statustip)
+        self.show_items_btn.setText(QCoreApplication.translate("Status", u"Show in Highlights", None))
+    # retranslateUi
 
-import images_rc
