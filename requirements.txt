@@ -1,6 +1,0 @@
-beautifulsoup4
-future
-PySide==1.2.4
-requests
-pypiwin32
-pywin32

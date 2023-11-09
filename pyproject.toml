@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "kohighlights"
+version = "1.7.3.0"
+description = "KOHighlights is a utility for viewing KOReader's highlights and/or export them to simple text, html, csv or markdown files."
+authors = ["noEmbryo <noembryo@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+beautifulsoup4 = "^4.12.2"
+PySide = "1.2.4"
+requests = "^2.31.0"
+pypiwin32 = "^223"
+pywin32 = "^306"
+future = "^0.18.3"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
