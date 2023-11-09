@@ -90,9 +90,11 @@ def get_book_text(title, authors, highlights, format_, line_break, space, text):
         text += BOOK_BLOCK % {"title": title, "authors": authors}
         for high in highlights:
             date_text, high_comment, high_text, page_text, chapter = high
-            text += HIGH_BLOCK % {"page": page_text, "date": date_text,
-                                  "highlight": high_text, "comment": high_comment,
-                                  "chapter": chapter}
+            text += HIGH_BLOCK % {
+                "page": page_text, "date": date_text,
+                "highlight": high_text, "comment": high_comment,
+                "chapter": chapter
+            }
         text += "</div>\n"
     elif format_ == ONE_TEXT:
         name = title
@@ -100,9 +102,11 @@ def get_book_text(title, authors, highlights, format_, line_break, space, text):
             name = "{} - {}".format(authors, title)
         line = "-" * 80
         text += line + nl + name + nl + line + nl
-        highlights = [i[3] + space + i[0] + line_break +
-                      ("[{}]{}".format(i[4], nl) if i[4] else "") +
-                      i[2] + i[1] for i in highlights]
+        highlights = [
+            i[3] + space + i[0] + line_break +
+            ("[{}]{}".format(i[4], nl) if i[4] else "") +
+            i[2] + i[1] for i in highlights
+        ]
         text += (nl * 2).join(highlights) + nl * 2
     elif format_ == ONE_CSV:
         for high in highlights:
@@ -123,8 +127,7 @@ def get_book_text(title, authors, highlights, format_, line_break, space, text):
             if chapter:
                 chapter = "***{0}***{1}{1}".format(chapter, nl).replace(nl, "  " + nl)
             high = i[2].replace(nl, "  " + nl)
-            h = ("*" + i[3] + space + i[0] + line_break + chapter +
-                 high + comment + "  \n&nbsp;  \n")
+            h = ("*" + i[3] + space + i[0] + line_break + chapter + high + comment + "  \n&nbsp;  \n")
             h = h.replace("-", "\\-")
             highs.append(h)
         text += nl.join(highs) + "\n---\n"
