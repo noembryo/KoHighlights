@@ -795,9 +795,6 @@ class Filter(QDialog, Ui_Filter):
     def __init__(self, parent=None):
         super(Filter, self).__init__(parent)
         self.setupUi(self)
-        if QT4:  # Remove the question mark widget from dialog
-            # noinspection PyUnresolvedReferences
-            self.setWindowFlags(self.windowFlags() ^ Qt.WindowContextHelpButtonHint)
         self.setWindowTitle(_("Filter").format(APP_NAME))
         self.base = parent
 
@@ -948,9 +945,6 @@ class About(QDialog, Ui_About):
     def __init__(self, parent=None):
         super(About, self).__init__(parent)
         self.setupUi(self)
-        if QT4:  # Remove the question mark widget from dialog
-            # noinspection PyUnresolvedReferences
-            self.setWindowFlags(self.windowFlags() ^ Qt.WindowContextHelpButtonHint)
         self.setWindowTitle(_("About {}").format(APP_NAME))
         self.base = parent
 
@@ -1069,9 +1063,6 @@ class TextDialog(QDialog, Ui_TextDialog):
 
     def __init__(self, parent=None):
         super(TextDialog, self).__init__(parent)
-        if QT4:  # Remove the question mark widget from dialog
-            # noinspection PyUnresolvedReferences
-            self.setWindowFlags(self.windowFlags() ^ Qt.WindowContextHelpButtonHint)
         self.setupUi(self)
 
         self.base = parent

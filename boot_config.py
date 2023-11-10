@@ -87,11 +87,8 @@ def except_hook(class_type, value, trace_back):
 
 sys.excepthook = except_hook
 
-QT4 = True
-try:
-    import PySide6
-except ImportError:
-    QT4 = False
+
+import PySide6
 FIRST_RUN = False
 # noinspection PyBroadException
 try:

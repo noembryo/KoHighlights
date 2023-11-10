@@ -2724,8 +2724,7 @@ class KOHighlights(QApplication):
 
     def __init__(self, *args, **kwargs):
         super(KOHighlights, self).__init__(*args, **kwargs)
-        if not QT4:
-            self.setAttribute(Qt.AA_DisableWindowContextHelpButton)
+
         # decode app's arguments
         # try:
         #     sys.argv = [i.decode(sys.getfilesystemencoding()) for i in sys.argv]
