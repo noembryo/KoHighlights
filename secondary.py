@@ -8,18 +8,11 @@ from distutils.version import LooseVersion
 from os.path import join, basename, splitext, isfile
 from pprint import pprint
 
-if QT4:  # ___ ______________ DEPENDENCIES __________________________
-    from PySide.QtCore import Qt, Slot, QObject, Signal, QSize, QPoint, QEvent
-    from PySide.QtGui import (QApplication, QMessageBox, QIcon, QFileDialog, QLineEdit,
-                              QDialog, QWidget, QMovie, QFont, QMenu, QAction, QCursor,
-                              QTableWidget, QCheckBox, QToolButton, QActionGroup,
-                              QTableWidgetItem)
-else:
-    from PySide2.QtCore import QObject, Qt, Signal, QPoint, Slot, QSize, QEvent
-    from PySide2.QtGui import QFont, QMovie, QIcon, QCursor
-    from PySide2.QtWidgets import (QTableWidgetItem, QTableWidget, QMessageBox, QLineEdit,
-                                   QApplication, QWidget, QDialog, QFileDialog,
-                                   QActionGroup, QMenu, QAction, QToolButton, QCheckBox)
+from PySide6.QtCore import QObject, Qt, Signal, QPoint, Slot, QSize, QEvent
+from PySide6.QtGui import QFont, QMovie, QIcon, QCursor, QAction, QActionGroup
+from PySide6.QtWidgets import (QTableWidgetItem, QTableWidget, QMessageBox, QLineEdit,
+                                QApplication, QWidget, QDialog, QFileDialog,
+                                QMenu, QToolButton, QCheckBox)
 import requests
 from bs4 import BeautifulSoup
 from slppu import slppu as lua  # https://github.com/noembryo/slppu
@@ -517,7 +510,7 @@ class ToolBar(QWidget, Ui_ToolBar):
         :type point: QPoint
         :param point: The point where the right-click happened
         """
-        self.size_menu.exec_(self.tool_frame.mapToGlobal(point))
+        self.size_menu.exec(self.tool_frame.mapToGlobal(point))
 
     def create_size_menu(self):
         """ Create the toolbar's buttons size menu
@@ -642,7 +635,7 @@ class ToolBar(QWidget, Ui_ToolBar):
         """ The context menu of the "Archived" button is pressed
         """
         # noinspection PyArgumentList
-        self.db_menu.exec_(QCursor.pos())
+        self.db_menu.exec(QCursor.pos())
 
     def create_db_menu(self):
         """ Create the database menu

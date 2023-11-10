@@ -20,21 +20,13 @@ from os.path import (isdir, isfile, join, basename, splitext, dirname, split, ge
 from pprint import pprint
 
 
-if QT4:  # ___ ______________ DEPENDENCIES __________________________
-    from PySide.QtSql import QSqlDatabase, QSqlQuery
-    from PySide.QtCore import (Qt, QTimer, Slot, QThread, QMimeData, QModelIndex,
-                               QByteArray, QPoint)
-    from PySide.QtGui import (QMainWindow, QApplication, QMessageBox, QIcon, QFileDialog,
-                              QTableWidgetItem, QTextCursor, QMenu, QAction, QHeaderView,
-                              QPixmap, QListWidgetItem, QBrush, QColor)
-else:
-    from PySide2.QtWidgets import (QMainWindow, QHeaderView, QApplication, QMessageBox,
-                                   QAction, QMenu, QTableWidgetItem, QListWidgetItem,
-                                   QFileDialog)
-    from PySide2.QtCore import (Qt, QTimer, QThread, QModelIndex, Slot, QPoint, QMimeData,
-                                QByteArray)
-    from PySide2.QtSql import QSqlDatabase, QSqlQuery
-    from PySide2.QtGui import QIcon, QPixmap, QTextCursor, QBrush, QColor
+
+from PySide6.QtWidgets import (QMainWindow, QHeaderView, QApplication, QMessageBox,
+                                QMenu, QTableWidgetItem, QListWidgetItem,
+                                QFileDialog)
+from PySide6.QtCore import Qt, QTimer, QThread, QModelIndex, Slot, QPoint, QMimeData
+from PySide6.QtSql import QSqlDatabase, QSqlQuery
+from PySide6.QtGui import QIcon, QPixmap, QTextCursor, QBrush, QColor, QAction
 
 from secondary import *
 from gui_main import Ui_Base
@@ -128,17 +120,11 @@ class Base(QMainWindow, Ui_Base):
         self.header_main.setContextMenuPolicy(Qt.CustomContextMenu)
         self.header_high_view = self.high_table.horizontalHeader()
         self.header_high_view.setDefaultAlignment(Qt.AlignLeft)
-        # self.header_high_view.setResizeMode(HIGHLIGHT_H, QHeaderView.Stretch)
-        if QT4:
-            self.file_table.verticalHeader().setResizeMode(QHeaderView.Fixed)
-            self.header_main.setMovable(True)
-            self.high_table.verticalHeader().setResizeMode(QHeaderView.Fixed)
-            self.header_high_view.setMovable(True)
-        else:
-            self.file_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
-            self.header_main.setSectionsMovable(True)
-            self.high_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
-            self.header_high_view.setSectionsMovable(True)
+
+        self.file_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
+        self.header_main.setSectionsMovable(True)
+        self.high_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
+        self.header_high_view.setSectionsMovable(True)
 
         self.splitter.setCollapsible(0, False)
         self.splitter.setCollapsible(1, False)
@@ -363,7 +349,7 @@ class Base(QMainWindow, Ui_Base):
     def set_db_version(self):
         """ Set the current database version
         """
-        self.query.exec_("""PRAGMA user_version = {}""".format(DB_VERSION))
+        self.query.exec("""PRAGMA user_version = {}""".format(DB_VERSION))
 
     def change_db(self, mode):
         """ Changes the current db file
@@ -410,7 +396,7 @@ class Base(QMainWindow, Ui_Base):
     def create_books_table(self):
         """ Create the books table
         """
-        self.query.exec_("""CREATE TABLE IF NOT EXISTS books (id INTEGER PRIMARY KEY, 
+        self.query.exec("""CREATE TABLE IF NOT EXISTS books (id INTEGER PRIMARY KEY, 
                          md5 TEXT UNIQUE NOT NULL, date TEXT, path TEXT, data TEXT)""")
 
     def add_books2db(self, books):
@@ -427,7 +413,7 @@ class Base(QMainWindow, Ui_Base):
             self.query.bindValue(":date", book["date"])
             self.query.bindValue(":path", book["path"])
             self.query.bindValue(":data", book["data"])
-            self.query.exec_()
+            self.query.exec()
         self.db.commit()
 
     def read_books_from_db(self):
@@ -435,7 +421,7 @@ class Base(QMainWindow, Ui_Base):
         """
         del self.books[:]
         self.query.setForwardOnly(True)
-        self.query.exec_("""SELECT * FROM books""")
+        self.query.exec("""SELECT * FROM books""")
         while self.query.next():
             book = [self.query.value(i) for i in range(1, 5)]  # don't read the id
             data = json.loads(book[DB_DATA], object_hook=self.keys2int)
@@ -462,7 +448,7 @@ class Base(QMainWindow, Ui_Base):
         self.query.prepare("""UPDATE books SET data = :data WHERE md5 = :md5""")
         self.query.bindValue(":md5", data["partial_md5_checksum"])
         self.query.bindValue(":data", json.dumps(data))
-        self.query.exec_()
+        self.query.exec()
 
     def delete_books_from_db(self, ids):
         """ Deletes multiple books from the db
@@ -475,18 +461,18 @@ class Base(QMainWindow, Ui_Base):
             self.query.prepare("""DELETE FROM books WHERE md5 = :md5""")
             for md5 in ids:
                 self.query.bindValue(":md5", md5)
-                self.query.exec_()
+                self.query.exec()
             self.db.commit()
 
     def get_db_book_count(self):
         """ Get the count of the books in the db
         """
-        self.query.exec_("""SELECT Count(*) FROM books""")
+        self.query.exec("""SELECT Count(*) FROM books""")
         self.query.next()
         return self.query.value(0)
 
     def vacuum_db(self, info=True):
-        self.query.exec_("""VACUUM""")
+        self.query.exec("""VACUUM""")
         if info:
             self.popup(_("Information"), _("The database is compacted!"),
                        QMessageBox.Information)
@@ -652,7 +638,7 @@ class Base(QMainWindow, Ui_Base):
             action.triggered.connect(partial(self.delete_actions, 0))
             menu.addAction(action)
 
-        menu.exec_(self.file_table.mapToGlobal(point))
+        menu.exec(self.file_table.mapToGlobal(point))
 
     @Slot(QTableWidgetItem)
     def on_file_table_itemDoubleClicked(self, item):
@@ -756,7 +742,7 @@ class Base(QMainWindow, Ui_Base):
             action.triggered.connect(self.toggle_title_sort)
             menu.addAction(action)
 
-            menu.exec_(self.file_table.mapToGlobal(pos))
+            menu.exec(self.file_table.mapToGlobal(pos))
 
     def toggle_title_sort(self):
         """ Toggles the way titles are sorted (use or not A/The)
@@ -1108,7 +1094,7 @@ class Base(QMainWindow, Ui_Base):
         action.setIcon(self.ico_file_save)
         menu.addAction(action)
 
-        menu.exec_(self.high_table.mapToGlobal(point))
+        menu.exec(self.high_table.mapToGlobal(point))
 
     def get_highlights(self):
         """ Returns the selected highlights and the comments texts
@@ -1411,7 +1397,7 @@ class Base(QMainWindow, Ui_Base):
             action.setIcon(self.ico_delete)
             menu.addAction(action)
 
-            menu.exec_(self.high_list.mapToGlobal(point))
+            menu.exec(self.high_list.mapToGlobal(point))
 
     @Slot()
     def on_high_list_itemDoubleClicked(self):
@@ -1433,7 +1419,7 @@ class Base(QMainWindow, Ui_Base):
             return
         self.edit_high.high_edit_txt.setText(comment)
         # self.edit_high.high_edit_txt.setFocus()
-        self.edit_high.exec_()
+        self.edit_high.exec()
 
     def edit_comment_ok(self):
         """ Change the selected highlight's comment
@@ -2542,7 +2528,7 @@ class Base(QMainWindow, Ui_Base):
         elif input_text:  # Show input QLineEdit
             popup.set_input(input_text)
 
-        popup.exec_()
+        popup.exec()
         return popup
 
     def passed_files(self):
@@ -2774,7 +2760,7 @@ class KOHighlights(QApplication):
         # else:
         #     self.parse_args()
         self.base.setWindowTitle(APP_NAME + " portable" if PORTABLE else APP_NAME)
-        self.exec_()
+        self.exec()
         self.deleteLater()  # avoids some QThread messages in the shell on exit
         # show_console() if on_windows and compiled else None
 
