@@ -1,7 +1,5 @@
 # coding=utf-8
 from __future__ import absolute_import, division, print_function, unicode_literals
-
-
 from boot_config import *
 import os, sys, re
 import gzip
@@ -27,7 +25,7 @@ if QT4:  # ___ ______________ DEPENDENCIES __________________________
     from PySide.QtGui import (QMainWindow, QApplication, QMessageBox, QIcon, QFileDialog,
                               QTableWidgetItem, QTextCursor, QMenu, QAction, QHeaderView,
                               QPixmap, QListWidgetItem, QBrush, QColor)
-else:
+elif QT5:
     from PySide2.QtWidgets import (QMainWindow, QHeaderView, QApplication, QMessageBox,
                                    QAction, QMenu, QTableWidgetItem, QListWidgetItem,
                                    QFileDialog)
@@ -35,6 +33,12 @@ else:
                                 QByteArray)
     from PySide2.QtSql import QSqlDatabase, QSqlQuery
     from PySide2.QtGui import QIcon, QPixmap, QTextCursor, QBrush, QColor
+else:  # Qt6
+    from PySide6.QtWidgets import (QMainWindow, QHeaderView, QApplication, QMessageBox,
+                                   QFileDialog, QTableWidgetItem, QMenu, QListWidgetItem)
+    from PySide6.QtCore import Qt, QTimer, Slot, QPoint, QThread, QModelIndex, QMimeData
+    from PySide6.QtGui import QIcon, QAction, QBrush, QColor, QPixmap, QTextCursor
+    from PySide6.QtSql import QSqlDatabase, QSqlQuery
 
 from secondary import *
 from gui_main import Ui_Base
@@ -47,7 +51,7 @@ else:
 
 
 __author__ = "noEmbryo"
-__version__ = "1.7.3.0"
+__version__ = "1.7.4.0"
 
 
 # if sys.platform.lower().startswith("win"):
@@ -134,7 +138,12 @@ class Base(QMainWindow, Ui_Base):
             self.header_main.setMovable(True)
             self.high_table.verticalHeader().setResizeMode(QHeaderView.Fixed)
             self.header_high_view.setMovable(True)
-        else:
+        elif QT5:
+            self.file_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
+            self.header_main.setSectionsMovable(True)
+            self.high_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
+            self.header_high_view.setSectionsMovable(True)
+        elif QT6:
             self.file_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
             self.header_main.setSectionsMovable(True)
             self.high_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
@@ -342,6 +351,8 @@ class Base(QMainWindow, Ui_Base):
             print("Could not open database!")
             return
         self.query = QSqlQuery()
+        # if QT6:
+        #     self.query.exec_ = self.query.exec
         if app_config:
             pass
             # self.query.exec_("""PRAGMA user_version""")  # 2do: enable if db changes
@@ -359,6 +370,10 @@ class Base(QMainWindow, Ui_Base):
         if version == DB_VERSION or not isfile(self.db_path):
             return  # the db is up to date or does not exists yet
         self.update_db(version)
+
+    def update_db(self, version):
+        """ Updates the db to the last version"""
+        pass
 
     def set_db_version(self):
         """ Set the current database version
@@ -597,6 +612,8 @@ class Base(QMainWindow, Ui_Base):
             return
 
         menu = QMenu(self.file_table)
+        # if QT6:
+        #     menu.exec_ = menu.exec
 
         row = self.file_table.itemAt(point).row()
         self.act_view_book.setEnabled(self.toolbar.open_btn.isEnabled())
@@ -664,7 +681,7 @@ class Base(QMainWindow, Ui_Base):
         row = item.row()
         meta_path = self.file_table.item(row, PATH).data(0)
         data = self.file_table.item(row, TITLE).data(Qt.UserRole)
-        book_path = self.get_book_path(meta_path, data)
+        book_path = self.get_book_path(meta_path, data)[0]
         self.open_file(book_path)
 
     @staticmethod
@@ -676,15 +693,18 @@ class Base(QMainWindow, Ui_Base):
         :type data: dict
         :param data: The book's metadata
         """
-        book_path = data.get("doc_path")
-        if not book_path:  # use the metadata file path
-            ext = splitext(splitext(meta_path)[0])[1]
-            meta_path = splitext(meta_path)[0]
-            book_path = splitext(split(meta_path)[0])[0] + ext
-        else:  # use the recorded file path
-            drive = splitdrive(meta_path)[0]
-            book_path = join(drive, os.sep, *(book_path.split("/")[3:]))
-        return book_path
+        meta_path = splitext(meta_path)[0]  # use the metadata file path
+        ext = splitext(meta_path)[1]
+        book_path = splitext(split(meta_path)[0])[0] + ext
+        book_exists = isfile(book_path)
+        if not book_exists:  # use the recorded file path
+            doc_path = data.get("doc_path")
+            if doc_path:
+                drive = splitdrive(meta_path)[0]
+                doc_path = join(drive, os.sep, *(doc_path.split("/")[3:]))
+                if isfile(doc_path):
+                    book_path = doc_path
+        return book_path, book_exists
 
     @Slot()
     def on_act_view_book_triggered(self):
@@ -749,6 +769,8 @@ class Base(QMainWindow, Ui_Base):
         name = self.file_table.horizontalHeaderItem(column).text()
         if name == _("Title"):
             menu = QMenu(self)
+            # if QT6:
+            #     menu.exec_ = menu.exec
 
             action = QAction(_("Ignore english articles"), menu)
             action.setCheckable(True)
@@ -816,7 +838,7 @@ class Base(QMainWindow, Ui_Base):
             except KeyError:  # older metadata, don't add
                 older += 1
                 continue
-            data["stats"]["performance_in_pages"] = {}  # can be cluttered
+            data["stats"]["performance_in_pages"] = {}
             data["page_positions"] = {}  # can be cluttered
             books.append({"md5": md5, "path": path, "date": date,
                           "data": json.dumps(data)})
@@ -914,9 +936,8 @@ class Base(QMainWindow, Ui_Base):
         author_item.setToolTip(authors)
         self.file_table.setItem(0, AUTHOR, author_item)
 
-        book_path = self.get_book_path(meta_path, data)
+        book_path, book_exists = self.get_book_path(meta_path, data)
         ext = splitext(book_path)[1]
-        book_exists = isfile(book_path)
         book_icon = self.ico_file_exists if book_exists else self.ico_file_missing
         type_item = QTableWidgetItem(book_icon, ext)
         type_item.setToolTip(book_path if book_exists else
@@ -1067,6 +1088,8 @@ class Base(QMainWindow, Ui_Base):
             return
 
         menu = QMenu(self.high_table)
+        # if QT6:
+        #     menu.exec_ = menu.exec
 
         row = self.high_table.itemAt(point).row()
         self.act_view_book.setData(row)
@@ -1342,6 +1365,7 @@ class Base(QMainWindow, Ui_Base):
             for page_id in data["highlight"][page]:
                 highlight = self.get_highlight_info(data, page, page_id)
                 if highlight:
+                    # noinspection PyTypeChecker
                     highlight.update({"authors": authors, "title": title,
                                       "path": path})
                     highlights.append(highlight)
@@ -1395,6 +1419,8 @@ class Base(QMainWindow, Ui_Base):
         """
         if self.sel_high_list:
             menu = QMenu(self.high_list)
+            # if QT6:
+            #     menu.exec_ = menu.exec
 
             action = QAction(_("Comments"), menu)
             action.triggered.connect(self.on_edit_comment)
@@ -2242,6 +2268,7 @@ class Base(QMainWindow, Ui_Base):
             authors = ""
         return authors, title, highlights
 
+    # noinspection PyTypeChecker
     def get_formatted_high(self, data, page, page_id, format_):
         """ Create the highlight's texts
 
@@ -2738,7 +2765,7 @@ class KOHighlights(QApplication):
 
     def __init__(self, *args, **kwargs):
         super(KOHighlights, self).__init__(*args, **kwargs)
-        if not QT4:
+        if QT5:
             self.setAttribute(Qt.AA_DisableWindowContextHelpButton)
         # decode app's arguments
         # try:
@@ -2981,6 +3008,7 @@ class KOHighlights(QApplication):
                 title = _("NO TITLE FOUND")
         return authors, title, highlights
 
+    # noinspection PyTypeChecker
     def cli_get_formatted_high(self, data, page, page_id, args):
         """ Get the highlight's info (text, comment, date and page)
 

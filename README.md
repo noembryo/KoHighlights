@@ -53,8 +53,10 @@ The original KOHighlights (using the wxPython) can be found
 * Delete some or all the highlights of any book.
 * Clear/reset the .sdr folders with the metadata or the books in the eReader.
 
-### Prerequisites
-* Progress sync plugin must be enabled in KOReader
+### Prerequisites  
+These plugins must be enabled in KOReader
+* Progress sync plugin
+* Reading statistics plugin
 
 ### Portable
 In Windows, KOHighlights can run in Portable mode using a `portable_settings` directory to store its settings, that is located inside the installation directory of the app.  

@@ -14,12 +14,19 @@ if QT4:  # ___ ______________ DEPENDENCIES __________________________
                               QDialog, QWidget, QMovie, QFont, QMenu, QAction, QCursor,
                               QTableWidget, QCheckBox, QToolButton, QActionGroup,
                               QTableWidgetItem)
-else:
+elif QT5:
     from PySide2.QtCore import QObject, Qt, Signal, QPoint, Slot, QSize, QEvent
     from PySide2.QtGui import QFont, QMovie, QIcon, QCursor
     from PySide2.QtWidgets import (QTableWidgetItem, QTableWidget, QMessageBox, QLineEdit,
                                    QApplication, QWidget, QDialog, QFileDialog,
                                    QActionGroup, QMenu, QAction, QToolButton, QCheckBox)
+else:  # Qt6
+    from PySide6.QtCore import QObject, Qt, Signal, QEvent, QPoint, Slot, QSize
+    from PySide6.QtGui import QFont, QActionGroup, QAction, QCursor, QMovie, QIcon
+    from PySide6.QtWidgets import (QTableWidgetItem, QTableWidget, QApplication,
+                                   QLineEdit, QToolButton, QWidget, QMenu, QFileDialog,
+                                   QDialog, QMessageBox, QCheckBox)
+
 import requests
 from bs4 import BeautifulSoup
 from slppu import slppu as lua  # https://github.com/noembryo/slppu
@@ -489,6 +496,10 @@ from gui_filter import Ui_Filter
 class ToolBar(QWidget, Ui_ToolBar):
 
     def __init__(self, parent=None):
+        """ The Toolbar
+
+        :type parent: Base
+        """
         super(ToolBar, self).__init__(parent)
         self.setupUi(self)
         self.base = parent
@@ -797,6 +808,10 @@ class ToolBar(QWidget, Ui_ToolBar):
 class Filter(QDialog, Ui_Filter):
 
     def __init__(self, parent=None):
+        """ Initializes the `Filter` dialog
+
+        :type parent: Base
+        """
         super(Filter, self).__init__(parent)
         self.setupUi(self)
         if QT4:  # Remove the question mark widget from dialog
@@ -950,6 +965,10 @@ class Filter(QDialog, Ui_Filter):
 class About(QDialog, Ui_About):
 
     def __init__(self, parent=None):
+        """ Initializes the `About` dialog
+
+        :type parent: Base
+        """
         super(About, self).__init__(parent)
         self.setupUi(self)
         if QT4:  # Remove the question mark widget from dialog
@@ -1038,8 +1057,7 @@ class About(QDialog, Ui_About):
                 <p align="center"><a href="http://www.noembryo.com/apps.php?app_index">
                    noEmbryo's page</a> with more Apps and stuff...</p>
                 <p align="center">Use it and if you like it, consider to
-                <p align="center"><a href="https://www.paypal.com/cgi-bin/webscr?
-                    cmd=_s-xclick &hosted_button_id=RBYLVRYG9RU2S">
+                <p align="center"><a href="https://www.paypal.com/donate/?hosted_button_id=RBYLVRYG9RU2S">
                 <img src="{2}" alt="PayPal Button"
                     width="142" height="27" border="0"></a></p>
                 <p align="center">&nbsp;</p></td>
@@ -1091,6 +1109,10 @@ class TextDialog(QDialog, Ui_TextDialog):
 class Status(QWidget, Ui_Status):
 
     def __init__(self, parent=None):
+        """ Initializes the StatusBar
+
+        :type parent: Base
+        """
         super(Status, self).__init__(parent)
         self.setupUi(self)
         self.base = parent

@@ -5,21 +5,37 @@ import time
 import sys, os
 import traceback
 import gzip, json
-from os.path import dirname, join, isdir, expanduser, exists
+from os.path import dirname, join, isdir, expanduser
 
 APP_NAME = "KOHighlights"
 APP_DIR = dirname(os.path.abspath(sys.argv[0]))
 os.chdir(APP_DIR)  # Set the current working directory to the app's directory
 
 PORTABLE = False
-PYTHON2 = True if sys.version_info < (3, 0) else False
+PYTHON2 = sys.version_info < (3, 0)
+
 if PYTHON2:
     from io import open
     from codecs import open as c_open
+    from PySide.QtCore import qVersion
 else:
     # noinspection PyShadowingBuiltins
     unicode, basestring = str, str
     c_open = open
+    try:
+        from PySide2.QtCore import qVersion
+    except ImportError:
+        from PySide6.QtCore import qVersion
+
+USE_QT6 = False  # select between PySide2/Qt5 and Pyside6/Qt6 if both are installed
+# noinspection PyTypeChecker
+qt_version = qVersion().split(".")[0]
+QT4 = qt_version == "4"
+QT5 = qt_version == "5"
+QT6 = qt_version == "6"
+if QT6 and QT5:
+    if USE_QT6:
+        USE_QT5 = False
 
 if sys.platform == "win32":  # Windows
     import win32api
@@ -84,12 +100,6 @@ def except_hook(class_type, value, trace_back):
 
 
 sys.excepthook = except_hook
-
-QT4 = True
-try:
-    import PySide
-except ImportError:
-    QT4 = False
 FIRST_RUN = False
 # noinspection PyBroadException
 try:
