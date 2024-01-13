@@ -12,7 +12,6 @@ import hashlib
 from datetime import datetime
 from functools import partial
 from collections import defaultdict
-from distutils.version import LooseVersion
 from os.path import (isdir, isfile, join, basename, splitext, dirname, split, getmtime,
                      abspath, splitdrive)
 from pprint import pprint
@@ -46,12 +45,14 @@ from gui_main import Ui_Base
 
 if PYTHON2:  # ___ __________ PYTHON 2/3 COMPATIBILITY ______________
     import cPickle as pickle
+    from distutils.version import LooseVersion as version_parse
 else:
+    from packaging.version import parse as version_parse
     import pickle
 
 
 __author__ = "noEmbryo"
-__version__ = "1.7.4.0"
+__version__ = "1.7.5.0"
 
 
 # if sys.platform.lower().startswith("win"):
@@ -351,8 +352,8 @@ class Base(QMainWindow, Ui_Base):
             print("Could not open database!")
             return
         self.query = QSqlQuery()
-        # if QT6:
-        #     self.query.exec_ = self.query.exec
+        if QT6:  # QT6 requires exec() instead of exec_()
+            self.query.exec_ = getattr(self.query, "exec")
         if app_config:
             pass
             # self.query.exec_("""PRAGMA user_version""")  # 2do: enable if db changes
@@ -361,17 +362,17 @@ class Base(QMainWindow, Ui_Base):
         self.set_db_version() if not isfile(self.db_path) else None
         self.create_books_table()
 
-    def check_db_version(self, version):
+    def check_db_version(self, db_version):
         """ Updates the db to the last version
 
-        :type version: int
-        :param version: The db file version
+        :type db_version: int
+        :param db_version: The db file version
         """
-        if version == DB_VERSION or not isfile(self.db_path):
+        if db_version == DB_VERSION or not isfile(self.db_path):
             return  # the db is up to date or does not exists yet
-        self.update_db(version)
+        self.update_db(db_version)
 
-    def update_db(self, version):
+    def update_db(self, db_version):
         """ Updates the db to the last version"""
         pass
 
@@ -612,8 +613,8 @@ class Base(QMainWindow, Ui_Base):
             return
 
         menu = QMenu(self.file_table)
-        # if QT6:
-        #     menu.exec_ = menu.exec
+        if QT6:  # QT6 requires exec() instead of exec_()
+            menu.exec_ = getattr(menu, "exec")
 
         row = self.file_table.itemAt(point).row()
         self.act_view_book.setEnabled(self.toolbar.open_btn.isEnabled())
@@ -769,8 +770,8 @@ class Base(QMainWindow, Ui_Base):
         name = self.file_table.horizontalHeaderItem(column).text()
         if name == _("Title"):
             menu = QMenu(self)
-            # if QT6:
-            #     menu.exec_ = menu.exec
+            if QT6:  # QT6 requires exec() instead of exec_()
+                menu.exec_ = getattr(menu, "exec")
 
             action = QAction(_("Ignore english articles"), menu)
             action.setCheckable(True)
@@ -1088,8 +1089,8 @@ class Base(QMainWindow, Ui_Base):
             return
 
         menu = QMenu(self.high_table)
-        # if QT6:
-        #     menu.exec_ = menu.exec
+        if QT6:  # QT6 requires exec() instead of exec_()
+            menu.exec_ = getattr(menu, "exec")
 
         row = self.high_table.itemAt(point).row()
         self.act_view_book.setData(row)
@@ -1304,12 +1305,11 @@ class Base(QMainWindow, Ui_Base):
                     self.toolbar.books_view_btn.setChecked(True)
                     self.toolbar.setup_buttons()
                     self.toolbar.activate_buttons()
-
                     self.file_table.selectRow(row)  # select the book
                     self.on_file_table_itemClicked(item)
                     for high_row in range(self.high_list.count()):  # find the highlight
                         if (self.high_list.item(high_row)
-                                .data(Qt.UserRole)[HIGHLIGHT_TEXT] == highlight):
+                                .data(Qt.UserRole)["text"] == highlight):
                             self.high_list.setCurrentRow(high_row)  # select the highlight
                             return
             except KeyError:  # old metadata with no "stats"
@@ -1419,8 +1419,8 @@ class Base(QMainWindow, Ui_Base):
         """
         if self.sel_high_list:
             menu = QMenu(self.high_list)
-            # if QT6:
-            #     menu.exec_ = menu.exec
+            if QT6:  # QT6 requires exec() instead of exec_()
+                menu.exec_ = getattr(menu, "exec")
 
             action = QAction(_("Comments"), menu)
             action.triggered.connect(self.on_edit_comment)
@@ -2569,6 +2569,8 @@ class Base(QMainWindow, Ui_Base):
         elif input_text:  # Show input QLineEdit
             popup.set_input(input_text)
 
+        if QT6:  # QT6 requires exec() instead of exec_()
+            popup.exec_ = getattr(popup, "exec")
         popup.exec_()
         return popup
 
@@ -2700,9 +2702,11 @@ class Base(QMainWindow, Ui_Base):
             return
         if not version_new:
             return
-        version = LooseVersion(self.version)
-        skip_version = LooseVersion(self.skip_version)
-        if version_new > version and version_new != skip_version:
+        # current_version = LooseVersion(self.version)
+        # skip_version = LooseVersion(self.skip_version)
+        current_version = version_parse(self.version)
+        skip_version = version_parse(self.skip_version)
+        if version_new > current_version and version_new != skip_version:
             popup = self.popup(_("Newer version exists!"),
                                _("There is a newer version (v.{}) online.\n"
                                  "Open the site to download it now?")
@@ -2801,6 +2805,8 @@ class KOHighlights(QApplication):
         # else:
         #     self.parse_args()
         self.base.setWindowTitle(APP_NAME + " portable" if PORTABLE else APP_NAME)
+        if QT6:  # QT6 requires exec() instead of exec_()
+            self.exec_ = getattr(self, "exec")
         self.exec_()
         self.deleteLater()  # avoids some QThread messages in the shell on exit
         # show_console() if on_windows and compiled else None

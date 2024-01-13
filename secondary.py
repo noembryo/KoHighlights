@@ -4,7 +4,6 @@ from boot_config import *
 import re
 import webbrowser
 from functools import partial
-from distutils.version import LooseVersion
 from os.path import join, basename, splitext, isfile
 from pprint import pprint
 
@@ -26,6 +25,11 @@ else:  # Qt6
     from PySide6.QtWidgets import (QTableWidgetItem, QTableWidget, QApplication,
                                    QLineEdit, QToolButton, QWidget, QMenu, QFileDialog,
                                    QDialog, QMessageBox, QCheckBox)
+
+if PYTHON2:  # ___ __________ PYTHON 2/3 COMPATIBILITY ______________
+    from distutils.version import LooseVersion as version_parse
+else:
+    from packaging.version import parse as version_parse
 
 import requests
 from bs4 import BeautifulSoup
@@ -541,6 +545,8 @@ class ToolBar(QWidget, Ui_ToolBar):
             action.triggered.connect(partial(self.set_btn_size, size))
             group.addAction(action)
             menu.addAction(action)
+        if QT6:  # QT6 requires exec() instead of exec_()
+            menu.exec_ = getattr(menu, "exec")
         return menu
 
     def set_btn_size(self, size):
@@ -671,6 +677,8 @@ class ToolBar(QWidget, Ui_ToolBar):
         action.setIcon(self.base.ico_db_open)
         action.triggered.connect(partial(self.base.change_db, CHANGE_DB))
         menu.addAction(action)
+        if QT6:  # QT6 requires exec() instead of exec_()
+            menu.exec_ = getattr(menu, "exec")
         return menu
 
     def change_view(self):
@@ -998,8 +1006,9 @@ class About(QDialog, Ui_About):
             self.base.popup(_("No response!"), _("Version info is unreachable!\n"
                                                  "Please, try again later..."), buttons=1)
             return
-        version = LooseVersion(self.base.version)
-        if version_new > version:
+        # current_version = LooseVersion(self.base.version)
+        current_version = version_parse(self.base.version)
+        if version_new > current_version:
             popup = self.base.popup(_("Newer version exists!"),
                                     _("There is a newer version (v.{}) online.\n"
                                       "Open the site to download it now?")
@@ -1008,14 +1017,14 @@ class About(QDialog, Ui_About):
             if popup.clickedButton().text() == "OK":
                 webbrowser.open("http://www.noembryo.com/apps.php?katalib")
                 self.close()
-        elif version_new == version:
+        elif version_new == current_version:
             self.base.popup(_("No newer version exists!"),
-                            _("{} is up to date (v.{})").format(APP_NAME, version),
+                            _("{} is up to date (v.{})").format(APP_NAME, current_version),
                             icon=QMessageBox.Information, buttons=1)
-        elif version_new < version:
+        elif version_new < current_version:
             self.base.popup(_("No newer version exists!"),
                             _("It seems that you are using a newer version ({0})\n"
-                              "than the one online ({1})!").format(version, version_new),
+                              "than the one online ({1})!").format(current_version, version_new),
                             icon=QMessageBox.Question, buttons=1)
 
     @staticmethod
@@ -1036,7 +1045,8 @@ class About(QDialog, Ui_About):
             version_new = match.group(0)
         except AttributeError:  # no match found
             version_new = "0.0.0.0"
-        return LooseVersion(version_new)
+        # return LooseVersion(version_new)
+        return version_parse(version_new)
 
     def create_text(self):
         # color = self.palette().color(QPalette.WindowText).name()  # for links

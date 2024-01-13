@@ -14,6 +14,8 @@ os.chdir(APP_DIR)  # Set the current working directory to the app's directory
 PORTABLE = False
 PYTHON2 = sys.version_info < (3, 0)
 
+USE_QT6 = True  # select between PySide2/Qt5 and Pyside6/Qt6 if both are installed
+
 if PYTHON2:
     from io import open
     from codecs import open as c_open
@@ -22,12 +24,11 @@ else:
     # noinspection PyShadowingBuiltins
     unicode, basestring = str, str
     c_open = open
-    try:
-        from PySide2.QtCore import qVersion
-    except ImportError:
+    if USE_QT6:
         from PySide6.QtCore import qVersion
+    else:
+        from PySide2.QtCore import qVersion
 
-USE_QT6 = False  # select between PySide2/Qt5 and Pyside6/Qt6 if both are installed
 # noinspection PyTypeChecker
 qt_version = qVersion().split(".")[0]
 QT4 = qt_version == "4"
@@ -35,7 +36,7 @@ QT5 = qt_version == "5"
 QT6 = qt_version == "6"
 if QT6 and QT5:
     if USE_QT6:
-        USE_QT5 = False
+        QT5 = False
 
 if sys.platform == "win32":  # Windows
     import win32api
