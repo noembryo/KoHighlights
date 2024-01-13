@@ -77,6 +77,7 @@ It needs the [PySide](https://pypi.org/project/PySide/),
 [future](https://pypi.org/project/future/) and
 [requests](https://pypi.org/project/requests/) libraries.  
 In Linux the `libqt4-sql-sqlite` package must be installed.  
+PySide2/PySide6 are also supported (download the archive from the releases)
 
 ## Extra
 KOHighlights includes SLPPU (a converter between python and lua objects).  
