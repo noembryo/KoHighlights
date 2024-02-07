@@ -1,6 +1,7 @@
 # coding=utf-8
 from __future__ import absolute_import, division, print_function, unicode_literals
 from boot_config import *
+from boot_config import _
 import re
 import webbrowser
 from functools import partial
@@ -34,10 +35,6 @@ else:
 import requests
 from bs4 import BeautifulSoup
 from slppu import slppu as lua  # https://github.com/noembryo/slppu
-
-
-def _(text):  # for future gettext support
-    return text
 
 
 def decode_data(path):
@@ -209,7 +206,7 @@ def save_file(title, authors, highlights, path, format_, line_break, space, sort
         text_file.write(text)
 
 
-__all__ = ("_", "decode_data", "encode_data", "sanitize_filename", "get_csv_row",
+__all__ = ("decode_data", "encode_data", "sanitize_filename", "get_csv_row",
            "get_book_text", "save_file", "XTableWidgetIntItem", "XTableWidgetPercentItem",
            "XTableWidgetTitleItem", "DropTableWidget", "XMessageBox", "About", "AutoInfo",
            "ToolBar", "TextDialog", "Status", "LogStream", "Scanner", "HighlightScanner",
@@ -933,7 +930,7 @@ class Filter(QDialog, Ui_Filter):
                 elif self.filter_box.currentIndex() == FILTER_TITLES:
                     if txt in title.lower():
                         self.base.high_table.setRowHidden(row, False)
-                        continue
+                        # continue
                     else:
                         self.base.high_table.setRowHidden(row, True)
                         filtered += 1
@@ -999,7 +996,7 @@ class About(QDialog, Ui_About):
         self.check_for_updates()
 
     def check_for_updates(self):
-        """ Checks the web site for the current version
+        """ Checks the website for the current version
         """
         version_new = self.get_online_version()
         if not version_new:
@@ -1019,12 +1016,14 @@ class About(QDialog, Ui_About):
                 self.close()
         elif version_new == current_version:
             self.base.popup(_("No newer version exists!"),
-                            _("{} is up to date (v.{})").format(APP_NAME, current_version),
+                            _("{} is up to date (v.{})").format(APP_NAME,
+                                                                current_version),
                             icon=QMessageBox.Information, buttons=1)
         elif version_new < current_version:
             self.base.popup(_("No newer version exists!"),
                             _("It seems that you are using a newer version ({0})\n"
-                              "than the one online ({1})!").format(current_version, version_new),
+                              "than the one online ({1})!").format(current_version,
+                                                                   version_new),
                             icon=QMessageBox.Question, buttons=1)
 
     @staticmethod
@@ -1032,7 +1031,7 @@ class About(QDialog, Ui_About):
         header = {"User-Agent": "Mozilla/5.0 (Windows NT 5.1; rv:14.0) "
                                 "Gecko/20100101 Firefox/24.0.1",
                   "Referer": "http://noembryo.com"}
-        url = "http://www.noembryo.com/apps.php?kohighlights"
+        url = str("http://www.noembryo.com/apps.php?kohighlights")
         try:
             html_text = requests.get(url, headers=header).content
         except requests.exceptions.ConnectionError:
@@ -1067,7 +1066,8 @@ class About(QDialog, Ui_About):
                 <p align="center"><a href="http://www.noembryo.com/apps.php?app_index">
                    noEmbryo's page</a> with more Apps and stuff...</p>
                 <p align="center">Use it and if you like it, consider to
-                <p align="center"><a href="https://www.paypal.com/donate/?hosted_button_id=RBYLVRYG9RU2S">
+                <p align="center"><a
+                 href="https://www.paypal.com/donate/?hosted_button_id=RBYLVRYG9RU2S">
                 <img src="{2}" alt="PayPal Button"
                     width="142" height="27" border="0"></a></p>
                 <p align="center">&nbsp;</p></td>

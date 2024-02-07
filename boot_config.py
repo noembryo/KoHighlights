@@ -7,6 +7,10 @@ import traceback
 import gzip, json
 from os.path import dirname, join, isdir, expanduser
 
+
+def _(text):  # for future gettext support
+    return text
+
 APP_NAME = "KOHighlights"
 APP_DIR = dirname(os.path.abspath(sys.argv[0]))
 os.chdir(APP_DIR)  # Set the current working directory to the app's directory
@@ -14,7 +18,7 @@ os.chdir(APP_DIR)  # Set the current working directory to the app's directory
 PORTABLE = False
 PYTHON2 = sys.version_info < (3, 0)
 
-USE_QT6 = True  # select between PySide2/Qt5 and Pyside6/Qt6 if both are installed
+USE_QT6 = False  # select between PySide2/Qt5 and Pyside6/Qt6 if both are installed
 
 if PYTHON2:
     from io import open
@@ -34,9 +38,8 @@ qt_version = qVersion().split(".")[0]
 QT4 = qt_version == "4"
 QT5 = qt_version == "5"
 QT6 = qt_version == "6"
-if QT6 and QT5:
-    if USE_QT6:
-        QT5 = False
+if QT6 and QT5 and USE_QT6:
+    QT5 = False
 
 if sys.platform == "win32":  # Windows
     import win32api
@@ -124,6 +127,10 @@ PAGE, HIGHLIGHT_TEXT, DATE, PAGE_ID, COMMENT = range(5)  # high_list item data
 DB_MD5, DB_DATE, DB_PATH, DB_DATA = range(4)  # db data (columns)
 FILTER_ALL, FILTER_HIGH, FILTER_COMM, FILTER_TITLES = range(4)  # db data (columns)
 
+NO_TITLE = _("NO TITLE FOUND")
+NO_AUTHOR = _("NO AUTHOR FOUND")
+OLD_TYPE = _("OLD TYPE FILE")
+DO_NOT_SHOW = _("Don't show this again")
 DB_VERSION = 0
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 CSV_HEAD = "Title\tAuthors\tPage\tDate\tChapter\tHighlight\tComment\n"

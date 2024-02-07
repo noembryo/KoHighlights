@@ -1,6 +1,7 @@
 # coding=utf-8
 from __future__ import absolute_import, division, print_function, unicode_literals
 from boot_config import *
+from boot_config import _
 import os, sys, re
 import gzip
 import json
@@ -52,29 +53,7 @@ else:
 
 
 __author__ = "noEmbryo"
-__version__ = "1.7.5.0"
-
-
-# if sys.platform.lower().startswith("win"):
-#     import ctypes
-#
-#     def hide_console():
-#         """ Hides the console window in GUI mode. Necessary for frozen application,
-#         because this application support both, command line processing AND GUI mode
-#         and therefore cannot be run via pythonw.exe.
-#         """
-#
-#         win_handles = ctypes.windll.kernel32.GetConsoleWindow()
-#         if win_handles != 0:
-#             ctypes.windll.user32.ShowWindow(win_handles, 0)
-#             # if you wanted to close the handles...
-#             # ctypes.windll.kernel32.CloseHandle(win_handles)
-#
-#     def show_console():
-#         """ UnHides console window"""
-#         win_handles = ctypes.windll.kernel32.GetConsoleWindow()
-#         if win_handles != 0:
-#             ctypes.windll.user32.ShowWindow(win_handles, 1)
+__version__ = "1.7.6.0"
 
 
 class Base(QMainWindow, Ui_Base):
@@ -85,6 +64,7 @@ class Base(QMainWindow, Ui_Base):
         self.scan_thread = None
         self.setupUi(self)
         self.version = __version__
+        self.setWindowTitle(APP_NAME + " portable" if PORTABLE else APP_NAME)
 
         # ___ ________ SAVED SETTINGS ___________
         self.col_sort = MODIFIED
@@ -139,12 +119,7 @@ class Base(QMainWindow, Ui_Base):
             self.header_main.setMovable(True)
             self.high_table.verticalHeader().setResizeMode(QHeaderView.Fixed)
             self.header_high_view.setMovable(True)
-        elif QT5:
-            self.file_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
-            self.header_main.setSectionsMovable(True)
-            self.high_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
-            self.header_high_view.setSectionsMovable(True)
-        elif QT6:
+        elif QT5 or QT6:
             self.file_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
             self.header_main.setSectionsMovable(True)
             self.high_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
@@ -207,7 +182,7 @@ class Base(QMainWindow, Ui_Base):
         # noinspection PyTypeChecker,PyCallByClass
         QTimer.singleShot(10000, self.auto_check4update)  # check for updates
 
-        main_timer = QTimer(self)  # cleanup threads for ever
+        main_timer = QTimer(self)  # cleanup threads forever
         main_timer.timeout.connect(self.thread_cleanup)
         main_timer.start(2000)
 
@@ -326,7 +301,7 @@ class Base(QMainWindow, Ui_Base):
             event.accept()
             return
         popup = self.popup(_("Confirmation"), _("Exit {}?").format(APP_NAME), buttons=2,
-                           check_text=_("Don't show this again"))
+                           check_text=DO_NOT_SHOW)
         self.exit_msg = not popup.checked
         if popup.buttonRole(popup.clickedButton()) == QMessageBox.AcceptRole:
             self.bye_bye_stuff()
@@ -369,7 +344,7 @@ class Base(QMainWindow, Ui_Base):
         :param db_version: The db file version
         """
         if db_version == DB_VERSION or not isfile(self.db_path):
-            return  # the db is up to date or does not exists yet
+            return  # the db is up-to-date or does not exist yet
         self.update_db(db_version)
 
     def update_db(self, db_version):
@@ -484,7 +459,7 @@ class Base(QMainWindow, Ui_Base):
         """ Deletes multiple books from the db
 
         :type ids: list
-        :param ids: The md5s of the books to be deleted
+        :param ids: The MD5s of the books to be deleted
         """
         if ids:
             self.db.transaction()
@@ -796,7 +771,7 @@ class Base(QMainWindow, Ui_Base):
         """ Open/closes the Book info panel
 
         :type pressed: bool
-        :param pressed: The arrow button"s status
+        :param pressed: The arrow button's status
         """
         if pressed:  # Closed
             self.fold_btn.setText(_("Show Book Info"))
@@ -817,7 +792,7 @@ class Base(QMainWindow, Ui_Base):
             popup = self.popup(_("Question!"),
                                _("Add or replace {} in the archive?").format(extra),
                                buttons=2, icon=QMessageBox.Question,
-                               check_text=_("Don't show this again"))
+                               check_text=DO_NOT_SHOW)
             self.archive_warning = not popup.checked
             if popup.buttonRole(popup.clickedButton()) == QMessageBox.RejectRole:
                 return
@@ -987,8 +962,8 @@ class Base(QMainWindow, Ui_Base):
             high_count = ""
         title = data["stats"]["title"]
         authors = data["stats"]["authors"]
-        title = title if title else _("NO TITLE FOUND")
-        authors = authors if authors else _("NO AUTHOR FOUND")
+        title = title if title else NO_TITLE
+        authors = authors if authors else NO_AUTHOR
         try:
             percent = str(int(data["percent_finished"] * 100)) + "%"
         except KeyError:
@@ -1027,14 +1002,14 @@ class Base(QMainWindow, Ui_Base):
                 title = splitext(name)[0]
             except IndexError:  # no "#] " in filename
                 pass
-            authors = _("OLD TYPE FILE")
+            authors = OLD_TYPE
         if not title:
             try:
                 name = filename.split("#] ")[1]
                 title = splitext(name)[0]
             except IndexError:  # no "#] " in filename
-                title = _("NO TITLE FOUND")
-        authors = authors if authors else _("NO AUTHOR FOUND")
+                title = NO_TITLE
+        authors = authors if authors else NO_AUTHOR
         try:
             percent = str(int(data["percent_finished"] * 100)) + "%"
         except KeyError:
@@ -1292,7 +1267,7 @@ class Base(QMainWindow, Ui_Base):
         """ Finds the current highlight in the "Books View"
 
         :type highlight: str|unicode
-        :parameter highlight: The highlight we searching for
+        :parameter highlight: The highlight we are searching for
         """
         data = self.parent_book_data
 
@@ -1357,8 +1332,8 @@ class Base(QMainWindow, Ui_Base):
         :type path: str|unicode
         :param path: The book's path
         """
-        authors = data.get("stats", {}).get("authors", _("NO AUTHOR FOUND"))
-        title = data.get("stats", {}).get("title", _("NO TITLE FOUND"))
+        authors = data.get("stats", {}).get("authors", NO_AUTHOR)
+        title = data.get("stats", {}).get("title", NO_TITLE)
 
         highlights = []
         for page in data["highlight"]:
@@ -1783,7 +1758,7 @@ class Base(QMainWindow, Ui_Base):
                      "Do you want to continue?").format(APP_NAME)
             popup = self.popup(_("Warning!"), text, buttons=2,
                                button_text=(_("Yes"), _("No")),
-                               check_text=_("Don't show this again"))
+                               check_text=DO_NOT_SHOW)
             self.high_merge_warning = not popup.checked
             if popup.buttonRole(popup.clickedButton()) == QMessageBox.RejectRole:
                 return
@@ -2209,7 +2184,7 @@ class Base(QMainWindow, Ui_Base):
                 save_file(title, authors, highlights, dir_path,
                           format_, line_break, space, sort_by)
                 saved += 1
-            except IOError as err:  # any problem when writing (like long filename, etc)
+            except IOError as err:  # any problem when writing (like long filename, etc.)
                 self.popup(_("Warning!"),
                            _("Could not save the file to disk!\n{}").format(err))
         return saved
@@ -2264,7 +2239,7 @@ class Base(QMainWindow, Ui_Base):
                 highlights.append(self.get_formatted_high(data, page, page_id, format_))
         title = self.file_table.item(row, TITLE).data(0)
         authors = self.file_table.item(row, AUTHOR).data(0)
-        if authors in [_("OLD TYPE FILE"), _("NO AUTHOR FOUND")]:
+        if authors in [OLD_TYPE, NO_AUTHOR]:
             authors = ""
         return authors, title, highlights
 
@@ -2469,7 +2444,8 @@ class Base(QMainWindow, Ui_Base):
                         # noinspection PyArgumentList
                         config[k] = str(v, encoding="latin")
             config_json = json.dumps(config, sort_keys=True, indent=4)
-            with gzip.GzipFile(join(SETTINGS_DIR, "settings.json.gz"), "w+") as gz_file:
+            with gzip.GzipFile(join(SETTINGS_DIR, str("settings.json.gz")),
+                               "w+") as gz_file:
                 try:
                     gz_file.write(config_json)
                 except TypeError:  # Python3
@@ -2506,7 +2482,7 @@ class Base(QMainWindow, Ui_Base):
             else:
                 # noinspection PyUnresolvedReferences
                 value = value.encode("latin1")
-                # noinspection PyTypeChecker
+                # noinspection PyTypeChecker,PyArgumentList
                 value = pickle.loads(value, encoding="bytes")
         except pickle.UnpicklingError as err:
             print("While unPickling:", err)
@@ -2745,7 +2721,7 @@ class Base(QMainWindow, Ui_Base):
         # noinspection PyBroadException
         try:
             sys.__stdout__.write(text)
-        except Exception:  # a problematic print that WE HAVE to ignore or we LOOP
+        except Exception:  # a problematic print that WE HAVE to ignore, or we LOOP
             pass
 
     @staticmethod
@@ -2771,11 +2747,12 @@ class KOHighlights(QApplication):
         super(KOHighlights, self).__init__(*args, **kwargs)
         if QT5:
             self.setAttribute(Qt.AA_DisableWindowContextHelpButton)
-        # decode app's arguments
-        # try:
-        #     sys.argv = [i.decode(sys.getfilesystemencoding()) for i in sys.argv]
-        # except AttributeError:  # i.decode does not exists in Python 3
-        #     pass
+        on_windows = sys.platform.lower().startswith("win")
+        compiled = getattr(sys, 'frozen', False)
+        # # hide console window, but only under Windows and only if app is frozen
+        # if on_windows and compiled:
+        #     self.hide_console()
+
         argv = self.arguments()
         if argv[0].endswith("python.exe") or argv[0].endswith("python3.exe"):
             argv = argv[1:]
@@ -2787,35 +2764,103 @@ class KOHighlights(QApplication):
                                                             "highlights converter")
                                               .format(APP_NAME, __version__),
                                               epilog=_("Thanks for using %s!") % APP_NAME)
-        self.parser.add_argument("-v", "--version", action="version",
-                                 version="%(prog)s v{}".format(__version__))
-
         self.base = Base()
-        if getattr(sys, "frozen", False):  # the app is compiled
-            if not sys.platform.lower().startswith("win"):  # no cli in windows
+        if compiled:  # the app is compiled
+            if not on_windows:  # no cli in windows
                 self.parse_args()
         else:
             self.parse_args()
-        # # hide console window, but only under Windows and only if app is frozen
-        # on_windows = sys.platform.lower().startswith("win")
-        # compiled = getattr(sys, 'frozen', False)
-        # if on_windows and compiled:
-        #     hide_console()
-        #     self.parse_args()
-        # else:
-        #     self.parse_args()
-        self.base.setWindowTitle(APP_NAME + " portable" if PORTABLE else APP_NAME)
         if QT6:  # QT6 requires exec() instead of exec_()
             self.exec_ = getattr(self, "exec")
         self.exec_()
         self.deleteLater()  # avoids some QThread messages in the shell on exit
-        # show_console() if on_windows and compiled else None
+        # self.show_console() if on_windows and compiled else None
+
+    # ___ ___________________ GUI + CLI TESTING _____________________
+
+    @staticmethod
+    def hide_console():
+        """ Hides the console window in GUI mode. Necessary for frozen application,
+        because this application support both, command line processing AND GUI mode
+        and therefore cannot be run via pythonw.exe.
+        """
+        import ctypes
+        win_handles = ctypes.windll.kernel32.GetConsoleWindow()
+        if win_handles != 0:
+            ctypes.windll.user32.ShowWindow(win_handles, 0)
+            # if you wanted to close the handles...
+            # ctypes.windll.kernel32.CloseHandle(win_handles)
+
+    @staticmethod
+    def show_console():
+        """ UnHides console window
+        """
+        import ctypes
+        win_handles = ctypes.windll.kernel32.GetConsoleWindow()
+        if win_handles != 0:
+            ctypes.windll.user32.ShowWindow(win_handles, 1)
+
+    @staticmethod
+    def get_pid_info():
+        """ Return a dictionary with keys the PID of all running processes.
+        The values are dictionaries with the following key-value pairs:
+            name: <Name of the process PID>
+            parent_id: <PID of this process parent>
+        """
+        import win32pdh
+        # get the names and occurrences of all running process names
+        items, instances = win32pdh.EnumObjectItems(None, None, "Process",
+                                                    win32pdh.PERF_DETAIL_WIZARD)
+        instance_dict = {}
+        for instance in instances:
+            instance_dict[instance] = instance_dict.get(instance, 0) + 1
+        counter_items = ["ID Process", "Creating Process ID"]  # define the info to obtain
+
+        pid_dict = {}
+        # loop over each program (multiple instances might be running)
+        for instance, max_instances in instance_dict.items():
+            for i_num in range(max_instances):
+                hq = win32pdh.OpenQuery()  # define the counters for the query
+                hcs = {}
+                for item in counter_items:
+                    path = win32pdh.MakeCounterPath((None, "Process", instance,
+                                                     None, i_num, item))
+                    hcs[item] = win32pdh.AddCounter(hq, path)
+                win32pdh.CollectQueryData(hq)
+
+                hc_dict = {}  # store the values in a temporary dict
+                for item, hc in hcs.items():
+                    type_, val = win32pdh.GetFormattedCounterValue(hc,
+                                                                   win32pdh.PDH_FMT_LONG)
+                    hc_dict[item] = val
+                    win32pdh.RemoveCounter(hc)
+                win32pdh.CloseQuery(hq)
+
+                # obtain the pid and ppid of the current instance and store it
+                pid, pp_id = (hc_dict[item] for item in counter_items)
+                pid_dict[pid] = {"name": instance, "parent_id": pp_id}
+        return pid_dict
+
+    def get_parent_info(self, pid):
+        """ Returns a PID, Name tuple of the parent process
+
+        :type pid: int
+        :param pid: PID of the process to get the parent PID for
+        :rtype: tuple(int, str)
+        """
+        pid_info = self.get_pid_info()
+        pp_id = pid_info[pid]["parent_id"]
+        pp_name = pid_info[pp_id]["name"]
+        return pp_id, pp_name
 
     # ___ ___________________ CLI STUFF _____________________________
 
     def parse_args(self):
         """ Parse the command line parameters that are passed to the program.
         """
+        self.parser.add_argument("-v", "--version", action="version",
+                                 version="%(prog)s v{}".format(__version__))
+
         self.parser.add_argument("paths", nargs="*",
                                  help="The paths to input files or folder")
 
@@ -2928,7 +2973,7 @@ class KOHighlights(QApplication):
             try:
                 save_file(title, authors, highlights, path,
                           format_, line_break, space, sort_by)
-            except IOError as err:  # any problem when writing (like long filename, etc)
+            except IOError as err:  # any problem when writing (like long filename, etc.)
                 sys.stdout.write(str("Could not save the file to disk!\n{}").format(err))
         return saved
 
@@ -3011,7 +3056,7 @@ class KOHighlights(QApplication):
                 name = file_.split("#] ")[1]
                 title = splitext(name)[0]
             except IndexError:  # no "#] " in filename
-                title = _("NO TITLE FOUND")
+                title = NO_TITLE
         return authors, title, highlights
 
     # noinspection PyTypeChecker
@@ -3134,7 +3179,7 @@ class KOHighlights(QApplication):
                 name = meta_path.split("#] ")[1]
                 title = splitext(name)[0]
             except IndexError:  # no "#] " in filename
-                title = _("NO TITLE FOUND") + str(title_counter[0])
+                title = NO_TITLE + str(title_counter[0])
                 title_counter[0] += 1
         name = title
         if authors:
