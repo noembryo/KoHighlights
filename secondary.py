@@ -1,40 +1,35 @@
 # coding=utf-8
-from __future__ import absolute_import, division, print_function, unicode_literals
 from boot_config import *
 from boot_config import _
 import re
 import webbrowser
 from functools import partial
+from ntpath import normpath
 from os.path import join, basename, splitext, isfile
-from pprint import pprint
 
-if QT4:  # ___ ______________ DEPENDENCIES __________________________
-    from PySide.QtCore import Qt, Slot, QObject, Signal, QSize, QPoint, QEvent
-    from PySide.QtGui import (QApplication, QMessageBox, QIcon, QFileDialog, QLineEdit,
-                              QDialog, QWidget, QMovie, QFont, QMenu, QAction, QCursor,
-                              QTableWidget, QCheckBox, QToolButton, QActionGroup,
-                              QTableWidgetItem)
-elif QT5:
-    from PySide2.QtCore import QObject, Qt, Signal, QPoint, Slot, QSize, QEvent
-    from PySide2.QtGui import QFont, QMovie, QIcon, QCursor
+if QT5:  # ___ ______________ DEPENDENCIES __________________________
+    from PySide2.QtCore import (QObject, Qt, Signal, QPoint, Slot, QSize, QEvent, QRect,
+                                QTimer)
+    from PySide2.QtGui import (QFont, QMovie, QIcon, QCursor, QPalette, QColor, QPixmap,
+                               QPainter, QPen)
     from PySide2.QtWidgets import (QTableWidgetItem, QTableWidget, QMessageBox, QLineEdit,
                                    QApplication, QWidget, QDialog, QFileDialog,
-                                   QActionGroup, QMenu, QAction, QToolButton, QCheckBox)
+                                   QStyleFactory, QActionGroup, QMenu, QAction,
+                                   QToolButton, QCheckBox)
 else:  # Qt6
-    from PySide6.QtCore import QObject, Qt, Signal, QEvent, QPoint, Slot, QSize
-    from PySide6.QtGui import QFont, QActionGroup, QAction, QCursor, QMovie, QIcon
+    from PySide6.QtCore import (QObject, Qt, Signal, QEvent, QPoint, Slot, QSize, QRect,
+                                QTimer)
+    from PySide6.QtGui import (QFont, QActionGroup, QAction, QCursor, QMovie, QIcon,
+                               QPalette, QColor, QPixmap, QPainter, QPen)
     from PySide6.QtWidgets import (QTableWidgetItem, QTableWidget, QApplication,
                                    QLineEdit, QToolButton, QWidget, QMenu, QFileDialog,
-                                   QDialog, QMessageBox, QCheckBox)
-
-if PYTHON2:  # ___ __________ PYTHON 2/3 COMPATIBILITY ______________
-    from distutils.version import LooseVersion as version_parse
-else:
-    from packaging.version import parse as version_parse
-
+                                   QDialog, QMessageBox, QCheckBox, QStyleFactory)
 import requests
 from bs4 import BeautifulSoup
+from packaging.version import parse as version_parse
 from slppu import slppu as lua  # https://github.com/noembryo/slppu
+
+__author__ = "noEmbryo"
 
 
 def decode_data(path):
@@ -105,12 +100,11 @@ def get_book_text(title, authors, highlights, format_, line_break, space, text):
     elif format_ == ONE_TEXT:
         name = title
         if authors:
-            name = "{} - {}".format(authors, title)
+            name = f"{authors} - {title}"
         line = "-" * 80
         text += line + nl + name + nl + line + nl
-        highlights = [i[3] + space + i[0] + line_break +
-                      ("[{}]{}".format(i[4], nl) if i[4] else "") +
-                      i[2] + i[1] for i in highlights]
+        highlights = [i[3] + space + i[0] + line_break + (f"[{i[4]}]{nl}" if i[4] else "")
+                      + i[2] + i[1] for i in highlights]
         text += (nl * 2).join(highlights) + nl * 2
     elif format_ == ONE_CSV:
         for high in highlights:
@@ -121,7 +115,7 @@ def get_book_text(title, authors, highlights, format_, line_break, space, text):
             # data = {k.encode("utf8"): v.encode("utf8") for k, v in data.items()}
             text += get_csv_row(data) + "\n"
     elif format_ == ONE_MD:
-        text += "\n---\n## {}  \n##### {}  \n---\n".format(title, authors)
+        text += f"\n---\n## {title}  \n##### {authors}  \n---\n"
         highs = []
         for i in highlights:
             comment = i[1].replace(nl, "  " + nl)
@@ -129,7 +123,7 @@ def get_book_text(title, authors, highlights, format_, line_break, space, text):
                 comment = "  " + comment
             chapter = i[4]
             if chapter:
-                chapter = "***{0}***{1}{1}".format(chapter, nl).replace(nl, "  " + nl)
+                chapter = f"***{chapter}***{nl}{nl}".replace(nl, "  " + nl)
             high = i[2].replace(nl, "  " + nl)
             h = ("*" + i[3] + space + i[0] + line_break + chapter +
                  high + comment + "  \n&nbsp;  \n")
@@ -147,7 +141,7 @@ def save_file(title, authors, highlights, path, format_, line_break, space, sort
     encoding = "utf-8"
     name = title
     if authors:
-        name = "{} - {}".format(authors, title)
+        name = f"{authors} - {title}"
     if format_ == MANY_TEXT:
         ext = ".txt"
         line = "-" * 80
@@ -161,7 +155,7 @@ def save_file(title, authors, highlights, path, format_, line_break, space, sort
         encoding = "utf-8-sig"
     elif format_ == MANY_MD:
         ext = ".md"
-        text = "\n---\n## {}  \n##### {}  \n---\n".format(title, authors)
+        text = f"\n---\n## {title}  \n##### {authors}  \n---\n"
 
     filename = join(path, sanitize_filename(name))
     if _("NO TITLE FOUND") in title:  # don't overwrite unknown title files
@@ -182,7 +176,7 @@ def save_file(title, authors, highlights, path, format_, line_break, space, sort
                                       "chapter": chapter}
             elif format_ == MANY_TEXT:
                 text += (page_text + space + date_text + line_break +
-                         ("[{}]{}".format(chapter, nl) if chapter else "") +
+                         (f"[{chapter}]{nl}" if chapter else "") +
                          high_text + high_comment)
                 text += 2 * nl
             elif format_ == MANY_CSV:
@@ -196,7 +190,7 @@ def save_file(title, authors, highlights, path, format_, line_break, space, sort
                 if high_comment:
                     high_comment = "  " + high_comment
                 if chapter:
-                    chapter = "***{0}***{1}{1}".format(chapter, nl).replace(nl, "  " + nl)
+                    chapter = f"***{chapter}***{nl}{nl}".replace(nl, "  " + nl)
                 text += ("*" + page_text + space + date_text + line_break +
                          chapter + high_text + high_comment +
                          "  \n&nbsp;  \n\n").replace("-", "\\-")
@@ -210,7 +204,8 @@ __all__ = ("decode_data", "encode_data", "sanitize_filename", "get_csv_row",
            "get_book_text", "save_file", "XTableWidgetIntItem", "XTableWidgetPercentItem",
            "XTableWidgetTitleItem", "DropTableWidget", "XMessageBox", "About", "AutoInfo",
            "ToolBar", "TextDialog", "Status", "LogStream", "Scanner", "HighlightScanner",
-           "ReLoader", "DBLoader", "XToolButton", "Filter")
+           "ReLoader", "DBLoader", "XToolButton", "Filter", "XThemes", "XIconGlyph",
+           "SyncGroup", "SyncItem", "XTableWidget")
 
 
 # ___ _______________________ SUBCLASSING ___________________________
@@ -296,6 +291,76 @@ class DropTableWidget(QTableWidget):
             return False
 
 
+class XTableWidget(QTableWidget):
+    """ QTableWidget with support for drag and drop move of rows that contain widgets
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(XTableWidget, self).__init__(*args, **kwargs)
+        self.viewport().setAcceptDrops(True)
+        self.selection = self.selectionModel()
+        self.base = None
+
+    def dropEvent(self, event):
+        if not event.isAccepted() and event.source() == self:
+            drop_row = self.drop_on(event)
+            # rows = sorted(set(i.row() for i in self.selectedItems()))
+            rows = sorted(set(i.row() for i in self.selection.selectedRows()))
+            rows_to_move = []
+            for row in rows:
+                items = dict()
+                for col in range(self.columnCount()):
+                    # get the widget or item of current cell
+                    widget = self.cellWidget(row, col)
+                    if isinstance(widget, type(None)):  # a normal QTableWidgetItem
+                        items[col] = {"kind": "QTableWidgetItem",
+                                      "item": QTableWidgetItem(self.item(row, col))}
+                    else:  # another kind of widget.
+                        # So we catch the widget's unique characteristics
+                        items[col] = {"kind": "QWidget", "item": widget.data}
+                rows_to_move.append(items)
+
+            for row in reversed(rows):
+                self.removeRow(row)
+                # if row < drop_row:
+                #     drop_row -= 1
+            for row, data in enumerate(rows_to_move):
+                row += drop_row
+                self.insertRow(row)
+
+                for col, info in data.items():
+                    if info["kind"] == "QTableWidgetItem":
+                        # for QTableWidgetItem we can re-create the item directly
+                        self.setItem(row, col, info["item"])
+                    else:  # for other widgets we call
+                        # the parent's callback function to get them
+                        widget = self.base.create_sync_widget(info["item"])
+                        widget.idx = row
+                        self.base.sync_table.setRowHeight(row, widget.sizeHint().height())
+                        self.setCellWidget(row, col, widget)
+
+            self.base.update_sync_groups()
+            event.accept()
+        super(XTableWidget, self).dropEvent(event)
+
+    def drop_on(self, event):
+        index = self.indexAt(event.pos())
+        if not index.isValid():
+            return self.rowCount() - 1
+        return index.row() + 1 if self.is_below(event.pos(), index) else index.row()
+
+    def is_below(self, pos, index):
+        rect = self.visualRect(index)
+        margin = 2
+        if pos.y() - rect.top() < margin:
+            return False
+        elif rect.bottom() - pos.y() < margin:
+            return True
+        # noinspection PyTypeChecker
+        return rect.contains(pos, True) and not (int(self.model().flags(
+            index)) & Qt.ItemIsDropEnabled) and pos.y() >= rect.center().y()
+
+
 class XMessageBox(QMessageBox):
     """ A QMessageBox with a QCheckBox
     """
@@ -353,7 +418,7 @@ class XMessageBox(QMessageBox):
         :param widget: The widget to be added
         """
         # noinspection PyArgumentList
-        self.layout().addWidget(widget, 1, 1 if PYTHON2 else 2)
+        self.layout().addWidget(widget, 1, 2)
 
 
 class XToolButton(QToolButton):
@@ -396,7 +461,7 @@ class LogStream(QObject):
 
 
 class Scanner(QObject):
-    found = Signal(unicode)
+    found = Signal(str)
     finished = Signal()
 
     def __init__(self, path):
@@ -404,10 +469,6 @@ class Scanner(QObject):
         self.path = path
 
     def process(self):
-        self.start_scan()
-        self.finished.emit()
-
-    def start_scan(self):
         try:
             for dir_path, dirs, files in os.walk(self.path):
                 if dir_path.lower().endswith(".sdr"):  # a book's metadata folder
@@ -425,10 +486,11 @@ class Scanner(QObject):
                     continue
         except UnicodeDecodeError:  # os.walk error
             pass
+        self.finished.emit()
 
 
 class ReLoader(QObject):
-    found = Signal(unicode)
+    found = Signal(str)
     finished = Signal()
 
     def __init__(self, paths):
@@ -436,13 +498,14 @@ class ReLoader(QObject):
         self.paths = paths
 
     def process(self):
+        # print("Loading data from files")
         for path in self.paths:
             self.found.emit(path)
         self.finished.emit()
 
 
 class DBLoader(QObject):
-    found = Signal(unicode, dict, unicode)
+    found = Signal(str, dict, str)
     finished = Signal()
 
     def __init__(self, books):
@@ -468,20 +531,319 @@ class HighlightScanner(QObject):
         for row in range(self.base.file_table.rowCount()):
             data = self.base.file_table.item(row, TITLE).data(Qt.UserRole)
             path = self.base.file_table.item(row, TYPE).data(Qt.UserRole)[0]
-            self.get_book_highlights(data, path)
+            meta_path = self.base.file_table.item(row, PATH).data(0)
+            highlights = self.base.get_highlights_from_data(data, path, meta_path)
+            for highlight in highlights:
+                self.found.emit(highlight)
         self.finished.emit()
 
-    def get_book_highlights(self, data, path):
-        """ Finds all the highlights from a book
 
-        :type data: dict
-        :param data: The book data (converted from the lua file)
-        :type path: str|unicode
-        :param path: The book path
+class XThemes(QObject):
+    """ Dark and light theme palettes
+    """
+
+    def __init__(self, parent=None):
+        super(XThemes, self).__init__(parent)
+
+        # noinspection PyArgumentList
+        self.app = QApplication.instance()
+        self.def_style = str(self.app.style())
+        # noinspection PyArgumentList
+        themes = QStyleFactory.keys()
+        if "Fusion" in themes:
+            self.app_style = "Fusion"
+        elif "Plastique" in themes:
+            self.app_style = "Plastique"
+        else:
+            self.app_style = self.def_style
+        self.def_colors = self.get_current()
+        # self.def_palette = self.app.palette()
+
+    def dark(self):
+        """ Apply a dark theme
         """
-        highlights = self.base.get_highlights_from_data(data, path)
-        for highlight in highlights:
-            self.found.emit(highlight)
+
+        dark_palette = QPalette()
+
+        # base
+        text = 250
+        dark_palette.setColor(QPalette.WindowText, QColor(text, text, text))
+        dark_palette.setColor(QPalette.Button, QColor(53, 53, 53))
+        dark_palette.setColor(QPalette.Light, QColor(text, text, text))
+        dark_palette.setColor(QPalette.Midlight, QColor(90, 90, 90))
+        dark_palette.setColor(QPalette.Dark, QColor(35, 35, 35))
+        dark_palette.setColor(QPalette.Text, QColor(text, text, text))
+        dark_palette.setColor(QPalette.BrightText, QColor(text, text, text))
+        dark_palette.setColor(QPalette.ButtonText, QColor(text, text, text))
+        dark_palette.setColor(QPalette.Base, QColor(25, 25, 25))
+        # dark_palette.setColor(QPalette.Text, QColor(180, 180, 180))
+        # dark_palette.setColor(QPalette.BrightText, QColor(180, 180, 180))
+        # dark_palette.setColor(QPalette.ButtonText, QColor(180, 180, 180))
+        # dark_palette.setColor(QPalette.Base, QColor(42, 42, 42))
+        dark_palette.setColor(QPalette.Window, QColor(53, 53, 53))
+        dark_palette.setColor(QPalette.Shadow, QColor(10, 10, 10))
+        # dark_palette.setColor(QPalette.Highlight, QColor(42, 130, 218))
+        dark_palette.setColor(QPalette.Highlight, QColor(20, 50, 80))
+        dark_palette.setColor(QPalette.HighlightedText, QColor(text, text, text))
+        dark_palette.setColor(QPalette.Link, QColor(56, 252, 196))
+        dark_palette.setColor(QPalette.AlternateBase, QColor(66, 66, 66))
+        dark_palette.setColor(QPalette.ToolTipBase, QColor(53, 53, 53))
+        dark_palette.setColor(QPalette.ToolTipText, QColor(text, text, text))
+        dark_palette.setColor(QPalette.LinkVisited, QColor(80, 80, 80))
+
+        # disabled
+        gray = QColor(100, 100, 100)
+        dark_palette.setColor(QPalette.Disabled, QPalette.WindowText, gray)
+        dark_palette.setColor(QPalette.Disabled, QPalette.Text, gray)
+        dark_palette.setColor(QPalette.Disabled, QPalette.ButtonText, gray)
+        dark_palette.setColor(QPalette.Disabled, QPalette.HighlightedText, gray)
+        dark_palette.setColor(QPalette.Disabled, QPalette.Highlight,
+                              QColor(80, 80, 80))
+
+        self.app.style().unpolish(self.app)
+        self.app.setPalette(dark_palette)
+        # self.app.setStyle("Fusion")
+        self.app.setStyle(self.app_style)
+
+    def light(self):
+        """ Apply a light theme
+        """
+
+        light_palette = QPalette()
+
+        # base
+        light_palette.setColor(QPalette.WindowText, QColor(0, 0, 0))
+        light_palette.setColor(QPalette.Button, QColor(240, 240, 240))
+        # light_palette.setColor(QPalette.Light, QColor(180, 180, 180))
+        # light_palette.setColor(QPalette.Midlight, QColor(200, 200, 200))
+        # light_palette.setColor(QPalette.Dark, QColor(225, 225, 225))
+        light_palette.setColor(QPalette.Dark, QColor(180, 180, 180))
+        light_palette.setColor(QPalette.Midlight, QColor(200, 200, 200))
+        light_palette.setColor(QPalette.Light, QColor(250, 250, 250))
+        light_palette.setColor(QPalette.Text, QColor(0, 0, 0))
+        light_palette.setColor(QPalette.BrightText, QColor(0, 0, 0))
+        light_palette.setColor(QPalette.ButtonText, QColor(0, 0, 0))
+        light_palette.setColor(QPalette.Base, QColor(237, 237, 237))
+        light_palette.setColor(QPalette.Window, QColor(240, 240, 240))
+        light_palette.setColor(QPalette.Shadow, QColor(20, 20, 20))
+        # light_palette.setColor(QPalette.Highlight, QColor(76, 163, 224))
+        light_palette.setColor(QPalette.Highlight, QColor(200, 230, 255))
+        light_palette.setColor(QPalette.HighlightedText, QColor(0, 0, 0))
+        light_palette.setColor(QPalette.Link, QColor(0, 162, 232))
+        light_palette.setColor(QPalette.AlternateBase, QColor(225, 225, 225))
+        light_palette.setColor(QPalette.ToolTipBase, QColor(240, 240, 240))
+        light_palette.setColor(QPalette.ToolTipText, QColor(0, 0, 0))
+        light_palette.setColor(QPalette.LinkVisited, QColor(222, 222, 222))
+
+        # disabled
+        light_palette.setColor(QPalette.Disabled, QPalette.WindowText,
+                               QColor(115, 115, 115))
+        light_palette.setColor(QPalette.Disabled, QPalette.Text,
+                               QColor(115, 115, 115))
+        light_palette.setColor(QPalette.Disabled, QPalette.ButtonText,
+                               QColor(115, 115, 115))
+        light_palette.setColor(QPalette.Disabled, QPalette.Highlight,
+                               QColor(190, 190, 190))
+        light_palette.setColor(QPalette.Disabled, QPalette.HighlightedText,
+                               QColor(115, 115, 115))
+
+        self.app.style().unpolish(self.app)
+        self.app.setPalette(light_palette)
+        # self.app.setStyle("Fusion")
+        self.app.setStyle(self.app_style)
+
+    def normal(self):
+        """ Apply the normal theme
+        """
+        normal_palette = QPalette()
+
+        normal_palette.setColor(QPalette.WindowText, self.def_colors["WindowText"])
+        normal_palette.setColor(QPalette.Button, self.def_colors["Button"])
+        normal_palette.setColor(QPalette.Light, self.def_colors["Light"])
+        normal_palette.setColor(QPalette.Midlight, self.def_colors["Midlight"])
+        normal_palette.setColor(QPalette.Dark, self.def_colors["Dark"])
+        normal_palette.setColor(QPalette.Text, self.def_colors["Text"])
+        normal_palette.setColor(QPalette.BrightText, self.def_colors["BrightText"])
+        normal_palette.setColor(QPalette.ButtonText, self.def_colors["ButtonText"])
+        normal_palette.setColor(QPalette.Base, self.def_colors["Base"])
+        normal_palette.setColor(QPalette.Window, self.def_colors["Window"])
+        normal_palette.setColor(QPalette.Shadow, self.def_colors["Shadow"])
+        normal_palette.setColor(QPalette.Highlight, self.def_colors["Highlight"])
+        normal_palette.setColor(QPalette.HighlightedText,
+                                self.def_colors["HighlightedText"])
+        normal_palette.setColor(QPalette.Link, self.def_colors["Link"])
+        normal_palette.setColor(QPalette.AlternateBase,
+                                self.def_colors["AlternateBase"])
+        normal_palette.setColor(QPalette.ToolTipBase, self.def_colors["ToolTipBase"])
+        normal_palette.setColor(QPalette.ToolTipText, self.def_colors["ToolTipText"])
+        normal_palette.setColor(QPalette.LinkVisited, self.def_colors["LinkVisited"])
+
+        # # disabled
+        # normal_palette.setColor(QPalette.Disabled, QPalette.WindowText,
+        #                         QColor(115, 115, 115))
+        # normal_palette.setColor(QPalette.Disabled, QPalette.Text,
+        #                         QColor(115, 115, 115))
+        # normal_palette.setColor(QPalette.Disabled, QPalette.ButtonText,
+        #                         QColor(115, 115, 115))
+        # normal_palette.setColor(QPalette.Disabled, QPalette.Highlight,
+        #                         QColor(190, 190, 190))
+        # normal_palette.setColor(QPalette.Disabled, QPalette.HighlightedText,
+        #                         QColor(115, 115, 115))
+
+        self.app.style().unpolish(self.app.base)
+        self.app.setPalette(normal_palette)
+        # self.app.setPalette(self.def_palette)
+        self.app.setStyle(self.def_style)
+
+    @staticmethod
+    def get_current():
+        """ Return the current theme's data
+        """
+        light_palette = QPalette()
+        data = {'WindowText': (light_palette.color(QPalette.WindowText)),
+                'Button': (light_palette.color(QPalette.Button)),
+                'Light': (light_palette.color(QPalette.Light)),
+                'Midlight': (light_palette.color(QPalette.Midlight)),
+                'Dark': (light_palette.color(QPalette.Dark)),
+                'Text': (light_palette.color(QPalette.Text)),
+                'BrightText': (light_palette.color(QPalette.BrightText)),
+                'ButtonText': (light_palette.color(QPalette.ButtonText)),
+                'Base': (light_palette.color(QPalette.Base)),
+                'Window': (light_palette.color(QPalette.Window)),
+                'Shadow': (light_palette.color(QPalette.Shadow)),
+                'Highlight': (light_palette.color(QPalette.Highlight)),
+                'HighlightedText': (light_palette.color(QPalette.HighlightedText)),
+                'Link': (light_palette.color(QPalette.Link)),
+                'AlternateBase': (light_palette.color(QPalette.AlternateBase)),
+                'ToolTipBase': (light_palette.color(QPalette.ToolTipBase)),
+                'ToolTipText': (light_palette.color(QPalette.ToolTipText)),
+                'LinkVisited': (light_palette.color(QPalette.LinkVisited))}
+        return data
+
+
+class XIconGlyph(QObject):
+    """ A Font char to QIcon converter
+
+    * Usage in Base:
+    fdb = QFontDatabase()
+    fdb.addApplicationFont(":/stuff/font.ttf")  # add a custom font or use existing
+    # pprint(fdb.families())
+
+    self.font_ico = XIconGlyph(self, glyph=None)
+
+    ico = self.font_ico.get_icon({"char": "✓",
+                                  "size": (32, 32),
+                                  "size_ratio": 1.2,
+                                  "offset": (0, -2),
+                                  "family": "XFont",
+                                  "color": "#FF0000",
+                                  "active": "orange",
+                                  "hover": (160, 50, 255),
+                                  })
+    self.tool_btn.setIcon(ico)
+    """
+
+    def __init__(self, parent, glyph=None):
+        super(XIconGlyph, self).__init__(parent)
+        self.char = ""
+        self.family = ""
+        self.color = parent.palette().text().color().name()  # use the default
+        self.active = None
+        self.hover = None
+        self.disabled = parent.palette().dark().color().name()
+        self.icon_size = 16, 16
+        self.size_ratio = 1
+        self.offset = 0, 0
+        self.glyph = glyph
+        if glyph:
+            self._parse_glyph(glyph)
+
+    def _parse_glyph(self, glyph):
+        """ Set the glyph options
+
+        :type glyph: dict
+        """
+        if self.glyph:
+            self.glyph.update(glyph)
+
+        family = glyph.get("family")
+        if family:
+            self.family = family
+        char = glyph.get("char")
+        if char:
+            self.char = char
+        icon_size = glyph.get("size")
+        if icon_size:
+            self.icon_size = icon_size
+        offset = glyph.get("offset")
+        if offset:
+            self.offset = offset
+        size_ratio = glyph.get("size_ratio")
+        if size_ratio:
+            self.size_ratio = size_ratio
+        active = glyph.get("active")
+        if active:
+            self.active = active
+        hover = glyph.get("hover")
+        if hover:
+            self.hover = hover
+        color = glyph.get("color")
+        if color:
+            self.color = color
+        disabled = glyph.get("disabled")
+        if disabled:
+            self.disabled = disabled
+
+    def _get_char_pixmap(self, color):
+        """ Create an icon from a font character
+
+        :type color: str|tuple
+        :param color: The color of the icon
+        :return: QPixmap
+        """
+        if isinstance(color, tuple):
+            color = QColor(*color)
+        else:
+            color = QColor(color)
+        font = QFont()
+        if self.family:
+            font.setFamily(self.family)
+        font.setPixelSize(self.icon_size[1] * self.size_ratio)
+
+        pixmap = QPixmap(*self.icon_size)
+        pixmap.fill(QColor(0, 0, 0, 0))  # fill with transparency
+
+        painter = QPainter(pixmap)
+        painter.setFont(font)
+        pen = QPen()
+        pen.setColor(color)
+        painter.setPen(pen)
+        painter.drawText(QRect(QPoint(*self.offset), QSize(*self.icon_size)),
+                         Qt.AlignCenter | Qt.AlignVCenter, self.char)
+        painter.end()
+        return pixmap
+
+    def get_icon(self, glyph=None):
+        """ Get the icon from the glyph
+
+        :type glyph: dict
+        :return: QIcon
+        """
+        if glyph:
+            self._parse_glyph(glyph)
+
+        icon = QIcon()
+        icon.addPixmap(self._get_char_pixmap(self.color), QIcon.Normal, QIcon.Off)
+        if self.active:  # the checkable down state icon
+            icon.addPixmap(self._get_char_pixmap(self.active),
+                           QIcon.Active, QIcon.On)
+        if self.hover:  # the mouse hover state icon
+            icon.addPixmap(self._get_char_pixmap(self.hover),
+                           QIcon.Active, QIcon.Off)
+        if self.disabled:  # the disabled state icon
+            icon.addPixmap(self._get_char_pixmap(self.disabled),
+                           QIcon.Disabled, QIcon.Off)
+        return icon
 
 # ___ _______________________ GUI STUFF _____________________________
 
@@ -492,6 +854,8 @@ from gui_toolbar import Ui_ToolBar
 from gui_status import Ui_Status
 from gui_edit import Ui_TextDialog
 from gui_filter import Ui_Filter
+from gui_sync_group import Ui_SyncGroup
+from gui_sync_item import Ui_SyncItem
 
 
 class ToolBar(QWidget, Ui_ToolBar):
@@ -505,19 +869,21 @@ class ToolBar(QWidget, Ui_ToolBar):
         self.setupUi(self)
         self.base = parent
 
-        self.buttons = (self.check_btn, self.scan_btn, self.export_btn, self.open_btn,
-                        self.merge_btn, self.delete_btn, self.clear_btn, self.about_btn,
-                        self.books_view_btn, self.high_view_btn, self.filter_btn)
-        self.size_menu = self.create_size_menu()
-        self.db_menu = self.create_db_menu()
+        self.buttons = (self.scan_btn, self.export_btn, self.open_btn, self.merge_btn,
+                        self.delete_btn, self.clear_btn, self.about_btn, self.filter_btn,
+                        self.books_view_btn, self.high_view_btn, self.sync_view_btn,
+                        self.add_btn)
+
+        self.size_menu = QMenu(self)
+        # self.size_menu.aboutToShow.connect(self.create_size_menu)
+
+        self.db_menu = QMenu()
+        self.db_menu.aboutToShow.connect(self.create_db_menu)
         self.db_btn.setMenu(self.db_menu)
 
-        for btn in [self.loaded_btn, self.db_btn,
-                    self.books_view_btn, self.high_view_btn]:
+        for btn in [self.books_view_btn, self.high_view_btn, self.sync_view_btn,
+                    self.loaded_btn, self.db_btn]:
             btn.clicked.connect(self.change_view)
-
-        self.check_btn.clicked.connect(parent.on_check_btn)
-        self.check_btn.hide()
 
     @Slot(QPoint)
     def on_tool_frame_customContextMenuRequested(self, point):
@@ -526,25 +892,20 @@ class ToolBar(QWidget, Ui_ToolBar):
         :type point: QPoint
         :param point: The point where the right-click happened
         """
-        self.size_menu.exec_(self.tool_frame.mapToGlobal(point))
-
-    def create_size_menu(self):
-        """ Create the toolbar's buttons size menu
-        """
-        menu = QMenu(self)
+        self.size_menu.clear()
         group = QActionGroup(self)
         sizes = (_("Tiny"), 16), (_("Small"), 32), (_("Medium"), 48), (_("Big"), 64)
         for name, size in sizes:
-            action = QAction(name, menu)
+            action = QAction(name, self.size_menu)
             action.setCheckable(True)
             if size == self.base.toolbar_size:
                 action.setChecked(True)
             action.triggered.connect(partial(self.set_btn_size, size))
             group.addAction(action)
-            menu.addAction(action)
+            self.size_menu.addAction(action)
         if QT6:  # QT6 requires exec() instead of exec_()
-            menu.exec_ = getattr(menu, "exec")
-        return menu
+            self.size_menu.exec_ = getattr(self.size_menu, "exec")
+        self.size_menu.exec_(self.tool_frame.mapToGlobal(point))
 
     def set_btn_size(self, size):
         """ Changes the Toolbar's icons size
@@ -559,12 +920,16 @@ class ToolBar(QWidget, Ui_ToolBar):
         for btn in self.buttons:
             btn.setMinimumWidth(size + 10)
             btn.setIconSize(button_size)
+            # btn.setStyleSheet("QToolButton:disabled {background-color: rgb(0, 0, 0);}")
 
         for btn in [self.loaded_btn, self.db_btn]:
             # btn.setMinimumWidth(size + 10)
             btn.setIconSize(half_size)
         # noinspection PyArgumentList
         QApplication.processEvents()
+
+        if self.base.theme in [THEME_NONE_NEW, THEME_DARK_NEW, THEME_LIGHT_NEW]:
+            self.base.set_new_icons(menus=False)
 
     @Slot()
     def on_scan_btn_clicked(self):
@@ -606,6 +971,19 @@ class ToolBar(QWidget, Ui_ToolBar):
             data = self.base.high_table.item(idx.row(), HIGHLIGHT_H).data(Qt.UserRole)
             self.base.open_file(data["path"])
 
+    @Slot()
+    def on_add_btn_clicked(self):
+        """ The `Add` sync group button is pressed
+        """
+        if self.base.current_view == SYNC_VIEW:
+            info = {"title": "",
+                    "sync_pos": False,
+                    "merge": False,
+                    "sync_db": True,
+                    "items": [{"path": "", "data": {}}],
+                    "enabled": True}
+            self.base.create_sync_row(info)
+
     @Slot(bool)
     def on_filter_btn_toggled(self, state):
         """ The `Find` button is pressed
@@ -623,9 +1001,27 @@ class ToolBar(QWidget, Ui_ToolBar):
     def on_merge_btn_clicked(self):
         """ The `Merge` button is pressed
         """
+        if self.base.current_view == SYNC_VIEW:
+            if self.base.merge_warning_stop():
+                return
+            text = _("Synchronize all active Sync groups?")
+            popup = self.base.popup(_("Sync"), text, icon=QMessageBox.Question,
+                                    buttons=2)
+            if popup.buttonRole(popup.clickedButton()) == QMessageBox.AcceptRole:
+                changed_total = 0
+                for idx in range(self.base.sync_table.rowCount()):
+                    group = self.base.sync_table.cellWidget(idx, 0)
+                    if group.power_btn.isChecked():
+                        changed = self.base.synchronize_group(group, multi=True)
+                        if changed:
+                            changed_total += 1
+                text = _(f"Synchronization process completed\n"
+                         f"{changed_total} groups were synchronized")
+                self.base.popup(_("Information"), text, QMessageBox.Information)
+            return
         data = [self.base.file_table.item(idx.row(), idx.column()).data(Qt.UserRole)
                 for idx in self.base.sel_indexes]
-        if self.base.same_cre_version(data):
+        if self.base.same_cre_version(*data):
             self.base.on_merge_highlights()
         else:
             self.base.wrong_cre_version()
@@ -634,18 +1030,31 @@ class ToolBar(QWidget, Ui_ToolBar):
     def on_delete_btn_clicked(self):
         """ The `Delete` button is pressed
         """
-        self.base.delete_actions(0)
+        if self.base.current_view == BOOKS_VIEW:
+            # self.base.delete_actions(0)
+            if not self.base.db_mode:
+                self.delete_btn.showMenu()
+            else:
+                self.base.delete_actions(0)
+        elif self.base.current_view == HIGHLIGHTS_VIEW:
+            self.base.on_delete_highlights()
+        elif self.base.current_view == SYNC_VIEW:
+            for index in sorted(self.base.sel_sync_view)[::-1]:
+                row = index.row()
+                del self.base.sync_groups[row]
+                self.base.sync_table.model().removeRow(row)
+            self.base.update_sync_groups()
 
     @Slot()
     def on_clear_btn_clicked(self):
         """ The `Clear List` button is pressed
         """
-        if self.base.current_view == HIGHLIGHTS_VIEW:
-            (self.base.high_table.model()  # clear Books view too
-             .removeRows(0, self.base.high_table.rowCount()))
+        if self.base.current_view == SYNC_VIEW:
+            return
         self.base.loaded_paths.clear()
         self.base.reload_highlights = True
         self.base.file_table.model().removeRows(0, self.base.file_table.rowCount())
+        self.base.high_table.model().removeRows(0, self.base.high_table.rowCount())
         self.activate_buttons()
 
     @Slot()
@@ -658,44 +1067,52 @@ class ToolBar(QWidget, Ui_ToolBar):
     def create_db_menu(self):
         """ Create the database menu
         """
-        menu = QMenu(self)
-
-        action = QAction(_("Create new database"), menu)
+        self.db_menu.clear()
+        action = QAction(_("Create new database"), self.db_menu)
         action.setIcon(self.base.ico_db_add)
         action.triggered.connect(partial(self.base.change_db, NEW_DB))
-        menu.addAction(action)
+        self.db_menu.addAction(action)
 
-        action = QAction(_("Reload database"), menu)
+        action = QAction(_("Reload database"), self.db_menu)
         action.setIcon(self.base.ico_refresh)
         action.triggered.connect(partial(self.base.change_db, RELOAD_DB))
-        menu.addAction(action)
+        self.db_menu.addAction(action)
 
-        action = QAction(_("Change database"), menu)
+        action = QAction(_("Change database"), self.db_menu)
         action.setIcon(self.base.ico_db_open)
         action.triggered.connect(partial(self.base.change_db, CHANGE_DB))
-        menu.addAction(action)
+        self.db_menu.addAction(action)
         if QT6:  # QT6 requires exec() instead of exec_()
-            menu.exec_ = getattr(menu, "exec")
-        return menu
+            self.db_menu.exec_ = getattr(self.db_menu, "exec")
 
     def change_view(self):
         """ Changes what is shown in the app
         """
-        new = self.update_archived() if self.db_btn.isChecked() else self.update_loaded()
+        reloaded = False
+        if not self.sync_view_btn.isChecked():  # don't reload when coming from Sync view
+            reloaded = (self.update_archived()
+                        if self.db_btn.isChecked() else self.update_loaded())
         if self.books_view_btn.isChecked():  # Books view
-            # self.add_btn_menu(self.base.toolbar.export_btn)
+            self.base.current_view = BOOKS_VIEW
+            self.merge_btn.setToolTip(TOOLTIP_MERGE)
+            self.merge_btn.setStatusTip(TOOLTIP_MERGE)
             if self.base.sel_idx:
                 item = self.base.file_table.item(self.base.sel_idx.row(),
                                                  self.base.sel_idx.column())
                 self.base.on_file_table_itemClicked(item, reset=False)
-        else:  # Highlights view
-            for btn in [self.base.toolbar.export_btn, self.base.toolbar.delete_btn]:
-                self.remove_btn_menu(btn)
-            if self.base.reload_highlights and not new:
+        elif self.high_view_btn.isChecked():  # Highlights view
+            self.base.current_view = HIGHLIGHTS_VIEW
+            if self.base.reload_highlights and not reloaded:
                 self.base.scan_highlights_thread()
+        else:  # Sync view
+            self.base.current_view = SYNC_VIEW
+            self.merge_btn.setToolTip(TOOLTIP_SYNC)
+            self.merge_btn.setStatusTip(TOOLTIP_SYNC)
+            if not self.base.sync_groups_loaded:
+                # noinspection PyTypeChecker
+                QTimer.singleShot(0, self.base.load_sync_groups)
+                self.base.sync_groups_loaded = True
 
-        self.base.current_view = (BOOKS_VIEW if self.books_view_btn.isChecked()
-                                  else HIGHLIGHTS_VIEW)
         self.base.views.setCurrentIndex(self.base.current_view)
         self.setup_buttons()
         self.activate_buttons()
@@ -720,7 +1137,7 @@ class ToolBar(QWidget, Ui_ToolBar):
             self.base.db_mode = True
             self.base.reload_highlights = True
             self.base.read_books_from_db()
-            text = _("Loading {} database").format(APP_NAME)
+            text = _(f"Loading {APP_NAME} database")
             self.base.loading_thread(DBLoader, self.base.books, text)
             if not len(self.base.books):  # no books in the db
                 text = _('There are no books currently in the archive.\nTo add/'
@@ -733,74 +1150,84 @@ class ToolBar(QWidget, Ui_ToolBar):
         """ Shows/Hides toolbar's buttons based on the view selected
         """
         books_view = self.books_view_btn.isChecked()
+        high_view = self.high_view_btn.isChecked()
+        sync_view = self.sync_view_btn.isChecked()
         db_mode = self.db_btn.isChecked()
 
-        self.scan_btn.setVisible(not db_mode)
-        self.merge_btn.setVisible(books_view and not db_mode)
-        self.delete_btn.setVisible(books_view)
-        self.clear_btn.setVisible(not db_mode)
+        self.scan_btn.setVisible(not (db_mode or sync_view))
+        self.export_btn.setVisible(not sync_view)
+        self.open_btn.setVisible(not sync_view)
+        self.add_btn.setVisible(sync_view)
+        self.filter_btn.setVisible(not sync_view)
+        self.merge_btn.setVisible(sync_view or not (db_mode or high_view))
+        # self.delete_btn.setVisible(books_view or sync_view)
+        self.clear_btn.setVisible(not (db_mode or sync_view))
 
-        if self.base.db_mode:
-            self.remove_btn_menu(self.base.toolbar.delete_btn)
-        else:
-            self.add_btn_menu(self.base.toolbar.delete_btn)
-        self.base.status.setVisible(books_view)
+        self.mode_grp.setEnabled(not sync_view)
+        self.base.status.show_items_btn.setVisible(books_view)
+
+        self.set_btn_menu(self.export_btn, books_view)
+        self.set_btn_menu(self.merge_btn, books_view)
+        self.set_btn_menu(self.delete_btn, books_view and not db_mode)
 
     def activate_buttons(self):
         """ Enables/Disables toolbar's buttons based on selection/view
         """
-        if self.base.high_table.isVisible():  # Highlights view
+        count = 0
+        sync_enable = False
+        book_exists = False
+        if self.base.current_view == HIGHLIGHTS_VIEW:  # Highlights view
             try:
                 idx = self.base.sel_high_view[-1]
             except IndexError:
                 idx = None
             count = self.base.high_table.rowCount()
-        else:
+        elif self.base.current_view == BOOKS_VIEW:  # Books view
             idx = self.base.sel_idx
             count = self.base.file_table.rowCount()
+            if len(self.base.sel_indexes) == 2:  # check if we can sync/merge
+                idx1, idx2 = self.base.sel_indexes
+                data1 = self.base.file_table.item(idx1.row(),
+                                                  idx1.column()).data(Qt.UserRole)
+                path1 = self.base.file_table.item(idx1.row(), TYPE).data(Qt.UserRole)[0]
+                data2 = self.base.file_table.item(idx2.row(),
+                                                  idx2.column()).data(Qt.UserRole)
+                path2 = self.base.file_table.item(idx2.row(), TYPE).data(Qt.UserRole)[0]
+                sync_enable = self.base.same_book(data1, data2, path1, path2)
+        else:  # Sync view
+            try:
+                idx = self.base.sel_sync_view[-1]
+            except IndexError:
+                idx = None
+            sync_enable = True
+
         if idx:
             row = idx.row()
-            if self.base.high_table.isVisible():  # Highlights view
+            if self.base.file_table.isVisible():  # Books view
+                book_exists = self.base.file_table.item(row, TYPE).data(Qt.UserRole)[1]
+            elif self.base.high_table.isVisible():  # Highlights view
                 data = self.base.high_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)
                 book_exists = isfile(data["path"])
-            else:
-                book_exists = self.base.file_table.item(row, TYPE).data(Qt.UserRole)[1]
-        else:
-            book_exists = False
 
-        self.export_btn.setEnabled(bool(idx))
+        self.export_btn.setEnabled(bool(idx) and not self.base.sync_table.isVisible())
         self.open_btn.setEnabled(book_exists)
         self.delete_btn.setEnabled(bool(idx))
         self.clear_btn.setEnabled(bool(count))
-
-        self.merge_btn.setEnabled(False)
-        if len(self.base.sel_indexes) == 2:  # check if we can sync/merge
-            idx1, idx2 = self.base.sel_indexes
-            data1 = self.base.file_table.item(idx1.row(), idx1.column()).data(Qt.UserRole)
-            path1 = self.base.file_table.item(idx1.row(), TYPE).data(Qt.UserRole)[0]
-            data2 = self.base.file_table.item(idx2.row(), idx2.column()).data(Qt.UserRole)
-            path2 = self.base.file_table.item(idx2.row(), TYPE).data(Qt.UserRole)[0]
-            self.merge_btn.setEnabled(self.base.same_book(data1, data2, path1, path2))
+        self.merge_btn.setEnabled(sync_enable)
 
     @staticmethod
-    def add_btn_menu(btn):
+    def set_btn_menu(btn, status=True):
         """ Adds a menu arrow to a toolbar button
 
         :type btn: QToolButton
         :param btn: The button to change
         """
-        btn.setStyleSheet("")
-        btn.setPopupMode(QToolButton.MenuButtonPopup)
-
-    @staticmethod
-    def remove_btn_menu(btn):
-        """ Removes the menu arrow from a toolbar button
-
-        :type btn: QToolButton
-        :param btn: The button to change
-        """
-        btn.setStyleSheet("QToolButton::menu-indicator{width:0px;}")
-        btn.setPopupMode(QToolButton.DelayedPopup)
+        if status:
+            btn.setStyleSheet("")
+            btn.setPopupMode(QToolButton.MenuButtonPopup)
+        else:
+            btn.setStyleSheet("QToolButton::menu-indicator{width:0px;}")
+            btn.setPopupMode(QToolButton.DelayedPopup)
 
     @Slot()
     def on_about_btn_clicked(self):
@@ -819,10 +1246,7 @@ class Filter(QDialog, Ui_Filter):
         """
         super(Filter, self).__init__(parent)
         self.setupUi(self)
-        if QT4:  # Remove the question mark widget from dialog
-            # noinspection PyUnresolvedReferences
-            self.setWindowFlags(self.windowFlags() ^ Qt.WindowContextHelpButtonHint)
-        self.setWindowTitle(_("Filter").format(APP_NAME))
+        self.setWindowTitle(_("Filter"))
         self.base = parent
 
     def keyPressEvent(self, event):
@@ -899,7 +1323,7 @@ class Filter(QDialog, Ui_Filter):
                     else:
                         self.base.file_table.setRowHidden(row, True)
                         filtered += 1
-        else:
+        elif self.base.toolbar.high_view_btn.isChecked():
             row_count = self.base.high_table.rowCount()
             for row in range(row_count):
                 title = self.base.high_table.item(row, TITLE_H).data(0)
@@ -934,8 +1358,10 @@ class Filter(QDialog, Ui_Filter):
                     else:
                         self.base.high_table.setRowHidden(row, True)
                         filtered += 1
-        self.filtered_lbl.setText(_("Showing {}/{}").format(row_count - filtered,
-                                                            row_count))
+        else:
+            print("SYNC FILTERRRRRRRRRRRRRRRRR")
+            return
+        self.filtered_lbl.setText(_(f"Showing {row_count - filtered}/{row_count}"))
 
     @Slot()
     def on_clear_filter_btn_clicked(self):
@@ -976,10 +1402,7 @@ class About(QDialog, Ui_About):
         """
         super(About, self).__init__(parent)
         self.setupUi(self)
-        if QT4:  # Remove the question mark widget from dialog
-            # noinspection PyUnresolvedReferences
-            self.setWindowFlags(self.windowFlags() ^ Qt.WindowContextHelpButtonHint)
-        self.setWindowTitle(_("About {}").format(APP_NAME))
+        self.setWindowTitle(_(f"About {APP_NAME}"))
         self.base = parent
 
     @Slot()
@@ -1007,24 +1430,21 @@ class About(QDialog, Ui_About):
         current_version = version_parse(self.base.version)
         if version_new > current_version:
             popup = self.base.popup(_("Newer version exists!"),
-                                    _("There is a newer version (v.{}) online.\n"
-                                      "Open the site to download it now?")
-                                    .format(version_new),
+                                    _(f"There is a newer version (v.{version_new}) online"
+                                      f".\nOpen the site to download it now?"),
                                     icon=QMessageBox.Information, buttons=2)
             if popup.clickedButton().text() == "OK":
                 webbrowser.open("http://www.noembryo.com/apps.php?katalib")
                 self.close()
         elif version_new == current_version:
             self.base.popup(_("No newer version exists!"),
-                            _("{} is up to date (v.{})").format(APP_NAME,
-                                                                current_version),
+                            _(f"{APP_NAME} is up to date (v.{current_version})"),
                             icon=QMessageBox.Information, buttons=1)
         elif version_new < current_version:
             self.base.popup(_("No newer version exists!"),
-                            _("It seems that you are using a newer version ({0})\n"
-                              "than the one online ({1})!").format(current_version,
-                                                                   version_new),
-                            icon=QMessageBox.Question, buttons=1)
+                            _(f"It seems that you are using a newer version "
+                              f"({current_version})\nthan the one online "
+                              f"({version_new})!"), icon=QMessageBox.Question, buttons=1)
 
     @staticmethod
     def get_online_version():
@@ -1051,30 +1471,30 @@ class About(QDialog, Ui_About):
         # color = self.palette().color(QPalette.WindowText).name()  # for links
         splash = ":/stuff/logo.png"
         paypal = ":/stuff/paypal.png"
-        info = _("""<body style="font-size:10pt; font-weight:400; font-style:normal">
+        info = _(f"""<body style="font-size:10pt; font-weight:400; font-style:normal">
         <center>
           <table width="100%" border="0">
             <tr>
-                <p align="center"><img src="{0}" width="256" height ="212"></p>
-                <p align="center"><b>{3}</b> is a utility for viewing
-                    <a href="https://github.com/koreader/koreader">Koreader</a>'s
+                <p align="center"><img src="{splash}" width="256" height ="212"></p>
+                <p align="center"><b>{APP_NAME}</b> is a utility for viewing
+                    <a href="https://github.com/koreader/koreader">KOReader</a>'s
                     highlights<br/>and/or export them to simple text</p>
-                <p align="center">Version {1}</p>
+                <p align="center">Version {self.base.version}</p>
                 <p align="center">Visit
                     <a href="https://github.com/noEmbryo/KoHighlights">
-                    {3} page at GitHub</a>, or</p>
+                    {APP_NAME} page at GitHub</a>, or</p>
                 <p align="center"><a href="http://www.noembryo.com/apps.php?app_index">
                    noEmbryo's page</a> with more Apps and stuff...</p>
                 <p align="center">Use it and if you like it, consider to
                 <p align="center"><a
                  href="https://www.paypal.com/donate/?hosted_button_id=RBYLVRYG9RU2S">
-                <img src="{2}" alt="PayPal Button"
+                <img src="{paypal}" alt="PayPal Button"
                     width="142" height="27" border="0"></a></p>
                 <p align="center">&nbsp;</p></td>
             </tr>
           </table>
         </center>
-        </body>""").format(splash, self.base.version, paypal, APP_NAME)
+        </body>""")
         self.text_lbl.setText(info)
 
 
@@ -1101,19 +1521,16 @@ class TextDialog(QDialog, Ui_TextDialog):
 
     def __init__(self, parent=None):
         super(TextDialog, self).__init__(parent)
-        if QT4:  # Remove the question mark widget from dialog
-            # noinspection PyUnresolvedReferences
-            self.setWindowFlags(self.windowFlags() ^ Qt.WindowContextHelpButtonHint)
         self.setupUi(self)
 
         self.base = parent
-        self.on_ok = None
+        # self.on_ok = None
 
     @Slot()
     def on_ok_btn_clicked(self):
         """ The OK button is pressed
         """
-        self.on_ok()
+        self.base.edit_comment_ok()
 
 
 class Status(QWidget, Ui_Status):
@@ -1126,26 +1543,38 @@ class Status(QWidget, Ui_Status):
         super(Status, self).__init__(parent)
         self.setupUi(self)
         self.base = parent
+        self.themes = XThemes(parent)
 
         self.wait_anim = QMovie(":/stuff/wait.gif")
         self.anim_lbl.setMovie(self.wait_anim)
         self.anim_lbl.hide()
 
+        self.show_actions = [self.act_page, self.act_date, self.act_text,
+                             self.act_chapter, self.act_comment]
+        for idx, act in enumerate(self.show_actions):
+            act.setData(idx)
+            act.triggered.connect(partial(self.on_show_items, act))
+
         self.show_menu = QMenu(self)
-        for i in [self.act_page, self.act_date, self.act_text, self.act_chapter,
-                  self.act_comment]:
-            self.show_menu.addAction(i)
-            # noinspection PyUnresolvedReferences
-            i.triggered.connect(self.on_show_items)
-            i.setChecked(True)
+        self.show_menu.aboutToShow.connect(self.get_show_menu)
+        self.show_items_btn.setMenu(self.show_menu)
+
+    def get_show_menu(self):
+        """ Returns the menu with the items to show
+        """
+        self.show_menu.clear()
+        for idx, act in enumerate(self.show_actions):
+            act.setChecked(self.base.show_items[idx])
+            self.show_menu.addAction(act)
 
         action = QAction(_("Date Format"), self.show_menu)
-        action.setIcon(QIcon(":/stuff/calendar.png"))
+        action.setIcon(self.base.ico_calendar)
         action.triggered.connect(self.set_date_format)
         self.show_menu.addAction(action)
 
         sort_menu = QMenu(self)
-        ico_sort = QIcon(":/stuff/sort.png")
+        sort_menu.setIcon(self.base.ico_sort)
+        sort_menu.setTitle(_("Sort by"))
         group = QActionGroup(self)
 
         action = QAction(_("Date"), sort_menu)
@@ -1164,20 +1593,57 @@ class Status(QWidget, Ui_Status):
         group.addAction(action)
         sort_menu.addAction(action)
 
-        sort_menu.setIcon(ico_sort)
-        sort_menu.setTitle(_("Sort by"))
         self.show_menu.addMenu(sort_menu)
 
-        self.show_items_btn.setMenu(self.show_menu)
+    @Slot(int)
+    def on_theme_box_currentIndexChanged(self, idx):
+        """ Selects the app's theme style
+        """
+        if idx == THEME_NONE_OLD:
+            self.themes.normal()
+            self.base.set_old_icons()
+            if self.base.theme not in [THEME_NONE_OLD, THEME_NONE_NEW]:
+                self.no_theme_popup(idx)
+                return
+        elif idx == THEME_NONE_NEW:
+            self.themes.normal()
+            self.base.set_new_icons()
+            if self.base.theme not in [THEME_NONE_OLD, THEME_NONE_NEW]:
+                self.no_theme_popup(idx)
+                return
+        elif idx == THEME_DARK_OLD:
+            self.themes.dark()
+            self.base.set_old_icons()
+        elif idx == THEME_DARK_NEW:
+            self.themes.dark()
+            self.base.set_new_icons()
+        elif idx == THEME_LIGHT_OLD:
+            self.themes.light()
+            self.base.set_old_icons()
+        elif idx == THEME_LIGHT_NEW:
+            self.themes.light()
+            self.base.set_new_icons()
 
-    def on_show_items(self):
+        self.base.theme = idx
+        self.base.reset_theme_colors()
+
+    def no_theme_popup(self, idx):
+        self.base.theme = idx
+        self.base.reset_theme_colors()
+        self.base.popup(_("Warning"), _("The theme will be fully reset after "
+                                        "the application is restarted."))
+
+    def on_show_items(self, action=None):
         """ Show/Hide elements of the highlight info
         """
+        if action:
+            act_idx = action.data()
+            self.base.show_items[act_idx] = action.isChecked()
         try:
-            idx = self.base.file_table.selectionModel().selectedRows()[-1]
+            table_idx = self.base.file_table.selectionModel().selectedRows()[-1]
         except IndexError:  # nothing selected
             return
-        item = self.base.file_table.item(idx.row(), 0)
+        item = self.base.file_table.item(table_idx.row(), 0)
         self.base.on_file_table_itemClicked(item)
 
     def set_date_format(self):
@@ -1214,6 +1680,407 @@ class Status(QWidget, Ui_Status):
             self.anim_lbl.hide()
             self.wait_anim.stop()
 
+
+class SyncGroup(QWidget, Ui_SyncGroup):
+
+    def __init__(self, parent=None):
+        """ Initializes the StatusBar
+
+        :type parent: Base
+        """
+        super(SyncGroup, self).__init__(parent)
+        self.setupUi(self)
+        self.base = parent
+        self.sync_items = []
+        self.items_layout = self.items_frm.layout()
+
+        self.idx = None
+        self.data = None
+        self.new_format = True
+        self.def_btn_icos = []
+        self.buttons = [(self.power_btn, "Y"),
+                        (self.sync_btn, "E"),
+                        (self.refresh_btn, "Z")]
+        self.setup_buttons()
+        self.setup_icons()
+
+        font = QFont()
+        font.setBold(True)
+        font.setPointSize(QFont.pointSize(QFont()) + 3)
+        self.title_lbl.setFont(font)
+
+        power_color = self.base.palette().button().color().name()
+        self.css = 'QFrame#items_frm {background-color: "%s";}'
+        self.setStyleSheet(self.css % power_color)
+
+        self.sync_pos_chk.stateChanged.connect(self.update_data)
+        self.merge_chk.stateChanged.connect(self.update_data)
+        self.sync_db_chk.stateChanged.connect(self.update_data)
+
+    @Slot(QPoint)
+    def on_group_frm_customContextMenuRequested(self, point):
+        """ When the context menu of the SyncGroup is requested
+
+        :type point: QPoint
+        :param point: The point of the click
+        """
+        menu = QMenu(self)
+        if QT6:  # QT6 requires exec() instead of exec_()
+            menu.exec_ = getattr(menu, "exec")
+
+        action = QAction(_("Rename group"), menu)
+        action.setIcon(self.base.ico_file_edit)
+        action.triggered.connect(self.on_rename)
+        menu.addAction(action)
+
+        action = QAction(_("Sync group"), menu)
+        action.setIcon(self.base.ico_files_merge)
+        action.triggered.connect(self.on_sync_btn_clicked)
+        menu.addAction(action)
+
+        menu.addSeparator()
+
+        action = QAction(_("Delete selected"), menu)
+        action.setIcon(self.base.ico_delete)
+        action.triggered.connect(self.base.toolbar.on_delete_btn_clicked)
+        menu.addAction(action)
+
+        menu.exec_(self.mapToGlobal(point))
+
+    def on_rename(self):
+        """ Renames the SyncGroup
+        """
+        title = self.title_lbl.text()
+        title = title if title else True
+        popup = self.base.popup(_("Rename SyncGroup"),
+                                _("Enter the new name of the SyncGroup:"),
+                                icon=QMessageBox.Question, buttons=2,
+                                input_text=title, button_text=(_("OK"), _("Cancel")))
+        if popup.buttonRole(popup.clickedButton()) == QMessageBox.AcceptRole:
+            text = popup.typed_text
+            self.title_lbl.setText(text)
+            self.data["title"] = text
+            self.update_data()
+
+    def setup_buttons(self):
+        for btn, char in self.buttons:
+            self.def_btn_icos.append(btn.icon())
+            size = btn.iconSize().toTuple()
+            btn.xig = XIconGlyph(self, {"family": "XFont", "size": size, "char": char})
+        for item in self.sync_items:
+            item.setup_buttons()
+
+    def setup_icons(self):
+        if self.base.theme in [THEME_NONE_NEW, THEME_DARK_NEW, THEME_LIGHT_NEW]:
+            # noinspection PyTypeChecker
+            QTimer.singleShot(0, self.set_new_icons)
+        else:
+            self.set_old_icons()
+        for item in self.sync_items:
+            item.setup_icons()
+
+    # noinspection DuplicatedCode
+    def set_new_icons(self):
+        """ Get the font icons with the new color palette
+        """
+        color = self.palette().text().color().name()
+        for btn, _ in self.buttons:
+            size = btn.iconSize().toTuple()
+            btn.xig.color = color
+            btn.setIcon(btn.xig.get_icon({"size": size}))
+
+    def set_old_icons(self):
+        """ Reload the old icons
+        """
+        for idx, item in enumerate(self.buttons):
+            btn = item[0]
+            btn.setIcon(self.def_btn_icos[idx])
+
+    @Slot(bool)
+    def on_power_btn_clicked(self, state):
+        """ Enables the Group
+        """
+        if state:
+            power_color = self.base.palette().button().color().name()
+        else:
+            power_color = self.base.palette().dark().color().name()
+        self.setStyleSheet(self.css % power_color)
+
+        self.data["enable"] = state
+        self.update_data()
+
+    @Slot()
+    def on_refresh_btn_clicked(self, ):
+        """ The `Refresh` button is pressed
+        """
+        items_paths = [i["path"] for i in self.data.get("items", [])]
+        for item in self.sync_items:
+            self.items_layout.removeWidget(item)
+        self.sync_items = []
+        for path in items_paths:
+            self.add_item({"path": path})
+        self.check_data()
+
+    @Slot()
+    def on_sync_btn_clicked(self, ):
+        """ The `Sync this group` button is pressed
+        """
+        if self.base.merge_warning_stop():
+            return
+        self.base.synchronize_group(self)
+
+    def add_item(self, data):
+        """ Adds a new sync item
+
+        :type data: dict
+        :param data: The sync item data
+        """
+        item = SyncItem(self.base)
+        item.group = self
+        self.sync_items.append(item)
+        item.idx = len(self.sync_items) - 1
+        path = data["path"]
+        if path:
+            item.sync_path_txt.setText(path)
+            try:
+                data = decode_data(path)
+            except FileNotFoundError:  # path doesn't exist
+                self.data["items"][item.idx]["data"] = {}
+                self.set_erroneous(item, _("Could not access the book's metadata file"))
+            except PermissionError:
+                self.set_erroneous(item, _("Could not access the book's metadata file"))
+                self.base.error(_(f"Could not access the book's metadata file\n{path}\n\n"
+                                  f"Merging this group will produce unpredictable "
+                                  f"results."))
+                self.data["items"][item.idx]["data"] = {}
+            else:
+                self.data["items"][item.idx]["data"] = data
+                if not item.idx:
+                    self.new_format = data.get("annotations") is not None
+        self.items_layout.addWidget(item)
+
+    def remove_item(self, item):
+        """ Removes a sync item
+
+        :type item: SyncItem
+        """
+        del self.data["items"][item.idx]
+        self.items_layout.removeWidget(item)
+        self.sync_items.remove(item)
+        item.deleteLater()
+        for idx, item in enumerate(self.sync_items):
+            item.idx = idx
+
+    def reset_group_height(self):
+        """ Reset the height of the group row
+        """
+        height = self.sizeHint().height()
+        self.base.sync_table.setRowHeight(self.idx, height)
+
+    def check_data(self):
+        """ Checks if the data is valid for syncing
+        """
+        source = {"path:": "", "data": {}}
+        for idx, sync_item in enumerate(self.sync_items):
+            self.set_txt_normal(sync_item)
+            path = self.data["items"][idx]["path"]
+            if path and not isfile(path):  # file doesn't exist
+                text = _("The path to the book's metadata file does not exist")
+                self.set_erroneous(sync_item, text)
+                if idx:
+                    continue  # check the next path
+                else:
+                    return  # missing source file
+            elif not path:
+                continue  # empty item
+
+            data = self.data["items"][idx]["data"]
+            if not idx:  # source is the first item
+                source["path"] = path
+                source["data"] = data
+                if not data.get("cre_dom_version"):
+                    text = _("The metadata file is of an older, not supported version.\n"
+                             "No syncing is possible for this Sync group.")
+                    self.set_erroneous(sync_item, text)
+                    return
+                continue  # check source with the rest
+
+            # check if the data format is the same
+            data1_new = source["data"].get("annotations") is not None
+            try:
+                data2_new = data.get("annotations") is not None
+            except AttributeError:
+                self.set_erroneous(sync_item,
+                                   _("Could not access the book's metadata file"))
+                self.base.error(_(f"Could not access the book's metadata file\n{path}"))
+                continue
+            if (data1_new and not data2_new) or (data2_new and not data1_new):
+                text = _("The book's metadata files are in different format")
+                self.set_erroneous(sync_item, text)
+                continue
+
+            # check if the book's md5 is the same
+            if not self.base.same_book(source["data"], data, source["path"], path):
+                text = _("The book file is different from the rest")
+                self.set_erroneous(sync_item, text)
+                continue
+
+            # check if the books have the same cre version
+            if not self.base.same_cre_version(source["data"], data):
+                text = _("The metadata files were produced with a different version "
+                         "of the reader engine")
+                self.set_erroneous(sync_item, text)
+                continue
+
+    def set_txt_normal(self, item):
+        """ Sets the normal state of the item's text
+
+        :type item: SyncItem
+        """
+        item.ok = True
+        tooltip = _("The path to the  book's metadata file")
+        item.sync_path_txt.setToolTip(tooltip)
+        item.sync_path_txt.setStatusTip(tooltip)
+        item.sync_path_txt.setStyleSheet(self.styleSheet())
+
+    def set_erroneous(self, item, tooltip=""):
+        """ Sets the erroneous state of the item
+
+        :type item: SyncItem
+        """
+        item.ok = False
+        item.sync_path_txt.setToolTip(tooltip)
+        item.sync_path_txt.setStatusTip(tooltip)
+
+        if self.base.theme in (THEME_DARK_NEW, THEME_DARK_OLD):
+            color = "#DD0000"
+        else:
+            color = "#990000"
+        style = self.styleSheet() + 'QLineEdit {color: "%s";}' % color
+        item.sync_path_txt.setStyleSheet(style)
+
+    def update_data(self):
+        """ Saves and updates the sync group data when something is changed
+        """
+        if self.idx is None:  # on first load on startup
+            return
+        data = {"title": self.title_lbl.text(),
+                "sync_pos": self.sync_pos_chk.isChecked(),
+                "merge": self.merge_chk.isChecked(),
+                "sync_db": self.sync_db_chk.isChecked(),
+                "items": self.data["items"],
+                "enabled": self.power_btn.isChecked()
+                }
+        self.base.sync_groups[self.idx] = data
+        self.data = data
+        self.base.save_sync_groups()
+
+
+class SyncItem(QWidget, Ui_SyncItem):
+
+    def __init__(self, parent=None):
+        """ Initializes the StatusBar
+
+        :type parent: Base
+        """
+        super(SyncItem, self).__init__(parent)
+        self.setupUi(self)
+        self.base = parent
+        self.group = SyncGroup(self.base)
+        self.def_btn_icos = []
+        self.buttons = [(self.add_btn, "F"),
+                        (self.del_btn, "J")]
+        self.setup_buttons()
+        self.setup_icons()
+        self.ok = True
+
+    def setup_buttons(self):
+        for btn, char in self.buttons:
+            self.def_btn_icos.append(btn.icon())
+            size = btn.iconSize().toTuple()
+            btn.xig = XIconGlyph(self, {"family": "XFont", "size": size, "char": char})
+
+    def setup_icons(self):
+        if self.base.theme in [THEME_NONE_NEW, THEME_DARK_NEW, THEME_LIGHT_NEW]:
+            # noinspection PyTypeChecker
+            QTimer.singleShot(0, self.set_new_icons)
+        else:
+            self.set_old_icons()
+
+    # noinspection DuplicatedCode
+    def set_new_icons(self):
+        """ Get the font icons with the new color palette
+        """
+        color = self.palette().text().color().name()
+        for btn, _ in self.buttons:
+            size = btn.iconSize().toTuple()
+            btn.xig.color = color
+            btn.setIcon(btn.xig.get_icon({"size": size}))
+
+    def set_old_icons(self):
+        """ Reload the old icons
+        """
+        for idx, item in enumerate(self.buttons):
+            btn = item[0]
+            btn.setIcon(self.def_btn_icos[idx])
+
+    @Slot()
+    def on_sync_path_btn_clicked(self, ):
+        """ The `Select` path button is pressed
+        """
+        last_dir = self.base.last_dir
+        text = self.sync_path_txt.text().strip()
+        if text:
+            last_dir = dirname(text)
+        path = QFileDialog.getOpenFileName(self.base, _("Select the metadata file"),
+                                           last_dir, "metadata files (*.lua)")[0]
+        if path:
+            path = normpath(path)
+            self.base.last_dir = dirname(path)
+            for item in self.group.data["items"]:  # check existence
+                if item["path"] == path:
+                    self.base.popup(_("!"),
+                                    _("This metadata file already exists in the group!"),)
+                    return
+            idx = self.group.sync_items.index(self)
+            self.group.data["items"][idx]["path"] = path
+            data = decode_data(path)
+            self.group.data["items"][idx]["data"] = data
+            if idx == 0:  # first item
+                self.group.new_format = data.get("annotations") is not None
+                if not self.group.title_lbl.text().strip():
+                    title = data.get("doc_props", data.get("stats", {})).get("title", "")
+                    self.group.title_lbl.setText(title)
+            self.sync_path_txt.setText(path)
+            self.group.update_data()
+            self.group.check_data()
+
+    @Slot()
+    def on_add_btn_clicked(self, ):
+        """ Add a new item to the group
+        """
+        first_item = self.group.sync_items.index(self) == 0
+        if first_item and not self.sync_path_txt.text().strip():  # no first sync path
+            self.base.error(_("The first metadata file path must not be empty!"))
+            return
+        item_data = {"path": "", "data": {}}
+        self.group.add_item(item_data)
+        self.group.data["items"].append(item_data)
+        self.group.update_data()
+        # noinspection PyTypeChecker
+        QTimer.singleShot(200, self.group.reset_group_height)
+
+    @Slot()
+    def on_del_btn_clicked(self, ):
+        """ Delete this item from the group
+        """
+        if not self.idx:  # the first item can't be deleted
+            self.base.error(_("Can't delete the first metadata file path!"))
+            return
+        self.group.remove_item(self)
+        self.group.update_data()
+        # noinspection PyTypeChecker
+        QTimer.singleShot(100, self.group.reset_group_height)
 
 # if __name__ == "__main__":
 #     with open("secondary.py", str("r")) as py_text:

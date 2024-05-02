@@ -1,46 +1,35 @@
 # coding=utf-8
-from __future__ import (absolute_import, division, print_function, unicode_literals)
-
 import time
 import sys, os
 import traceback
 import gzip, json
 from os.path import dirname, join, isdir, expanduser
 
+__author__ = "noEmbryo"
+
 
 def _(text):  # for future gettext support
     return text
+
 
 APP_NAME = "KOHighlights"
 APP_DIR = dirname(os.path.abspath(sys.argv[0]))
 os.chdir(APP_DIR)  # Set the current working directory to the app's directory
 
-PORTABLE = False
-PYTHON2 = sys.version_info < (3, 0)
-
 USE_QT6 = False  # select between PySide2/Qt5 and Pyside6/Qt6 if both are installed
-
-if PYTHON2:
-    from io import open
-    from codecs import open as c_open
-    from PySide.QtCore import qVersion
+if USE_QT6:
+    from PySide6.QtCore import qVersion
 else:
-    # noinspection PyShadowingBuiltins
-    unicode, basestring = str, str
-    c_open = open
-    if USE_QT6:
-        from PySide6.QtCore import qVersion
-    else:
-        from PySide2.QtCore import qVersion
+    from PySide2.QtCore import qVersion
 
 # noinspection PyTypeChecker
 qt_version = qVersion().split(".")[0]
-QT4 = qt_version == "4"
 QT5 = qt_version == "5"
 QT6 = qt_version == "6"
 if QT6 and QT5 and USE_QT6:
     QT5 = False
 
+PORTABLE = False
 if sys.platform == "win32":  # Windows
     import win32api
     import win32event
@@ -65,7 +54,7 @@ if sys.platform == "win32":  # Windows
         sys.exit(0)
     try:
         # noinspection PyUnresolvedReferences
-        portable_arg = sys.argv[1] if not PYTHON2 else sys.argv[1].decode("mbcs")
+        portable_arg = sys.argv[1]
         PORTABLE = portable_arg == "-p"
     except IndexError:  # no arguments in the call
         pass
@@ -86,7 +75,7 @@ else:  # Linux+
         import socket
         app_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         # Create an abstract socket, by prefixing it with null.
-        app_socket.bind(str("\0{}_lock_port".format(APP_NAME)))
+        app_socket.bind(str(f"\0{APP_NAME}_lock_port"))
     except socket.error:  # port in use - another instance is running
         sys.exit(0)
     SETTINGS_DIR = join(expanduser("~"), ".config", APP_NAME)
@@ -96,10 +85,10 @@ os.makedirs(SETTINGS_DIR) if not isdir(SETTINGS_DIR) else None
 def except_hook(class_type, value, trace_back):
     """ Print the error to a log file
     """
-    name = join(SETTINGS_DIR, "error_log_{}.txt".format(time.strftime(str("%Y-%m-%d"))))
+    name = join(SETTINGS_DIR, f"error_log_{time.strftime(str('%Y-%m-%d'))}.txt")
     with open(name, "a", encoding="utf8") as log:
-        log.write("\nCrash@{}\n".format(time.strftime(str("%Y-%m-%d %H:%M:%S"))))
-    traceback.print_exception(class_type, value, trace_back, file=c_open(name, str("a")))
+        log.write(f"\nCrash@{time.strftime(str('%Y-%m-%d %H:%M:%S'))}\n")
+    traceback.print_exception(class_type, value, trace_back, file=open(name, str("a")))
     sys.__excepthook__(class_type, value, trace_back)
 
 
@@ -108,14 +97,13 @@ FIRST_RUN = False
 # noinspection PyBroadException
 try:
     with gzip.GzipFile(join(SETTINGS_DIR, "settings.json.gz")) as settings:
-        j_text = settings.read() if PYTHON2 else settings.read().decode("utf8")
-        app_config = json.loads(j_text)
+        app_config = json.loads(settings.read().decode("utf8"))
 except Exception:  # IOError on first run or everything else
     app_config = {}
     FIRST_RUN = True
 
 
-BOOKS_VIEW, HIGHLIGHTS_VIEW = range(2)  # app views
+BOOKS_VIEW, HIGHLIGHTS_VIEW, SYNC_VIEW = range(3)  # app views
 CHANGE_DB, NEW_DB, RELOAD_DB = range(3)  # db change mode
 (TITLE, AUTHOR, TYPE, PERCENT, RATING,
  HIGH_COUNT, MODIFIED, PATH) = range(8)  # file_table columns
@@ -125,7 +113,11 @@ PAGE, HIGHLIGHT_TEXT, DATE, PAGE_ID, COMMENT = range(5)  # high_list item data
 (MANY_TEXT, ONE_TEXT, MANY_HTML, ONE_HTML,
  MANY_CSV, ONE_CSV, MANY_MD, ONE_MD) = range(8)  # save_actions
 DB_MD5, DB_DATE, DB_PATH, DB_DATA = range(4)  # db data (columns)
-FILTER_ALL, FILTER_HIGH, FILTER_COMM, FILTER_TITLES = range(4)  # db data (columns)
+FILTER_ALL, FILTER_HIGH, FILTER_COMM, FILTER_TITLES = range(4)  # filter type
+(THEME_NONE_OLD, THEME_NONE_NEW, THEME_DARK_OLD, THEME_DARK_NEW,
+ THEME_LIGHT_OLD, THEME_LIGHT_NEW) = range(6)  # theme idx
+ACT_PAGE, ACT_DATE, ACT_TEXT, ACT_CHAPTER, ACT_COMMENT = range(5)  # show items actions
+
 
 NO_TITLE = _("NO TITLE FOUND")
 NO_AUTHOR = _("NO AUTHOR FOUND")
@@ -133,6 +125,12 @@ OLD_TYPE = _("OLD TYPE FILE")
 DO_NOT_SHOW = _("Don't show this again")
 DB_VERSION = 0
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
+TOOLTIP_MERGE = _("Merge the highlights from the same book in two different\ndevices, "
+                  "and/or sync their reading position.\nActivated only if two entries "
+                  "of the same book are selected.")
+TOOLTIP_SYNC = _("Start the sync process for all enabled groups")
+SYNC_FILE = join(SETTINGS_DIR, "sync_groups.json")
+
 CSV_HEAD = "Title\tAuthors\tPage\tDate\tChapter\tHighlight\tComment\n"
 CSV_KEYS = ["title", "authors", "page", "date", "chapter", "text", "comment"]
 HTML_HEAD = """<!DOCTYPE html>

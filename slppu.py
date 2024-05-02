@@ -1,13 +1,5 @@
-from __future__ import print_function
 import re
 import sys
-try:  # ___ _______ PYTHON 2/3 COMPATIBILITY ________________________
-    # noinspection PyCompatibility
-    basestring
-except NameError:  # python 3.x
-    # noinspection PyShadowingBuiltins
-    basestring, unicode, long = str, str, int
-from future.utils import iteritems
 
 # https://github.com/noembryo/slppu
 
@@ -30,13 +22,13 @@ class SLPPU(object):
         self.at = 0
         self.len = 0
         self.depth = 0
-        self.space = re.compile('\s', re.M)
-        self.alnum = re.compile('\w', re.M)
+        self.space = re.compile(r'\s', re.M)
+        self.alnum = re.compile(r'\w', re.M)
         self.newline = '\n'
         self.tab = '    '  # or '\t'
 
     def decode(self, text):
-        if not text or not isinstance(text, basestring):
+        if not text or not isinstance(text, str):
             return
         # FIXME: only short comments removed
         reg = re.compile('--.*$', re.M)
@@ -57,9 +49,9 @@ class SLPPU(object):
         tab = self.tab
         newline = self.newline
         tp = type(obj)
-        if tp in [str, unicode]:
+        if tp == str:
             s += '"%s"' % obj.replace(r'"', r'\"')
-        elif tp in [int, float, long, complex]:
+        elif tp in [int, float, complex]:
             s += str(obj)
         elif tp is bool:
             s += str(obj).lower()
@@ -68,16 +60,16 @@ class SLPPU(object):
         elif tp in [list, tuple, dict]:
             self.depth += 1
             if len(obj) == 0 or (tp is not dict and
-                                 len(filter(lambda x: type(x) in (int, float, long) or
-                                            (isinstance(x, basestring) and
+                                 len(filter(lambda x: type(x) in (int, float, str) or
+                                            (isinstance(x, str) and
                                              len(x) < 10), obj)) == len(obj)):
                 newline = tab = ''
             dp = tab * self.depth
             s += "%s{%s" % (tab * (self.depth - 2), newline)
             if tp is dict:
                 contents = []
-                for k, v in iteritems(obj):
-                    k = ('[{}]'.format(k) if type(k) in [int, float, long, complex]
+                for k, v in obj.items():
+                    k = ('[{}]'.format(k) if type(k) in [int, float, complex]
                          else '["{}"]'.format(k))
                     contents.append(dp + '%s = %s' % (k, (self.__encode(v))))
                 s += (',%s' % newline).join(contents)
@@ -161,8 +153,8 @@ class SLPPU(object):
                     if k is not None:
                         o[idx] = k
                     if not numeric_keys and len([key for key in o
-                                                 if isinstance(key, (str, unicode, float,
-                                                                     bool, tuple))]) == 0:
+                                                 if isinstance(key, (str, float, bool,
+                                                                     tuple))]) == 0:
                         ar = []
                         for key in o:
                             ar.insert(key, o[key])

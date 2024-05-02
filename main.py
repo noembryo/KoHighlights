@@ -1,5 +1,4 @@
 # coding=utf-8
-from __future__ import absolute_import, division, print_function, unicode_literals
 from boot_config import *
 from boot_config import _
 import os, sys, re
@@ -12,54 +11,48 @@ import argparse
 import hashlib
 from datetime import datetime
 from functools import partial
+from copy import deepcopy
 from collections import defaultdict
+from ntpath import normpath
 from os.path import (isdir, isfile, join, basename, splitext, dirname, split, getmtime,
                      abspath, splitdrive)
 from pprint import pprint
 
-
-if QT4:  # ___ ______________ DEPENDENCIES __________________________
-    from PySide.QtSql import QSqlDatabase, QSqlQuery
-    from PySide.QtCore import (Qt, QTimer, Slot, QThread, QMimeData, QModelIndex,
-                               QByteArray, QPoint)
-    from PySide.QtGui import (QMainWindow, QApplication, QMessageBox, QIcon, QFileDialog,
-                              QTableWidgetItem, QTextCursor, QMenu, QAction, QHeaderView,
-                              QPixmap, QListWidgetItem, QBrush, QColor)
-elif QT5:
+if QT5:
     from PySide2.QtWidgets import (QMainWindow, QHeaderView, QApplication, QMessageBox,
                                    QAction, QMenu, QTableWidgetItem, QListWidgetItem,
-                                   QFileDialog)
+                                   QFileDialog, QComboBox)
     from PySide2.QtCore import (Qt, QTimer, QThread, QModelIndex, Slot, QPoint, QMimeData,
                                 QByteArray)
     from PySide2.QtSql import QSqlDatabase, QSqlQuery
-    from PySide2.QtGui import QIcon, QPixmap, QTextCursor, QBrush, QColor
+    from PySide2.QtGui import QIcon, QPixmap, QTextCursor, QBrush, QColor, QFontDatabase
 else:  # Qt6
     from PySide6.QtWidgets import (QMainWindow, QHeaderView, QApplication, QMessageBox,
-                                   QFileDialog, QTableWidgetItem, QMenu, QListWidgetItem)
+                                   QFileDialog, QTableWidgetItem, QMenu, QListWidgetItem,
+                                   QComboBox)
     from PySide6.QtCore import Qt, QTimer, Slot, QPoint, QThread, QModelIndex, QMimeData
-    from PySide6.QtGui import QIcon, QAction, QBrush, QColor, QPixmap, QTextCursor
+    from PySide6.QtGui import (QIcon, QAction, QBrush, QColor, QPixmap, QTextCursor,
+                               QFontDatabase)
     from PySide6.QtSql import QSqlDatabase, QSqlQuery
 
 from secondary import *
 from gui_main import Ui_Base
 
 
-if PYTHON2:  # ___ __________ PYTHON 2/3 COMPATIBILITY ______________
-    import cPickle as pickle
-    from distutils.version import LooseVersion as version_parse
-else:
-    from packaging.version import parse as version_parse
-    import pickle
+from packaging.version import parse as version_parse
+import pickle
 
 
 __author__ = "noEmbryo"
-__version__ = "1.7.6.0"
+__version__ = "2.0.0.0"
 
 
 class Base(QMainWindow, Ui_Base):
 
     def __init__(self, parent=None):
         super(Base, self).__init__(parent)
+        # noinspection PyArgumentList
+        self.app = QApplication.instance()
 
         self.scan_thread = None
         self.setupUi(self)
@@ -87,43 +80,46 @@ class Base(QMainWindow, Ui_Base):
         self.exit_msg = True
         self.db_path = join(SETTINGS_DIR, "data.db")
         self.date_vacuumed = datetime.now().strftime(DATE_FORMAT)
+        self.theme = THEME_NONE_OLD
         self.date_format = DATE_FORMAT
+        self.show_items = [True, True, True, True, True]
         # ___ ___________________________________
 
         self.file_selection = None
         self.sel_idx = None
         self.sel_indexes = []
-        self.high_view_selection = None
-        self.sel_high_view = []
         self.high_list_selection = None
         self.sel_high_list = []
+        self.high_view_selection = None
+        self.sel_high_view = []
+        self.sync_view_selection = None
+        self.sel_sync_view = []
 
         self.loaded_paths = set()
         self.books2reload = set()
         self.parent_book_data = {}
         self.reload_highlights = True
+        self.sync_groups_loaded = False
         self.threads = []
 
         self.query = None
         self.db = None
         self.books = []
+        self.sync_groups = []
 
+        tooltip = _("Right click to ignore english articles")
+        self.file_table.horizontalHeaderItem(TITLE).setToolTip(tooltip)
         self.header_main = self.file_table.horizontalHeader()
         self.header_main.setDefaultAlignment(Qt.AlignLeft)
         self.header_main.setContextMenuPolicy(Qt.CustomContextMenu)
         self.header_high_view = self.high_table.horizontalHeader()
         self.header_high_view.setDefaultAlignment(Qt.AlignLeft)
         # self.header_high_view.setResizeMode(HIGHLIGHT_H, QHeaderView.Stretch)
-        if QT4:
-            self.file_table.verticalHeader().setResizeMode(QHeaderView.Fixed)
-            self.header_main.setMovable(True)
-            self.high_table.verticalHeader().setResizeMode(QHeaderView.Fixed)
-            self.header_high_view.setMovable(True)
-        elif QT5 or QT6:
-            self.file_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
-            self.header_main.setSectionsMovable(True)
-            self.high_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
-            self.header_high_view.setSectionsMovable(True)
+
+        self.file_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
+        self.header_main.setSectionsMovable(True)
+        self.high_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
+        self.header_high_view.setSectionsMovable(True)
 
         self.splitter.setCollapsible(0, False)
         self.splitter.setCollapsible(1, False)
@@ -136,19 +132,38 @@ class Base(QMainWindow, Ui_Base):
         self.ico_file_save = QIcon(":/stuff/file_save.png")
         self.ico_files_merge = QIcon(":/stuff/files_merge.png")
         self.ico_files_delete = QIcon(":/stuff/files_delete.png")
-        self.ico_file_exists = QIcon(":/stuff/file_exists.png")
-        self.ico_file_missing = QIcon(":/stuff/file_missing.png")
+        self.ico_db_add = QIcon(":/stuff/db_add.png")
+        self.ico_db_open = QIcon(":/stuff/db_open.png")
+        self.ico_refresh = QIcon(":/stuff/refresh16.png")
+        self.ico_folder_open = QIcon(":/stuff/folder_open.png")
+        self.ico_calendar = QIcon(":/stuff/calendar.png")
+        self.ico_sort = QIcon(":/stuff/sort.png")
+        self.ico_view_books = QIcon(":/stuff/view_books.png")
+        self.ico_files_view = QIcon(":/stuff/files_view.png")
         self.ico_file_edit = QIcon(":/stuff/file_edit.png")
         self.ico_copy = QIcon(":/stuff/copy.png")
         self.ico_delete = QIcon(":/stuff/delete.png")
+        self.def_icons = [
+            self.ico_file_save,
+            self.ico_files_merge,
+            self.ico_files_delete,
+            self.ico_db_add,
+            self.ico_db_open,
+            self.ico_refresh,
+            self.ico_folder_open,
+            self.ico_calendar,
+            self.ico_sort,
+            self.ico_view_books,
+            self.ico_files_view,
+            self.ico_file_edit,
+            self.ico_copy,
+            self.ico_delete,
+            ]
+        self.ico_file_exists = QIcon(":/stuff/file_exists.png")
+        self.ico_file_missing = QIcon(":/stuff/file_missing.png")
         self.ico_label_green = QIcon(":/stuff/label_green.png")
-        self.ico_view_books = QIcon(":/stuff/view_books.png")
-        self.ico_db_add = QIcon(":/stuff/db_add.png")
-        self.ico_db_open = QIcon(":/stuff/db_open.png")
         self.ico_app = QIcon(":/stuff/logo64.png")
         self.ico_empty = QIcon(":/stuff/trans32.png")
-        self.ico_refresh = QIcon(":/stuff/refresh16.png")
-        self.ico_folder_open = QIcon(":/stuff/folder_open.png")
 
         # noinspection PyArgumentList
         self.clip = QApplication.clipboard()
@@ -163,11 +178,18 @@ class Base(QMainWindow, Ui_Base):
         self.toolbar.merge_btn.setEnabled(False)
         self.toolbar.delete_btn.setEnabled(False)
 
+        self.export_menu = QMenu(self)
+        self.export_menu.setTitle(_("Export"))
+        self.export_menu.setIcon(self.ico_file_save)
+        self.export_menu.aboutToShow.connect(self.create_export_menu)  # assign menu
+        if QT6:  # QT6 requires exec() instead of exec_()
+            self.export_menu.exec_ = getattr(self.export_menu, "exec")
+        self.toolbar.export_btn.setMenu(self.export_menu)
+
         self.status = Status(self)
         self.statusbar.addPermanentWidget(self.status)
 
         self.edit_high = TextDialog(self)
-        self.edit_high.on_ok = self.edit_comment_ok
         self.edit_high.setWindowTitle(_("Comments"))
 
         self.description = TextDialog(self)
@@ -178,6 +200,19 @@ class Base(QMainWindow, Ui_Base):
 
         self.review_lbl.setVisible(False)
         self.review_txt.setVisible(False)
+
+        tbar = self.toolbar
+        self.def_btn_icos = []
+        self.buttons = [(tbar.scan_btn, "A"), (tbar.export_btn, "B"),
+                        (tbar.open_btn, "C"), (tbar.filter_btn, "D"),
+                        (tbar.merge_btn, "E"), (tbar.add_btn, "X"),
+                        (tbar.delete_btn, "O"), (tbar.clear_btn, "G"),
+                        (tbar.books_view_btn, "H"), (tbar.high_view_btn, "I"),
+                        (tbar.sync_view_btn, "W"), (tbar.loaded_btn, "H"),
+                        (tbar.db_btn, "K"), (self.status.show_items_btn, "U"),
+                        (self.description_btn, "V"), (self.filter.filter_btn, "D"),
+                        (self.filter.clear_filter_btn, "G"),
+                        ]
 
         # noinspection PyTypeChecker,PyCallByClass
         QTimer.singleShot(10000, self.auto_check4update)  # check for updates
@@ -192,12 +227,15 @@ class Base(QMainWindow, Ui_Base):
     def on_load(self):
         """ Things that must be done after the initialization
         """
+        fdb = QFontDatabase()
+        fdb.addApplicationFont(":/stuff/font.ttf")
+        # fdb.removeApplicationFont(0)
+
         self.settings_load()
         self.init_db()
         if FIRST_RUN:  # on first run
             self.toolbar.loaded_btn.click()
             self.splitter.setSizes((500, 250))
-        self.toolbar.export_btn.setMenu(self.get_export_menu())  # assign/create menu
         self.toolbar.merge_btn.setMenu(self.merge_menu())  # assign/create menu
         self.toolbar.delete_btn.setMenu(self.delete_menu())  # assign/create menu
         self.connect_gui()
@@ -210,7 +248,7 @@ class Base(QMainWindow, Ui_Base):
                 self.toolbar.loaded_btn.setChecked(True)  # open in Loaded mode
             else:
                 self.toolbar.db_btn.setChecked(True)  # open in Archived mode
-                text = _("Loading {} database").format(APP_NAME)
+                text = _(f"Loading {APP_NAME} database")
                 self.loading_thread(DBLoader, self.books, text)
         self.read_books_from_db()  # always load db on start
         if self.current_view == BOOKS_VIEW:
@@ -218,7 +256,92 @@ class Base(QMainWindow, Ui_Base):
         else:
             self.toolbar.high_view_btn.click()  # open in Highlights view
 
+        self.setup_buttons()
         self.show()
+
+    def setup_buttons(self):
+        for btn, char in self.buttons:
+            self.def_btn_icos.append(btn.icon())
+            size = btn.iconSize().toTuple()
+            btn.xig = XIconGlyph(self, {"family": "XFont", "size": size, "char": char})
+            # btn.glyph = btn.xig.get_icon()
+
+    def set_new_icons(self, menus=True):
+        """ Create the new icons
+
+        :type menus: bool
+        :param menus: Create the new menu icons too
+        """
+        # noinspection PyTypeChecker
+        QTimer.singleShot(0, partial(self.delayed_set_new_icons, menus))
+
+    def delayed_set_new_icons(self, menus=True):
+        """ Delay the creation of the icons to allow for the new palette to be set
+
+        :type menus: bool
+        :param menus: Create the menu icons too
+        """
+        for btn, _ in self.buttons:
+            size = btn.iconSize().toTuple()
+            btn.setIcon(btn.xig.get_icon({"size": size}))
+
+        if menus:  # recreate the menu icons
+            xig = XIconGlyph(self, {"family": "XFont", "size": (16, 16)})
+            self.export_menu.setIcon(xig.get_icon({"char": "B"}))
+            self.ico_file_save = xig.get_icon({"char": "B"})
+            self.ico_files_merge = xig.get_icon({"char": "E"})
+            self.ico_files_delete = xig.get_icon({"char": "O"})
+            self.ico_db_add = xig.get_icon({"char": "L"})
+            self.ico_db_open = xig.get_icon({"char": "M"})
+            self.ico_refresh = xig.get_icon({"char": "N"})
+            self.ico_folder_open = xig.get_icon({"char": "P"})
+            self.ico_calendar = xig.get_icon({"char": "T"})
+            self.ico_sort = xig.get_icon({"char": "S"})
+            self.ico_view_books = xig.get_icon({"char": "H"})
+            self.act_view_book.setIcon(xig.get_icon({"char": "C"}))
+            self.ico_file_edit = xig.get_icon({"char": "Q"})
+            self.ico_copy = xig.get_icon({"char": "R"})
+            self.ico_delete = xig.get_icon({"char": "O"})
+
+    def set_old_icons(self):
+        """ Reload the old icons
+        """
+        for idx, item in enumerate(self.buttons):
+            btn = item[0]
+            btn.setIcon(self.def_btn_icos[idx])
+
+        self.ico_file_save = self.def_icons[0]
+        self.ico_files_merge = self.def_icons[1]
+        self.ico_files_delete = self.def_icons[2]
+        self.ico_db_add = self.def_icons[3]
+        self.ico_db_open = self.def_icons[4]
+        self.ico_refresh = self.def_icons[5]
+        self.ico_folder_open = self.def_icons[6]
+        self.ico_calendar = self.def_icons[7]
+        self.ico_sort = self.def_icons[8]
+        self.ico_view_books = self.def_icons[9]
+        self.act_view_book.setIcon(self.def_icons[10])
+        self.ico_file_edit = self.def_icons[11]
+        self.ico_copy = self.def_icons[12]
+        self.ico_delete = self.def_icons[13]
+
+    def reset_theme_colors(self):
+        """ Resets the widget colors after a theme change
+        """
+        color = self.app.palette().base().color().name()
+        self.review_txt.setStyleSheet(f'background-color: "{color}";')
+        color = self.app.palette().window().color().name()
+        for item in [self.status.show_items_btn, self.status.theme_box]:
+            item.setStyleSheet(f'background-color: "{color}";')
+
+        color = self.app.palette().button().color().name()
+        for row in range(self.sync_table.rowCount()):
+            wdg = self.sync_table.cellWidget(row, 0)
+            wdg.setStyleSheet('QFrame#items_frm {background-color: "%s";}' % color)
+            wdg.setup_icons()
+
+        self.setup_buttons()
+        self.reload_table(_("Reloading books..."))
 
     # ___ ___________________ EVENTS STUFF __________________________
 
@@ -236,6 +359,10 @@ class Base(QMainWindow, Ui_Base):
         self.high_view_selection.selectionChanged.connect(self.high_view_selection_update)
         self.header_high_view.sectionClicked.connect(self.on_highlight_column_clicked)
         self.header_high_view.sectionResized.connect(self.on_highlight_column_resized)
+
+        self.sync_table.base = self
+        self.sync_view_selection = self.sync_table.selectionModel()
+        self.sync_view_selection.selectionChanged.connect(self.sync_view_selection_update)
 
         sys.stdout = LogStream()
         sys.stdout.setObjectName("out")
@@ -255,40 +382,36 @@ class Base(QMainWindow, Ui_Base):
         if mod == Qt.ControlModifier:  # if control is pressed
             if key == Qt.Key_Backspace:
                 self.toolbar.on_clear_btn_clicked()
-                return True
-            if key == Qt.Key_L:
+            elif key == Qt.Key_L:
                 self.toolbar.on_scan_btn_clicked()
-                return True
-            if key == Qt.Key_S:
+            elif key == Qt.Key_S:
                 self.on_export()
-                return True
-            if key == Qt.Key_I:
+            elif key == Qt.Key_I:
                 self.toolbar.on_about_btn_clicked()
-                return True
-            if key == Qt.Key_F:
+            elif key == Qt.Key_F:
                 self.toolbar.filter_btn.click()
-                return True
-            if key == Qt.Key_Q:
+            elif key == Qt.Key_Q:
                 self.close()
-            if self.current_view == HIGHLIGHTS_VIEW and self.sel_high_view:
+            elif self.current_view == HIGHLIGHTS_VIEW and self.sel_high_view:
                 if key == Qt.Key_C:
                     self.copy_text_2clip(self.get_highlights()[0])
-                    return True
+
         if mod == Qt.AltModifier:  # if alt is pressed
             if key == Qt.Key_A:
                 self.on_archive()
                 return True
-            if self.current_view == HIGHLIGHTS_VIEW and self.sel_high_view:
+            elif self.current_view == HIGHLIGHTS_VIEW and self.sel_high_view:
                 if key == Qt.Key_C:
                     self.copy_text_2clip(self.get_highlights()[1])
                     return True
 
         if key == Qt.Key_Escape:
             self.close()
-            return True
-        if key == Qt.Key_Delete:
-            self.delete_actions(0)
-            return True
+        elif key == Qt.Key_Delete:
+            if self.current_view == BOOKS_VIEW:
+                self.delete_actions(0)
+            else:
+                self.toolbar.on_delete_btn_clicked()
 
     def closeEvent(self, event):
         """ Accepts or rejects the `exit` command
@@ -300,7 +423,7 @@ class Base(QMainWindow, Ui_Base):
             self.bye_bye_stuff()
             event.accept()
             return
-        popup = self.popup(_("Confirmation"), _("Exit {}?").format(APP_NAME), buttons=2,
+        popup = self.popup(_("Confirmation"), _(f"Exit {APP_NAME}?"), buttons=2,
                            check_text=DO_NOT_SHOW)
         self.exit_msg = not popup.checked
         if popup.buttonRole(popup.clickedButton()) == QMessageBox.AcceptRole:
@@ -331,7 +454,7 @@ class Base(QMainWindow, Ui_Base):
             self.query.exec_ = getattr(self.query, "exec")
         if app_config:
             pass
-            # self.query.exec_("""PRAGMA user_version""")  # 2do: enable if db changes
+            # self.query.exec_("""PRAGMA user_version""")  # 2check: enable if db changes
             # while self.query.next():
             #     self.check_db_version(self.query.value(0))  # check the db version
         self.set_db_version() if not isfile(self.db_path) else None
@@ -354,7 +477,7 @@ class Base(QMainWindow, Ui_Base):
     def set_db_version(self):
         """ Set the current database version
         """
-        self.query.exec_("""PRAGMA user_version = {}""".format(DB_VERSION))
+        self.query.exec_(f"""PRAGMA user_version = {DB_VERSION}""")
 
     def change_db(self, mode):
         """ Changes the current db file
@@ -424,6 +547,7 @@ class Base(QMainWindow, Ui_Base):
     def read_books_from_db(self):
         """ Reads the contents of the books' db table
         """
+        # print("Reading data from db")
         del self.books[:]
         self.query.setForwardOnly(True)
         self.query.exec_("""SELECT * FROM books""")
@@ -494,7 +618,7 @@ class Base(QMainWindow, Ui_Base):
         # self.file_table.setSortingEnabled(False)
         for i in dropped:
             if splitext(i)[1] == ".lua":
-                self.create_row(i)
+                self.create_row(normpath(i))
         # self.file_table.setSortingEnabled(True)
         folders = [j for j in dropped if isdir(j)]
         for folder in folders:
@@ -535,36 +659,44 @@ class Base(QMainWindow, Ui_Base):
         :type row: int
         :param row: The item's row number
         """
+        stats = "doc_props" if "doc_props" in data else "stats" if "stats" in data else ""
         for key, field in zip(self.info_keys, self.info_fields):
             try:
-                if key == "title" and not data["stats"][key]:
+                if key == "title" and not data[stats][key]:
                     path = self.file_table.item(row, PATH).data(0)
                     try:
                         name = path.split("#] ")[1]
                         value = splitext(name)[0]
                     except IndexError:  # no "#] " in filename
                         value = ""
+                elif key == "pages":
+                    if "doc_pages" in data:
+                        value = data["doc_pages"]
+                    else:  # older type file
+                        value = data[stats][key]
                 elif key == "keywords":
                     keywords = data["doc_props"][key].split("\n")
                     value = "; ".join([i.rstrip("\\") for i in keywords])
                 else:
-                    value = data["stats"][key]
+                    value = data[stats][key]
                 try:
                     field.setText(value)
                 except TypeError:  # Needs string only
                     field.setText(str(value) if value else "")  # "" if 0
             except KeyError:  # older type file or other problems
                 path = self.file_table.item(row, PATH).data(0)
-                stats = self.get_item_stats(path, data)
+                stats_ = self.get_item_stats(data, path)
                 if key == "title":
-                    field.setText(stats[1])
+                    field.setText(stats_["title"])
                 elif key == "authors":
-                    field.setText(stats[2])
+                    field.setText(stats_["authors"])
                 else:
                     field.setText("")
 
         review = data.get("summary", {}).get("note", "")
         self.review_lbl.setVisible(bool(review))
+        color = self.app.palette().base().color().name()
+        self.review_txt.setStyleSheet(f'background-color: "{color}";')
         self.review_txt.setVisible(bool(review))
         self.review_txt.setText(review)
 
@@ -595,12 +727,7 @@ class Base(QMainWindow, Ui_Base):
         self.act_view_book.setEnabled(self.toolbar.open_btn.isEnabled())
         self.act_view_book.setData(row)
         menu.addAction(self.act_view_book)
-
-        export_menu = self.get_export_menu()
-        export_menu.setIcon(self.ico_file_save)
-        export_menu.setTitle(_("Export"))
-        menu.addMenu(export_menu)
-
+        menu.addMenu(self.export_menu)
         if not self.db_mode:
             action = QAction(_("Archive") + "\tAlt+A", menu)
             action.setIcon(self.ico_db_add)
@@ -611,11 +738,28 @@ class Base(QMainWindow, Ui_Base):
                 sync_group = QMenu(self)
                 sync_group.setTitle(_("Sync"))
                 sync_group.setIcon(self.ico_files_merge)
-                if self.check4archive_merge() is not False:
+
+                action = QAction(_("Create a sync group"), sync_group)
+                action.setIcon(self.ico_files_merge)
+                path = self.file_table.item(row, PATH).data(0)
+                title = self.file_table.item(row, TITLE).data(0)
+                data = self.file_table.item(row, TITLE).data(Qt.UserRole)
+                book_data = {"path": path, "data": data}
+                info = {"title": title,
+                        "sync_pos": False,
+                        "merge": False,
+                        "sync_db": True,
+                        "items": [book_data],
+                        "enabled": True}
+                action.triggered.connect(partial(self.create_sync_row, info))
+                sync_group.addAction(action)
+
+                if self.check4archive_merge(book_data) is not False:
                     sync_menu = self.create_archive_merge_menu()
                     sync_menu.setTitle(_("Sync with archived"))
                     sync_menu.setIcon(self.ico_files_merge)
                     sync_group.addMenu(sync_menu)
+
                 action = QAction(_("Sync with file"), sync_group)
                 action.setIcon(self.ico_files_merge)
                 action.triggered.connect(self.use_meta_files)
@@ -635,11 +779,20 @@ class Base(QMainWindow, Ui_Base):
                 action.triggered.connect(partial(self.open_file, folder_path))
                 menu.addAction(action)
 
+            elif len(self.sel_indexes) == 2:
+                if self.toolbar.merge_btn.isEnabled():
+                    action = QAction(_("Sync books"), menu)
+                    action.setIcon(self.ico_files_merge)
+                    action.triggered.connect(self.toolbar.on_merge_btn_clicked)
+                    menu.addAction(action)
+
+            menu.addSeparator()
             delete_menu = self.delete_menu()
             delete_menu.setIcon(self.ico_files_delete)
             delete_menu.setTitle(_("Delete") + "\tDel")
             menu.addMenu(delete_menu)
         else:
+            menu.addSeparator()
             action = QAction(_("Delete") + "\tDel", menu)
             action.setIcon(self.ico_files_delete)
             action.triggered.connect(partial(self.delete_actions, 0))
@@ -673,7 +826,7 @@ class Base(QMainWindow, Ui_Base):
         ext = splitext(meta_path)[1]
         book_path = splitext(split(meta_path)[0])[0] + ext
         book_exists = isfile(book_path)
-        if not book_exists:  # use the recorded file path
+        if not book_exists:  # use the recorded file path (newer metadata only)
             doc_path = data.get("doc_path")
             if doc_path:
                 drive = splitdrive(meta_path)[0]
@@ -719,6 +872,8 @@ class Base(QMainWindow, Ui_Base):
         else:
             self.high_list.clear()
             self.description_btn.setEnabled(False)
+            self.review_txt.hide()
+            self.review_lbl.hide()
             for field in self.info_fields:
                 field.setText("")
         self.toolbar.activate_buttons()
@@ -760,7 +915,9 @@ class Base(QMainWindow, Ui_Base):
         """ Toggles the way titles are sorted (use or not A/The)
         """
         self.alt_title_sort = not self.alt_title_sort
-        text = _("ReSorting books...")
+        self.reload_table(_("ReSorting books..."))
+
+    def reload_table(self, text):
         if not self.db_mode:
             self.loading_thread(ReLoader, self.loaded_paths.copy(), text)
         else:
@@ -790,7 +947,7 @@ class Base(QMainWindow, Ui_Base):
         if self.archive_warning:  # warn about book replacement in archive
             extra = _("these books") if len(self.sel_indexes) > 1 else _("this book")
             popup = self.popup(_("Question!"),
-                               _("Add or replace {} in the archive?").format(extra),
+                               _(f"Add or replace {extra} in the archive?"),
                                buttons=2, icon=QMessageBox.Question,
                                check_text=DO_NOT_SHOW)
             self.archive_warning = not popup.checked
@@ -806,9 +963,18 @@ class Base(QMainWindow, Ui_Base):
             path = self.file_table.item(row, PATH).text()
             date = self.file_table.item(row, MODIFIED).text()
             data = self.file_table.item(row, TITLE).data(Qt.UserRole)
-            if not data["highlight"]:  # no highlights, don't add
-                empty += 1
-                continue
+            annotations = data.get("annotations")
+            if annotations is not None:  # new format metadata
+                for high_idx in annotations:
+                    if annotations[high_idx]["pos0"]:
+                        break  # there is at least one highlight in the book
+                else:  # no highlights don't add
+                    empty += 1
+                    continue
+            else:  # old format metadata
+                if not data["highlight"]:  # no highlights, don't add
+                    empty += 1
+                    continue
             try:
                 md5 = data["partial_md5_checksum"]
             except KeyError:  # older metadata, don't add
@@ -823,24 +989,24 @@ class Base(QMainWindow, Ui_Base):
 
         extra = ""
         if empty:
-            extra += _("\nNot added {} books with no highlights.").format(empty)
+            extra += _(f"\nNot added {empty} books with no highlights.")
         if older:
-            extra += _("\nNot added {} books with old type metadata.").format(older)
+            extra += _(f"\nNot added {older} books with old type metadata.")
 
         self.popup(_("Added!"),
-                   _("{} books were added/updated to the Archive from the {} processed.")
-                   .format(added, len(self.sel_indexes)) + extra,
+                   _(f"{added} books were added/updated to the Archive from the "
+                     f"{len(self.sel_indexes)} processed."),
                    icon=QMessageBox.Information)
 
     def loading_thread(self, worker, args, text, clear=True):
         """ Populates the file_table with different contents
         """
-        if clear:
+        if clear and self.current_view != SYNC_VIEW:
             self.toolbar.on_clear_btn_clicked()
         self.file_table.setSortingEnabled(False)  # re-enable it after populating table
 
         self.status.animation(True)
-        self.auto_info.set_text(_("{}.\nPlease Wait...").format(text))
+        self.auto_info.set_text(_(f"{text}.\nPlease Wait..."))
         self.auto_info.show()
 
         scan_thread = QThread()
@@ -884,20 +1050,26 @@ class Base(QMainWindow, Ui_Base):
             if meta_path in self.loaded_paths:
                 return  # already loaded file
             self.loaded_paths.add(meta_path)
-            data = decode_data(meta_path)
+            try:
+                data = decode_data(meta_path)
+            except PermissionError:
+                self.base.error(_(f"Could not access the book's metadata file\n"
+                                  f"{meta_path}"))
+                return
             if not data:
                 print("No data here!", meta_path)
                 return
             date = str(datetime.fromtimestamp(getmtime(meta_path))).split(".")[0]
-            stats = self.get_item_stats(meta_path, data)
+            stats = self.get_item_stats(data, meta_path)
         else:  # for db entries
-            stats = self.get_item_db_stats(data)
-        icon, title, authors, percent, rating, status, high_count = stats
-
-        # noinspection PyArgumentList
-        color = ("#660000" if status == "abandoned" else
-                 # "#005500" if status == "complete" else
-                 QApplication.palette().text().color())
+            stats = self.get_item_stats(data)
+        title = stats["title"]
+        authors = stats["authors"]
+        percent = stats["percent"]
+        rating = stats["rating"]
+        status = stats["status"]
+        high_count = stats["high_count"]
+        icon = self.ico_label_green if high_count else self.ico_empty
 
         self.file_table.setSortingEnabled(False)
         self.file_table.insertRow(0)
@@ -917,7 +1089,7 @@ class Base(QMainWindow, Ui_Base):
         book_icon = self.ico_file_exists if book_exists else self.ico_file_missing
         type_item = QTableWidgetItem(book_icon, ext)
         type_item.setToolTip(book_path if book_exists else
-                             _("The {} file is missing!").format(ext))
+                             _(f"The {ext} file is missing!"))
         type_item.setData(Qt.UserRole, (book_path, book_exists))
         self.file_table.setItem(0, TYPE, type_item)
 
@@ -945,71 +1117,58 @@ class Base(QMainWindow, Ui_Base):
 
         for i in range(8):  # colorize row
             item = self.file_table.item(0, i)
-            item.setForeground(QBrush(QColor(color)))
+            if status == "abandoned":
+                if self.theme in (THEME_DARK_NEW, THEME_DARK_OLD):
+                    color = "#DD0000"
+                else:
+                    color = "#660000"
+                item.setForeground(QBrush(QColor(color)))
         self.file_table.setSortingEnabled(True)
 
-    def get_item_db_stats(self, data):
-        """ Returns the title and authors of a history file
-
-        :type data: dict
-        :param data: The dict converted lua file
-        """
-        if data["highlight"]:
-            icon = self.ico_label_green
-            high_count = str(len(data["highlight"]))
-        else:
-            icon = self.ico_empty
-            high_count = ""
-        title = data["stats"]["title"]
-        authors = data["stats"]["authors"]
-        title = title if title else NO_TITLE
-        authors = authors if authors else NO_AUTHOR
-        try:
-            percent = str(int(data["percent_finished"] * 100)) + "%"
-        except KeyError:
-            percent = ""
-        if "summary" in data:
-            rating = data["summary"].get("rating")
-            rating = rating * "*" if rating else ""
-            status = data["summary"].get("status")
-        else:
-            rating = ""
-            status = None
-
-        return icon, title, authors, percent, rating, status, high_count
-
-    def get_item_stats(self, filename, data):
+    @staticmethod
+    def get_item_stats(data, filename=None):
         """ Returns the title and authors of a metadata file
 
-        :type filename: str|unicode
-        :param filename: The filename to get the stats for
         :type data: dict
         :param data: The dict converted lua file
+        :type filename: str|unicode
+        :param filename: The filename to get the stats for
         """
-        if data["highlight"]:
-            icon = self.ico_label_green
-            high_count = str(len(data["highlight"]))
-        else:
-            icon = self.ico_empty
-            high_count = ""
-        try:
-            title = data["stats"]["title"]
-            authors = data["stats"]["authors"]
-        except KeyError:  # older type file
-            title = splitext(basename(filename))[0]
+        stats = "doc_props" if "doc_props" in data else "stats" if "stats" in data else ""
+        if filename:  # stats from a file
             try:
-                name = title.split("#] ")[1]
-                title = splitext(name)[0]
-            except IndexError:  # no "#] " in filename
-                pass
-            authors = OLD_TYPE
-        if not title:
-            try:
-                name = filename.split("#] ")[1]
-                title = splitext(name)[0]
-            except IndexError:  # no "#] " in filename
-                title = NO_TITLE
-        authors = authors if authors else NO_AUTHOR
+                title = data[stats]["title"]
+                authors = data[stats]["authors"]
+            except KeyError:  # much older type file
+                title = splitext(basename(filename))[0]
+                try:
+                    name = title.split("#] ")[1]
+                    title = splitext(name)[0]
+                except IndexError:  # no "#] " in filename
+                    pass
+                authors = OLD_TYPE
+            if not title:
+                try:
+                    name = filename.split("#] ")[1]
+                    title = splitext(name)[0]
+                except IndexError:  # no "#] " in filename
+                    title = NO_TITLE
+            authors = authors if authors else NO_AUTHOR
+        else:  # stats from a db entry
+            title = data[stats]["title"]
+            authors = data[stats]["authors"]
+
+        annotations = data.get("annotations")
+        if annotations is not None:  # new format metadata
+            high_count = len([i for i in annotations.values() if i.get("pos0")])
+        else:  # old format metadata
+            high_count = 0
+            if data["highlight"]:
+                for page in data["highlight"]:
+                    high_count += len(data["highlight"][page])
+                high_count = str(high_count) if high_count else ""
+        high_count = str(high_count) if high_count else ""
+
         try:
             percent = str(int(data["percent_finished"] * 100)) + "%"
         except KeyError:
@@ -1021,8 +1180,466 @@ class Base(QMainWindow, Ui_Base):
         else:
             rating = ""
             status = None
+        return {"title": title, "authors": authors, "percent": percent,
+                "rating": rating, "status": status, "high_count": high_count}
 
-        return icon, title, authors, percent, rating, status, high_count
+    # ___ ___________________ HIGHLIGHTS LIST STUFF _________________
+
+    def populate_high_list(self, data, path=""):
+        """ Populates the Highlights list of `Book` view
+
+        :type data: dict
+        :param data: The item/book's data
+        :type path: str|unicode
+        :param path: The item/book's path
+        """
+        space = (" " if self.status.act_page.isChecked() and
+                 self.status.act_date.isChecked() else "")
+        line_break = (":\n" if self.status.act_page.isChecked() or
+                      self.status.act_date.isChecked() else "")
+        def_date_format = self.date_format == DATE_FORMAT
+        highlights = self.get_highlights_from_data(data, path)
+        for i in sorted(highlights, key=self.sort_high4view):
+            chapter_text = (f"[{i['chapter']}]\n"
+                            if (i["chapter"] and self.status.act_chapter.isChecked())
+                            else "")
+            page_text = (_(f"Page {i['page']}")
+                         if self.status.act_page.isChecked() else "")
+            date = i["date"] if def_date_format else self.get_date_text(i["date"])
+            date_text = "[" + date + "]" if self.status.act_date.isChecked() else ""
+            high_text = i["text"] if self.status.act_text.isChecked() else ""
+            line_break2 = ("\n" if self.status.act_comment.isChecked() and i["comment"]
+                           else "")
+            high_comment = line_break2 + "● " + i["comment"] if line_break2 else ""
+            highlight = (page_text + space + date_text + line_break + chapter_text +
+                         high_text + high_comment + "\n")
+
+            highlight_item = QListWidgetItem(highlight, self.high_list)
+            highlight_item.setData(Qt.UserRole, i)
+
+    def get_highlights_from_data(self, data, path="", meta_path=""):
+        """ Get the HighLights from the .sdr data
+
+        :type data: dict
+        :param data: The lua converted book data
+        :type path: str|unicode
+        :param path: The book's path
+        :type meta_path: str|unicode
+        :param meta_path: The book metadata file's path
+        """
+        stats = "doc_props" if "doc_props" in data else "stats" if "stats" in data else ""
+        authors = data.get(stats, {}).get("authors", NO_AUTHOR)
+        title = data.get(stats, {}).get("title", NO_TITLE)
+        common = {"authors": authors, "title": title,
+                  "path": path, "meta_path": meta_path}
+
+        highlights = []
+        annotations = data.get("annotations")
+        if annotations is not None:  # new format metadata
+            for idx in annotations:
+                highlight = self.get_new_highlight_info(data, idx)
+                if highlight:
+                    # noinspection PyTypeChecker
+                    highlight.update(common)
+                    highlights.append(highlight)
+        else:
+            for page in data["highlight"]:
+                for page_id in data["highlight"][page]:
+                    highlight = self.get_old_highlight_info(data, page, page_id)
+                    if highlight:
+                        # noinspection PyTypeChecker
+                        highlight.update(common)
+                        highlights.append(highlight)
+        return highlights
+
+    @staticmethod
+    def get_new_highlight_info(data, idx):
+        """ Get the highlight's info (text, comment, date and page) [new format]
+
+        :type data: dict
+        :param data: The book's metadata
+        :type idx: int
+        :param idx: The highlight's idx
+        """
+        high_stuff = data["annotations"][idx]
+        if not high_stuff.get("pos0"):
+            return  # this is a bookmark not a highlight
+        pages = data["doc_pages"]
+        page = high_stuff.get("pageno", 0)
+        highlight = {"text": high_stuff.get("text", "").replace("\\\n", "\n"),
+                     "chapter": high_stuff.get("chapter", ""),
+                     "comment": high_stuff.get("note", "").replace("\\\n", "\n"),
+                     "date": high_stuff.get("datetime", ""), "idx": idx,
+                     "page": page, "pages": pages, "new": True}
+        return highlight
+
+    @staticmethod
+    def get_old_highlight_info(data, page, page_id):
+        """ Get the highlight's info (text, comment, date and page)
+
+        :type data: dict
+        :param data: The highlight's data
+        :type page: int
+        :param page The page where the highlight starts
+        :type page_id: int
+        :param page_id The count of this page's highlight
+        """
+        pages = data.get("doc_pages", data.get("stats", {}).get("pages", 0))
+        highlight = {"page": str(page), "page_id": page_id, "pages": pages, "new": False}
+        try:
+            high_stuf = data["highlight"][page][page_id]
+            date = high_stuf["datetime"]
+            text4check = high_stuf["text"]
+            chapter = high_stuf.get("chapter", "")
+            pat = r"Page \d+ (.+?) @ \d+-\d+-\d+ \d+:\d+:\d+"
+            text = text4check.replace("\\\n", "\n")
+            comment = ""
+            for idx in data["bookmarks"]:  # check for comment text
+                if text4check == data["bookmarks"][idx]["notes"]:
+                    bkm_text = data["bookmarks"][idx].get("text", "")
+                    if not bkm_text or (bkm_text == text4check):
+                        break
+                    bkm_text = re.sub(pat, r"\1", bkm_text, 1, re.DOTALL | re.MULTILINE)
+                    if text4check != bkm_text:  # there is a comment
+                        comment = bkm_text.replace("\\\n", "\n")
+                        break
+            highlight["date"] = date
+            highlight["text"] = text
+            highlight["comment"] = comment
+            highlight["chapter"] = chapter
+        except KeyError:  # blank highlight
+            return
+        return highlight
+
+    @Slot(QPoint)
+    def on_high_list_customContextMenuRequested(self, point):
+        """ When a highlight is right-clicked
+
+        :type point: QPoint
+        :param point: The point where the right-click happened
+        """
+        if self.sel_high_list:
+            menu = QMenu(self.high_list)
+            if QT6:  # QT6 requires exec() instead of exec_()
+                menu.exec_ = getattr(menu, "exec")
+
+            action = QAction(_("Comment"), menu)
+            action.triggered.connect(self.on_edit_comment)
+            action.setIcon(self.ico_file_edit)
+            menu.addAction(action)
+
+            action = QAction(_("Copy"), menu)
+            action.triggered.connect(self.on_copy_highlights)
+            action.setIcon(self.ico_copy)
+            menu.addAction(action)
+
+            menu.addSeparator()
+
+            action = QAction(_("Delete"), menu)
+            action.triggered.connect(self.on_delete_highlights)
+            action.setIcon(self.ico_delete)
+            menu.addAction(action)
+
+            menu.exec_(self.high_list.mapToGlobal(point))
+
+    @Slot()
+    def on_high_list_itemDoubleClicked(self):
+        """ An item on the Highlight List is double-clicked
+        """
+        self.on_edit_comment()
+
+    def on_edit_comment(self):
+        """ Opens a window to edit the selected highlight's comment
+        """
+        if self.file_table.isVisible():  # edit comments from Book View
+            row = self.sel_high_list[-1].row()
+            comment = self.high_list.item(row).data(Qt.UserRole)["comment"]
+        elif self.high_table.isVisible():  # edit comments from Highlights View
+            row = self.sel_high_view[-1].row()
+            high_data = self.high_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)
+            comment = high_data["comment"]
+        else:
+            return
+        self.edit_high.high_edit_txt.setText(comment)
+        # self.edit_high.high_edit_txt.setFocus()
+        if QT6:  # QT6 requires exec() instead of exec_()
+            self.edit_high.exec_ = getattr(self.edit_high, "exec")
+        self.edit_high.exec_()
+
+    def edit_comment_ok(self):
+        """ Change the selected highlight's comment
+        """
+        note = self.edit_high.high_edit_txt.toPlainText()
+        if self.file_table.isVisible():  # update comment from Book table
+            high_row = self.sel_high_list[-1].row()
+            high_data = self.high_list.item(high_row).data(Qt.UserRole)
+            item = self.file_table.item
+            row = self.sel_idx.row()
+            data = item(row, TITLE).data(Qt.UserRole)
+            self.update_comment(data, high_data, note)
+
+            if not self.db_mode:  # Loaded mode
+                path = item(row, PATH).text()
+                self.save_book_data(path, data)
+            else:  # Archived mode
+                self.update_book2db(data)
+                self.on_file_table_itemClicked(item(row, 0), reset=False)
+
+        elif self.high_table.isVisible():  # update comment from Highlights table
+            row = self.sel_high_view[-1].row()
+            high_data = self.high_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)
+            meta_path = high_data["meta_path"]
+            data = self.get_parent_book_data(row)[0]
+
+            self.update_comment(data, high_data, note)
+            self.high_table.item(row, HIGHLIGHT_H).setData(Qt.UserRole, high_data)
+            self.high_table.item(row, COMMENT_H).setText(note)
+
+            if not self.db_mode:  # Loaded mode
+                self.save_book_data(meta_path, data)
+            else:  # Archived mode
+                self.update_book2db(data)
+
+        self.reload_highlights = True
+
+    @staticmethod
+    def update_comment(data, high_data, note):
+        """ Update the comment of the selected highlight
+        """
+        date = datetime.now().strftime(DATE_FORMAT)
+        high_text = high_data["text"].replace("\n", "\\\n")
+        annotations = data.get("annotations")
+        if annotations is not None:  # new format metadata
+            for idx in annotations:
+                if high_text == annotations[idx]["text"]:
+                    annotations[idx]["note"] = note.replace("\n", "\\\n")
+                    annotations[idx]["datetime"] = date  # update last edit date
+                    high_data["comment"] = note
+                    break
+        else:  # old format metadata
+            for bkm in data["bookmarks"]:
+                if high_text == data["bookmarks"][bkm]["notes"]:
+                    high_data["comment"] = note
+                    data["bookmarks"][bkm]["text"] = note.replace("\n", "\\\n")
+                    data["bookmarks"][bkm]["datetime"] = date  # update bkm edit date
+                    for pg in data["highlight"]:  # and highlight's too
+                        for pg_id in data["highlight"][pg]:
+                            if data["highlight"][pg][pg_id]["text"] == high_text:
+                                data["highlight"][pg][pg_id]["datetime"] = date
+                                break
+
+    def on_copy_highlights(self):
+        """ Copy the selected highlights to clipboard
+        """
+        clipboard_text = ""
+        for highlight in sorted(self.sel_high_list):
+            row = highlight.row()
+            text = self.high_list.item(row).text()
+            clipboard_text += text + "\n"
+        self.copy_text_2clip(clipboard_text)
+
+    def on_delete_highlights(self):
+        """ The delete highlights action was invoked
+        """
+        if not self.db_mode:
+            if self.edit_lua_file_warning:
+                text = _("This is an one-time warning!\n\nIn order to delete highlights "
+                         "from a book, its \"metadata\" file must be edited. This "
+                         "contains a small risk of corrupting that file and lose all the "
+                         "settings and info of that book.\n\nDo you still want to do it?")
+                popup = self.popup(_("Warning!"), text, buttons=2,
+                                   button_text=(_("Yes"), _("No")))
+                if popup.buttonRole(popup.clickedButton()) == QMessageBox.RejectRole:
+                    return
+                else:
+                    self.edit_lua_file_warning = False
+            text = _("This will delete the selected highlights!\nAre you sure?")
+        else:
+            text = _("This will remove the selected highlights from the Archive!\n"
+                     "Are you sure?")
+        popup = self.popup(_("Warning!"), text, buttons=2,
+                           button_text=(_("Yes"), _("No")))
+        if popup.buttonRole(popup.clickedButton()) == QMessageBox.RejectRole:
+            return
+        self.delete_highlights()
+
+    def delete_highlights(self):
+        """ Delete the selected highlights
+        """
+        if self.file_table.isVisible():  # delete comments from Book table
+            row = self.sel_idx.row()
+            data = self.file_table.item(row, TITLE).data(Qt.UserRole)
+            hi_count = int(self.file_table.item(row, HIGH_COUNT).text())
+            annotations = data.get("annotations")
+            if annotations is not None:  # new format metadata
+                for high in self.sel_high_list:
+                    high_data = self.high_list.item(high.row()).data(Qt.UserRole)
+                    idx = high_data["idx"]
+                    del annotations[idx]  # delete the highlight
+                    hi_count -= 1
+                self.finalize_new_highs(data)
+            else:  # old format metadata
+                for high in self.sel_high_list:
+                    high_data = self.high_list.item(high.row()).data(Qt.UserRole)
+                    self.del_old_high(data, high_data)
+                    hi_count -= 1
+                self.finalize_old_highs(data)
+            self.update_and_save_meta(row, data, hi_count)
+            self.reload_highlights = True
+        elif self.high_table.isVisible():  # delete comments from Highlights table
+            hi2del = {}
+            idx2del = []
+            for hi_idx in self.sel_high_view:  # collect the data from the highlights
+                row = hi_idx.row()
+                high_data = self.high_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)
+                data = self.get_parent_book_data(row)[0]
+                meta_path = high_data["meta_path"]
+                idx2del.append(row)
+                data_list = hi2del.get(meta_path, [])
+                data_list.append((data, high_data, row))
+                hi2del[meta_path] = data_list
+
+            for meta_path, data_list in hi2del.items():
+                book_row = 0
+                for book_row in range(self.file_table.rowCount()):
+                    if self.file_table.item(book_row, PATH).text() == meta_path:
+                        break
+                hi_count = self.file_table.item(book_row, HIGH_COUNT).text()
+                hi_count = int(hi_count) if hi_count else 0
+                new_format = False
+                data = None
+                for data, high_data, row in data_list:
+                    annotations = data.get("annotations")
+                    if annotations is not None:  # new format metadata
+                        new_format = True
+                        idx = high_data["idx"]
+                        del annotations[idx]  # delete the highlight
+                        hi_count -= 1
+                    else:  # old format metadata
+                        self.del_old_high(data, high_data)
+                        hi_count -= 1
+                if new_format:
+                    self.finalize_new_highs(data)
+                else:
+                    self.finalize_old_highs(data)  # data is same for same meta_path
+                self.update_and_save_meta(book_row, data, hi_count)
+
+            idx2del = sorted(idx2del, reverse=True)
+            for hi_idx in idx2del:
+                self.high_table.removeRow(hi_idx)
+
+    @staticmethod
+    def finalize_new_highs(data):
+        annotations = data.get("annotations")
+        new_annot = {idx + 1: annotations[i]  # renumbering the annotations
+                     for idx, i in enumerate(sorted(annotations))}
+        if new_annot:
+            data["annotations"] = new_annot
+
+    @staticmethod
+    def del_old_high(data, hi_data):
+        page = int(hi_data["page"])
+        page_id = hi_data["page_id"]
+        del data["highlight"][page][page_id]  # delete the highlight
+        text = hi_data["text"]  # delete the associated bookmark
+        for bookmark in list(data["bookmarks"].keys()):
+            if text == data["bookmarks"][bookmark]["notes"]:
+                del data["bookmarks"][bookmark]
+
+    @staticmethod
+    def finalize_old_highs(data):
+        for i in list(data["highlight"].keys()):
+            if not data["highlight"][i]:  # delete page dicts with no highlights
+                del data["highlight"][i]
+            else:  # renumbering the highlight keys
+                contents = [data["highlight"][i][j] for j in sorted(data["highlight"][i])]
+                if contents:
+                    for l in list(data["highlight"][i].keys()):
+                        del data["highlight"][i][l]  # delete all the items and
+                    for k in range(len(contents)):  # rewrite with the new keys
+                        data["highlight"][i][k + 1] = contents[k]
+        contents = [data["bookmarks"][bookmark] for bookmark in sorted(data["bookmarks"])]
+        if contents:  # renumbering the bookmarks keys
+            for bookmark in list(data["bookmarks"].keys()):
+                del data["bookmarks"][bookmark]  # delete all the items and
+            for content in range(len(contents)):  # rewrite them with the new keys
+                data["bookmarks"][content + 1] = contents[content]
+
+    def update_and_save_meta(self, row, data, hi_count):
+        if not hi_count:  # change icon if no highlights
+            self.file_table.item(row, TITLE).setIcon(self.ico_empty)
+            hi_count = ""
+        self.file_table.item(row, HIGH_COUNT).setText(str(hi_count))
+        self.file_table.item(row, HIGH_COUNT).setToolTip(str(hi_count))
+        if not self.db_mode:
+            path = self.file_table.item(row, PATH).text()
+            data["annotations_externally_modified"] = True
+            self.save_book_data(path, data)
+        else:
+            self.update_book2db(data)
+            self.on_file_table_itemClicked(self.file_table.item(row, TITLE), reset=False)
+
+    def save_book_data(self, path, data):
+        """ Saves the data of a book to its lua file
+
+        :type path: str|unicode
+        :param path: The path to the book's data file
+        :type data: dict
+        :param data: The book's data
+        """
+        times = os.stat(path)  # read the file's created/modified times
+        encode_data(path, data)
+        if data.get("summary", {}).get("status") in ["abandoned", "complete"]:
+            os.utime(path, (times.st_ctime, times.st_mtime))  # reapply original times
+        if self.file_table.isVisible():
+            self.on_file_table_itemClicked(self.file_table.item(self.sel_idx.row(), 0),
+                                           reset=False)
+
+    # noinspection PyUnusedLocal
+    def high_list_selection_update(self, selected, deselected):
+        """ When a highlight in gets selected
+
+        :type selected: QModelIndex
+        :parameter selected: The selected highlight
+        :type deselected: QModelIndex
+        :parameter deselected: The deselected highlight
+        """
+        self.sel_high_list = self.high_list_selection.selectedRows()
+
+    def set_highlight_sort(self):
+        """ Sets the sorting method of displayed highlights
+        """
+        self.high_by_page = self.sender().data()
+        try:
+            row = self.sel_idx.row()
+            self.on_file_table_itemClicked(self.file_table.item(row, 0), False)
+        except AttributeError:  # no book selected
+            pass
+
+    def sort_high4view(self, data):
+        """ Sets the sorting method of displayed highlights
+
+        :type data: tuple
+        param: data: The highlight's data
+        """
+        if not self.high_by_page:
+            return data["date"]
+        else:
+            return int(data["page"])
+
+    def sort_high4write(self, data):
+        """ Sets the sorting method of written highlights
+
+        :type data: tuple
+        param: data: The highlight's data
+        """
+        if self.high_by_page and self.status.act_page.isChecked():
+            page = data[3]
+            if page.startswith("Page"):
+                page = page[5:]
+            return int(page)
+        else:
+            return data[0]
 
     # ___ ___________________ HIGHLIGHT TABLE STUFF _________________
 
@@ -1033,14 +1650,15 @@ class Base(QMainWindow, Ui_Base):
         :type item: QTableWidgetItem
         :param item: The item (cell) that is clicked
         """
-        row = item.row()
-        path = self.high_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)["path"]
+        # row = item.row()
+        # self.get_parent_book_data(row)
 
-        # needed for edit "Comments" or "Find in Books" in Highlight View
+    def get_parent_book_data(self, row):
+        meta_path = self.high_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)["meta_path"]
         for row in range(self.file_table.rowCount()):  # 2check: need to optimize?
-            if path == self.file_table.item(row, TYPE).data(Qt.UserRole)[0]:
-                self.parent_book_data = self.file_table.item(row, TITLE).data(Qt.UserRole)
-                break
+            if meta_path == self.file_table.item(row, PATH).data(0):
+                parent_book_data = self.file_table.item(row, TITLE).data(Qt.UserRole)
+                return parent_book_data, meta_path
 
     @Slot(QModelIndex)
     def on_high_table_doubleClicked(self, index):
@@ -1082,7 +1700,7 @@ class Base(QMainWindow, Ui_Base):
 
             text = _("Find in Archive") if self.db_mode else _("Find in Books")
             action = QAction(text, menu)
-            action.triggered.connect(partial(self.find_in_books, highlights))
+            action.triggered.connect(partial(self.find_in_books, highlights, row))
             action.setIcon(self.ico_view_books)
             menu.addAction(action)
 
@@ -1105,6 +1723,12 @@ class Base(QMainWindow, Ui_Base):
         action.triggered.connect(self.on_export)
         action.setData(2)
         action.setIcon(self.ico_file_save)
+        menu.addAction(action)
+
+        menu.addSeparator()
+        action = QAction(_("Delete") + "\tDel", menu)
+        action.setIcon(self.ico_files_delete)
+        action.triggered.connect(self.toolbar.on_delete_btn_clicked)
         menu.addAction(action)
 
         menu.exec_(self.high_table.mapToGlobal(point))
@@ -1173,13 +1797,13 @@ class Base(QMainWindow, Ui_Base):
 
         text = data["text"]
         item = QTableWidgetItem(text)
-        item.setToolTip("<p>{}</p>".format(text))
+        item.setToolTip(f"<p>{text}</p>")
         item.setData(Qt.UserRole, data)
         self.high_table.setItem(0, HIGHLIGHT_H, item)
 
         comment = data["comment"]
         item = QTableWidgetItem(comment)
-        item.setToolTip("<p>{}</p>".format(comment)) if comment else None
+        item.setToolTip(f"<p>{comment}</p>") if comment else None
         self.high_table.setItem(0, COMMENT_H, item)
 
         date = data["date"]
@@ -1209,7 +1833,8 @@ class Base(QMainWindow, Ui_Base):
         item.setToolTip(chapter)
         self.high_table.setItem(0, CHAPTER_H, item)
 
-        path = data["path"]
+        # path = data["path"]
+        path = data.get("meta_path", "")
         item = QTableWidgetItem(path)
         item.setToolTip(path)
         self.high_table.setItem(0, PATH_H, item)
@@ -1263,21 +1888,20 @@ class Base(QMainWindow, Ui_Base):
         elif column == COMMENT_H:
             self.comment_width = newSize
 
-    def find_in_books(self, highlight):
+    def find_in_books(self, highlight, hi_row):
         """ Finds the current highlight in the "Books View"
 
         :type highlight: str|unicode
         :parameter highlight: The highlight we are searching for
         """
-        data = self.parent_book_data
+        data, meta_path = self.get_parent_book_data(hi_row)
 
         for row in range(self.file_table.rowCount()):
             item = self.file_table.item(row, TITLE)
-            row_data = item.data(Qt.UserRole)
+            row_meta_path = self.file_table.item(row, PATH).data(0)
             try:  # find the book row
-                if data["stats"]["title"] == row_data["stats"]["title"]:
-                    self.views.setCurrentIndex(BOOKS_VIEW)
-                    self.toolbar.books_view_btn.setChecked(True)
+                if meta_path == row_meta_path:
+                    self.toolbar.books_view_btn.click()
                     self.toolbar.setup_buttons()
                     self.toolbar.activate_buttons()
                     self.file_table.selectRow(row)  # select the book
@@ -1290,351 +1914,228 @@ class Base(QMainWindow, Ui_Base):
             except KeyError:  # old metadata with no "stats"
                 continue
 
-    # ___ ___________________ HIGHLIGHTS LIST STUFF _________________
+    # ___ ___________________ SYNC GROUPS TABLE STUFF _______________
 
-    def populate_high_list(self, data, path=""):
-        """ Populates the Highlights list of `Book` view
+    @Slot(QTableWidgetItem)
+    def on_sync_table_itemClicked(self, item):
+        """ When an item of the sync_table is clicked
 
-        :type data: dict
-        :param data: The item/book's data
-        :type path: str|unicode
-        :param path: The item/book's path
+        :type item: QTableWidgetItem
+        :param item: The item (cell) that is clicked
         """
-        space = (" " if self.status.act_page.isChecked() and
-                 self.status.act_date.isChecked() else "")
-        line_break = (":\n" if self.status.act_page.isChecked() or
-                      self.status.act_date.isChecked() else "")
-        def_date_format = self.date_format == DATE_FORMAT
-        highlights = self.get_highlights_from_data(data, path)
-        for i in sorted(highlights, key=self.sort_high4view):
-            chapter_text = i["chapter"]
-            if chapter_text and self.status.act_chapter.isChecked():
-                chapter_text = "[{0}]\n".format(chapter_text)
-            page_text = (_("Page ") + i["page"]
-                         if self.status.act_page.isChecked() else "")
-            date = i["date"] if def_date_format else self.get_date_text(i["date"])
-            date_text = "[" + date + "]" if self.status.act_date.isChecked() else ""
-            high_text = i["text"] if self.status.act_text.isChecked() else ""
-            line_break2 = ("\n" if self.status.act_comment.isChecked() and i["comment"]
-                           else "")
-            high_comment = line_break2 + "● " + i["comment"] if line_break2 else ""
-            highlight = (page_text + space + date_text + line_break + chapter_text +
-                         high_text + high_comment + "\n")
-
-            highlight_item = QListWidgetItem(highlight, self.high_list)
-            highlight_item.setData(Qt.UserRole, i)
-
-    def get_highlights_from_data(self, data, path=""):
-        """ Get the HighLights from the .sdr data
-
-        :type data: dict
-        :param data: The lua converted book data
-        :type path: str|unicode
-        :param path: The book's path
-        """
-        authors = data.get("stats", {}).get("authors", NO_AUTHOR)
-        title = data.get("stats", {}).get("title", NO_TITLE)
-
-        highlights = []
-        for page in data["highlight"]:
-            for page_id in data["highlight"][page]:
-                highlight = self.get_highlight_info(data, page, page_id)
-                if highlight:
-                    # noinspection PyTypeChecker
-                    highlight.update({"authors": authors, "title": title,
-                                      "path": path})
-                    highlights.append(highlight)
-        return highlights
-
-    @staticmethod
-    def get_highlight_info(data, page, page_id):
-        """ Get the highlight's info (text, comment, date and page)
-
-        :type data: dict
-        :param data: The highlight's data
-        :type page: int
-        :param page The page where the highlight starts
-        :type page_id: int
-        :param page_id The count of this page's highlight
-        """
-        highlight = {}
-        try:
-            high_stuf = data["highlight"][page][page_id]
-            date = high_stuf["datetime"]
-            text4check = high_stuf["text"]
-            chapter = high_stuf.get("chapter", "")
-            pat = r"Page \d+ (.+?) @ \d+-\d+-\d+ \d+:\d+:\d+"
-            text = text4check.replace("\\\n", "\n")
-            comment = ""
-            for idx in data["bookmarks"]:  # check for comment text
-                if text4check == data["bookmarks"][idx]["notes"]:
-                    bkm_text = data["bookmarks"][idx].get("text", "")
-                    if not bkm_text or (bkm_text == text4check):
-                        break
-                    bkm_text = re.sub(pat, r"\1", bkm_text, 1, re.DOTALL | re.MULTILINE)
-                    if text4check != bkm_text:  # there is a comment
-                        comment = bkm_text.replace("\\\n", "\n")
-                        break
-            highlight["date"] = date
-            highlight["text"] = text
-            highlight["comment"] = comment
-            highlight["chapter"] = chapter
-            highlight["page"] = str(page)
-            highlight["page_id"] = page_id
-        except KeyError:  # blank highlight
-            return
-        return highlight
-
-    @Slot(QPoint)
-    def on_high_list_customContextMenuRequested(self, point):
-        """ When a highlight is right-clicked
-
-        :type point: QPoint
-        :param point: The point where the right-click happened
-        """
-        if self.sel_high_list:
-            menu = QMenu(self.high_list)
-            if QT6:  # QT6 requires exec() instead of exec_()
-                menu.exec_ = getattr(menu, "exec")
-
-            action = QAction(_("Comments"), menu)
-            action.triggered.connect(self.on_edit_comment)
-            action.setIcon(self.ico_file_edit)
-            menu.addAction(action)
-
-            action = QAction(_("Copy"), menu)
-            action.triggered.connect(self.on_copy_highlights)
-            action.setIcon(self.ico_copy)
-            menu.addAction(action)
-
-            action = QAction(_("Delete"), menu)
-            action.triggered.connect(self.on_delete_highlights)
-            action.setIcon(self.ico_delete)
-            menu.addAction(action)
-
-            menu.exec_(self.high_list.mapToGlobal(point))
-
-    @Slot()
-    def on_high_list_itemDoubleClicked(self):
-        """ An item on the Highlight List is double-clicked
-        """
-        self.on_edit_comment()
-
-    def on_edit_comment(self):
-        """ Opens a window to edit the selected highlight's comment
-        """
-        if self.file_table.isVisible():  # edit comments from Book View
-            row = self.sel_high_list[-1].row()
-            comment = self.high_list.item(row).data(Qt.UserRole)["comment"]
-        elif self.high_table.isVisible():  # edit comments from Highlights View
-            row = self.sel_high_view[-1].row()
-            high_data = self.high_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)
-            comment = high_data["comment"]
-        else:
-            return
-        self.edit_high.high_edit_txt.setText(comment)
-        # self.edit_high.high_edit_txt.setFocus()
-        self.edit_high.exec_()
-
-    def edit_comment_ok(self):
-        """ Change the selected highlight's comment
-        """
-        text = self.edit_high.high_edit_txt.toPlainText()
-        if self.file_table.isVisible():
-            high_index = self.sel_high_list[-1]
-            high_row = high_index.row()
-            high_data = self.high_list.item(high_row).data(Qt.UserRole)
-            high_text = high_data["text"].replace("\n", "\\\n")
-
-            row = self.sel_idx.row()
-            item = self.file_table.item
-            data = item(row, TITLE).data(Qt.UserRole)
-
-            for bookmark in data["bookmarks"].keys():
-                if high_text == data["bookmarks"][bookmark]["notes"]:
-                    data["bookmarks"][bookmark]["text"] = text.replace("\n", "\\\n")
-                    break
-            item(row, TITLE).setData(Qt.UserRole, data)
-
-            if not self.db_mode:  # Loaded mode
-                path = item(row, PATH).text()
-                self.save_book_data(path, data)
-            else:  # Archived mode
-                self.update_book2db(data)
-                self.on_file_table_itemClicked(item(row, 0), reset=False)
-
-        elif self.high_table.isVisible():
-            data = self.parent_book_data
-            row = self.sel_high_view[-1].row()
-            high_data = self.high_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)
-            high_text = high_data["text"].replace("\n", "\\\n")
-
-            for bookmark in data["bookmarks"].keys():
-                if high_text == data["bookmarks"][bookmark]["notes"]:
-                    data["bookmarks"][bookmark]["text"] = text.replace("\n", "\\\n")
-                    high_data["comment"] = text
-                    break
-            self.high_table.item(row, HIGHLIGHT_H).setData(Qt.UserRole, high_data)
-            self.high_table.item(row, COMMENT_H).setText(text)
-
-            if not self.db_mode:  # Loaded mode
-                book_path, ext = splitext(high_data["path"])
-                path = join(book_path + ".sdr", "metadata{}.lua".format(ext))
-                self.save_book_data(path, data)
-            else:  # Archived mode
-                self.update_book2db(data)
-                path = self.high_table.item(row, PATH_H).text()
-                for row in range(self.file_table.rowCount()):
-                    if path == self.file_table.item(row, TYPE).data(Qt.UserRole)[0]:
-                        self.file_table.item(row, TITLE).setData(Qt.UserRole, data)
-                        break
-
-        self.reload_highlights = True
-
-    def on_copy_highlights(self):
-        """ Copy the selected highlights to clipboard
-        """
-        clipboard_text = ""
-        for highlight in sorted(self.sel_high_list):
-            row = highlight.row()
-            text = self.high_list.item(row).text()
-            clipboard_text += text + "\n"
-        self.copy_text_2clip(clipboard_text)
-
-    def on_delete_highlights(self):
-        """ The delete highlights action was invoked
-        """
-        if not self.db_mode:
-            if self.edit_lua_file_warning:
-                text = _("This is an one-time warning!\n\nIn order to delete highlights "
-                         "from a book, its \"metadata\" file must be edited. This "
-                         "contains a small risk of corrupting that file and lose all the "
-                         "settings and info of that book.\n\nDo you still want to do it?")
-                popup = self.popup(_("Warning!"), text, buttons=2,
-                                   button_text=(_("Yes"), _("No")))
-                if popup.buttonRole(popup.clickedButton()) == QMessageBox.RejectRole:
-                    return
-                else:
-                    self.edit_lua_file_warning = False
-            text = _("This will delete the selected highlights!\nAre you sure?")
-        else:
-            text = _("This will remove the selected highlights from the Archive!\n"
-                     "Are you sure?")
-        popup = self.popup(_("Warning!"), text, buttons=2,
-                           button_text=(_("Yes"), _("No")))
-        if popup.buttonRole(popup.clickedButton()) == QMessageBox.RejectRole:
-            return
-        self.delete_highlights()
-
-    def delete_highlights(self):
-        """ Delete the selected highlights
-        """
-        row = self.sel_idx.row()
-        data = self.file_table.item(row, TITLE).data(Qt.UserRole)
-
-        for highlight in self.sel_high_list:
-            high_row = highlight.row()
-            high_data = self.high_list.item(high_row).data(Qt.UserRole)
-            pprint(high_data)
-            page = high_data["page"]
-            page_id = high_data["page_id"]
-            del data["highlight"][page][page_id]  # delete the highlight
-
-            # delete the associated bookmark
-            text = high_data["text"]
-            for bookmark in data["bookmarks"].keys():
-                if text == data["bookmarks"][bookmark]["notes"]:
-                    del data["bookmarks"][bookmark]
-
-        for i in data["highlight"].keys():
-            if not data["highlight"][i]:  # delete page dicts with no highlights
-                del data["highlight"][i]
-            else:  # renumbering the highlight keys
-                contents = [data["highlight"][i][j] for j in sorted(data["highlight"][i])]
-                if contents:
-                    for l in data["highlight"][i].keys():  # delete all the items and
-                        del data["highlight"][i][l]
-                    for k in range(len(contents)):      # rewrite them with the new keys
-                        data["highlight"][i][k + 1] = contents[k]
-
-        contents = [data["bookmarks"][bookmark] for bookmark in sorted(data["bookmarks"])]
-        if contents:  # renumbering the bookmarks keys
-            for bookmark in data["bookmarks"].keys():  # delete all the items and
-                del data["bookmarks"][bookmark]
-            for content in range(len(contents)):  # rewrite them with the new keys
-                data["bookmarks"][content + 1] = contents[content]
-
-        if not data["highlight"]:  # change icon if no highlights
-            item = self.file_table.item(row, 0)
-            item.setIcon(self.ico_empty)
-
-        if not self.db_mode:
-            path = self.file_table.item(row, PATH).text()
-            self.save_book_data(path, data)
-        else:
-            self.update_book2db(data)
-            item = self.file_table.item
-            item(row, TITLE).setData(Qt.UserRole, data)
-            self.on_file_table_itemClicked(item(row, 0), reset=False)
-        self.reload_highlights = True
-
-    def save_book_data(self, path, data):
-        """ Saves the data of a book to its lua file
-
-        :type path: str|unicode
-        :param path: The path to the book's data file
-        :type data: dict
-        :param data: The book's data
-        """
-        times = os.stat(path)  # read the file's created/modified times
-        encode_data(path, data)
-        os.utime(path, (times.st_ctime, times.st_mtime))  # reapply original times
-        if self.file_table.isVisible():
-            self.on_file_table_itemClicked(self.file_table.item(self.sel_idx.row(), 0),
-                                           reset=False)
+        # row = item.row()
+        # # path = self.high_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)["path"]
+        # print(row)
 
     # noinspection PyUnusedLocal
-    def high_list_selection_update(self, selected, deselected):
-        """ When a highlight in gets selected
+    def sync_view_selection_update(self, selected, deselected):
+        """ When a row in sync_table gets selected
 
         :type selected: QModelIndex
-        :parameter selected: The selected highlight
+        :parameter selected: The selected row
         :type deselected: QModelIndex
-        :parameter deselected: The deselected highlight
+        :parameter deselected: The deselected row
         """
-        self.sel_high_list = self.high_list_selection.selectedRows()
-
-    def set_highlight_sort(self):
-        """ Sets the sorting method of displayed highlights
-        """
-        self.high_by_page = self.sender().data()
         try:
-            row = self.sel_idx.row()
-            self.on_file_table_itemClicked(self.file_table.item(row, 0), False)
-        except AttributeError:  # no book selected
-            pass
+            self.sel_sync_view = self.sync_view_selection.selectedRows()
+        except IndexError:  # empty table
+            self.sel_sync_view = []
+        self.toolbar.activate_buttons()
 
-    def sort_high4view(self, data):
-        """ Sets the sorting method of displayed highlights
+    def create_sync_row(self, data, quiet=False):
+        """ Creates a sync_table row from the given data
 
-        :type data: tuple
-        param: data: The highlight's data
+        :type data: dict|list
+        :param data: The sync_group data
+        :type quiet: bool
+        :param quiet: Switch to the Sync view
         """
-        return int(data["page"]) if self.high_by_page else data["date"]
+        if self.current_view != SYNC_VIEW and not quiet:
+            self.toolbar.sync_view_btn.setChecked(True)
+            self.toolbar.change_view()
 
-    def sort_high4write(self, data):
-        """ Sets the sorting method of written highlights
-
-        :type data: tuple
-        param: data: The highlight's data
-        """
-        if self.high_by_page and self.status.act_page.isChecked():
-            page = data[3]
-            if page.startswith("Page"):
-                page = page[5:]
-            return int(page)
+        self.sync_table.setSortingEnabled(False)
+        if isinstance(data, dict):
+            count = self.sync_table.rowCount()
+            self.sync_table.insertRow(count)
+            wdg = self.create_sync_widget(data)
+            wdg.idx = count
+            self.sync_groups.append(data)
+            self.sync_table.setCellWidget(count, 0, wdg)
+            self.sync_table.setRowHeight(count, wdg.sizeHint().height())
+            wdg.check_data()
         else:
-            return data[0]
+            for idx, data in enumerate(data):
+                self.sync_table.insertRow(idx)
+                wdg = self.create_sync_widget(data)
+                self.sync_table.setCellWidget(idx, 0, wdg)
+                self.sync_table.setRowHeight(idx, wdg.sizeHint().height())
+                wdg.on_power_btn_clicked(data.get("enabled", True))
+                wdg.idx = idx
+                self.sync_groups.append(data)
+                wdg.check_data()
+        self.sync_table.setSortingEnabled(True)
+        # noinspection PyTypeChecker
+        QTimer.singleShot(0, self.save_sync_groups)
+
+    def create_sync_widget(self, data):
+        wdg = SyncGroup(self)
+        wdg.data = data
+        wdg.power_btn.setChecked(data.get("enabled", True))
+        wdg.title_lbl.setText(data.get("title", ""))
+        wdg.sync_pos_chk.setChecked(data.get("sync_pos", True))
+        wdg.merge_chk.setChecked(data.get("merge", True))
+        wdg.sync_db_chk.setChecked(data.get("sync_db", False))
+
+        items = deepcopy(data.get("items", [{"path": "", "data": {}}]))
+        for item in items:
+            wdg.add_item(item)
+        return wdg
+
+    def synchronize_group(self, group, multi=False):
+        """ Start the process of syncing/merging the group
+
+        :type group: SyncGroup
+        :param group: The group to be processed
+        """
+        group.on_refresh_btn_clicked()
+        if not group.sync_items[0].ok:
+            self.popup(_(f'Error in group "{group.data["title"]}"!'),
+                       _("There is a problem with the first metadata file path!\nCheck "
+                         "the Tooltip that appears while hovering the mouse over it."),
+                       icon=QMessageBox.Critical)
+            return
+        sync2db = group.sync_db_chk.isChecked()
+        group_changed = sync2db
+        to_process = []
+        for idx, item in enumerate(group.sync_items):
+            if not item.ok:
+                continue
+            info = group.data["items"][idx]
+            mod_time = os.stat(info["path"]).st_mtime
+            to_process.append((info, mod_time))
+        to_process = sorted(to_process, key=lambda x: x[1], reverse=True)
+        to_process = [i[0] for i in to_process]
+
+        if sync2db:
+            book_data = {"data": group.data["items"][0]["data"],
+                         "path": group.data["items"][0]["path"]}
+            db_idx = self.check4archive_merge(book_data)
+            if db_idx:
+                db_data = self.books[db_idx]["data"]
+                to_process.append({"data": db_data, "path": ""})
+
+        if len(to_process) > 1:
+            if group.sync_pos_chk.isChecked():
+                self.sync_pos(to_process)
+                group_changed = True
+            if group.merge_chk.isChecked():
+                items = []
+                for book_info in to_process:  # book_info: {"path": str, "data": dict}
+                    data = book_info["data"]
+                    total = data.get("doc_pages", data.get("stats", {}).get("pages", 0))
+                    if group.new_format:
+                        items.append((data["annotations"], total))
+                    else:
+                        items.append((data["highlight"], data["bookmarks"], total,
+                                      book_info["path"]))
+                if group.new_format:
+                    self.merge_new_highs(items)
+                else:
+                    self.merge_old_highs(items)
+                group_changed = True
+
+        if group_changed:
+            for item in deepcopy(to_process):
+                if item["path"]:  # db version has no path
+                    item["data"]["annotations_externally_modified"] = True
+                    self.save_book_data(item["path"], item["data"])
+
+            if sync2db:  # add the newest version of the book to db
+                new_data = deepcopy(to_process[0])
+                path = new_data["path"]
+                data = new_data["data"]
+                date = str(datetime.fromtimestamp(getmtime(path))).split(".")[0]
+                md5 = data["partial_md5_checksum"]
+                self.delete_books_from_db([md5])  # remove the existing version if any
+                try:  # clean up data that can be cluttered
+                    new_data["stats"]["performance_in_pages"] = {}
+                    new_data["page_positions"] = {}
+                    new_data.pop("annotations_externally_modified", None)
+                except KeyError:
+                    pass
+                self.add_books2db([{"md5": md5, "path": path, "date": date,
+                                    "data": json.dumps(data)}])
+            self.update_new_values(group)
+            text = _("Synchronization process completed")
+        else:
+            text = _("Nothing to sync")
+
+        if not multi:  # one group Sync
+            self.popup(_("Information"), text, QMessageBox.Information)
+        else:  # multiple Sync operations
+            if group_changed:
+                return True  # needed for counting the number of groups changed
+
+    def update_new_values(self, group):
+        """ Updates the book table after sync_groups execution
+        """
+        self.reload_highlights = True
+        row_infos = {}
+        for idx, item in enumerate(group.data["items"]):
+            if not group.sync_items[idx].ok:
+                continue
+            path = item["path"]
+            for row in range(self.file_table.rowCount()):
+                if self.file_table.item(row, PATH).text() == path:
+                    row_infos[row] = item
+                    break
+        for row in row_infos:
+            data = row_infos[row]["data"]
+            self.file_table.item(row, TITLE).setData(Qt.UserRole, data)
+            hi_count = self.get_item_stats(data)["high_count"]
+            if hi_count and hi_count != "0":
+                self.file_table.item(row, TITLE).setIcon(self.ico_label_green)
+            self.file_table.item(row, HIGH_COUNT).setText(hi_count)
+            self.file_table.item(row, HIGH_COUNT).setToolTip(hi_count)
+            if group.sync_pos_chk.isChecked():
+                percent = str(int(data.get("percent_finished", 0) * 100)) + "%"
+                self.file_table.item(row, PERCENT).setText(percent)
+                self.file_table.item(row, PERCENT).setToolTip(percent)
+
+    def update_sync_groups(self):
+        """ Update the sync groups in memory and on disk
+        """
+        del self.sync_groups[:]
+        for i in range(self.sync_table.rowCount()):
+            wdg = self.sync_table.cellWidget(i, 0)
+            wdg.idx = i  # update the index of widget
+            wdg.check_data()
+            self.sync_groups.append(wdg.data)
+
+        self.save_sync_groups()
+
+    def load_sync_groups(self):
+        """ Load the sync groups from a file
+        """
+        try:
+            with open(SYNC_FILE, "r", encoding="utf-8") as f:
+                sync_groups = json.load(f)
+        except (IOError, ValueError):  # no json file exists or corrupted file
+            return
+        self.create_sync_row(sync_groups, quiet=True)
+
+    def save_sync_groups(self):
+        """ Save the sync groups to a file
+        """
+        sync_groups = deepcopy(self.sync_groups)
+        sync_groups = [i for i in sync_groups if i["items"][0].get("path")]
+        with open(SYNC_FILE, "w+", encoding="utf-8") as f:
+            items = [i for grp in sync_groups for i in grp["items"] if i.get("path")]
+            for item in items:
+                item["data"] = {}
+                item["path"] = normpath(item["path"])
+            json.dump(sync_groups, f, indent=4)
 
     # ___ ___________________ MERGING - SYNCING STUFF _______________
 
@@ -1666,18 +2167,20 @@ class Base(QMainWindow, Ui_Base):
     def wrong_book(self):
         """ Shows an info dialog if the book MD5 of two metadata are different
         """
-        text = _("It seems that the selected metadata file belongs to a different book..")
+        text = _("It seems that the selected metadata file belongs to a different file..")
         self.popup(_("Book mismatch!"), text, icon=QMessageBox.Critical)
 
     @staticmethod
-    def same_cre_version(data):
+    def same_cre_version(data1, data2):
         """ Check if the supplied metadata have the same CRE version
 
-        :type data: list[dict]
-        :param data: The data to get checked
+        :type data1: dict
+        :param data1: The data of the first book
+        :type data2: dict
+        :param data2: The data of the second book
         """
         try:
-            if data[0]["cre_dom_version"] == data[1]["cre_dom_version"]:
+            if data1["cre_dom_version"] == data2["cre_dom_version"]:
                 return True
         except KeyError:  # no "cre_dom_version" key (older metadata)
             pass
@@ -1698,20 +2201,32 @@ class Base(QMainWindow, Ui_Base):
                  "and does not change that often.")
         self.popup(_("Version mismatch!"), text, icon=QMessageBox.Critical)
 
-    def check4archive_merge(self):
+    def check4archive_merge(self, book_data):
         """ Check if the selected books' highlights can be merged
             with its archived version
+
+        :type book_data: dict
+        :param book_data: The data of the book
         """
-        idx = self.sel_idx
-        data1 = self.file_table.item(idx.row(), idx.column()).data(Qt.UserRole)
-        book_path = self.file_table.item(idx.row(), TYPE).data(Qt.UserRole)[0]
+        data1 = book_data["data"]
+        book_path = book_data["path"]
 
         for index, book in enumerate(self.books):
             data2 = book["data"]
             if self.same_book(data1, data2, book_path):
-                if self.same_cre_version([data1, data2]):
+                if self.same_cre_version(data1, data2):
                     return index
         return False
+
+    def wrong_meta_format(self):
+        """ Shows an info dialog if the format of the two metadata are different
+        """
+        text = _("Can not merge these highlights, because their metadata format are "
+                 "different!\nThere was a re-write of the highlight/bookmark "
+                 "structure of KOReader that make them incompatible.\n\nRe-open the "
+                 "books with a newer version of KOReader to update them and then merge "
+                 "them using KOHighlights.")
+        self.popup(_("Metadata format mismatch!"), text, icon=QMessageBox.Critical)
 
     def merge_menu(self):
         """ Creates the `Merge/Sync` button menu
@@ -1751,18 +2266,8 @@ class Base(QMainWindow, Ui_Base):
         :type filename: str|unicode
         :param filename: The path to the metadata file to merge the book with
         """
-        if self.high_merge_warning:
-            text = _("Merging highlights is experimental so, always do backups ;o)\n"
-                     "Because of the different page formats and sizes, some page "
-                     "numbers in {} might be inaccurate. "
-                     "Do you want to continue?").format(APP_NAME)
-            popup = self.popup(_("Warning!"), text, buttons=2,
-                               button_text=(_("Yes"), _("No")),
-                               check_text=DO_NOT_SHOW)
-            self.high_merge_warning = not popup.checked
-            if popup.buttonRole(popup.clickedButton()) == QMessageBox.RejectRole:
-                return
-
+        if self.merge_warning_stop():
+            return
         popup = self.popup(_("Warning!"),
                            _("The highlights of the selected entries will be merged.\n"
                              "This can not be undone! Continue?"), buttons=2,
@@ -1770,6 +2275,21 @@ class Base(QMainWindow, Ui_Base):
                            check_text=_("Sync the reading position too"))
         if popup.buttonRole(popup.clickedButton()) == QMessageBox.AcceptRole:
             self.merge_highlights(popup.checked, True, to_archived, filename)
+
+    def merge_warning_stop(self):
+        """ Stop if the merge warning is answered "No"
+        """
+        if self.high_merge_warning:
+            text = _(f"Merging highlights is experimental so, always do backups ;o)\n"
+                     f"Because of the different page formats and sizes, some page "
+                     f"numbers in {APP_NAME} might be inaccurate. "
+                     f"Do you want to continue?")
+            popup = self.popup(_("Warning!"), text, buttons=2,
+                               button_text=(_("Yes"), _("No")),
+                               check_text=DO_NOT_SHOW)
+            self.high_merge_warning = not popup.checked
+            if popup.buttonRole(popup.clickedButton()) == QMessageBox.RejectRole:
+                return True
 
     def merge_highlights(self, sync, merge, to_archived=False, filename=""):
         """ Merge highlights from the same book in two different devices
@@ -1783,160 +2303,314 @@ class Base(QMainWindow, Ui_Base):
         :type filename: str|unicode
         :param filename: The path to the metadata file to merge the book with
         """
+        item = self.file_table.item
         if to_archived:  # Merge/Sync a book with archive
             idx1, idx2 = self.sel_idx, None
-            data1 = self.file_table.item(idx1.row(), TITLE).data(Qt.UserRole)
-            data2 = self.books[self.check4archive_merge()]["data"]
-            path1, path2 = self.file_table.item(idx1.row(), PATH).text(), None
+            data1 = item(idx1.row(), TITLE).data(Qt.UserRole)
+            path1, path2 = item(idx1.row(), PATH).text(), None
+            book_data = {"data": data1, "path": path1}
+            db_idx = self.check4archive_merge(book_data)
+            if not db_idx:
+                return
+            data2 = self.books[db_idx]["data"]
         elif filename:  # Merge/Sync a book with a metadata file
             idx1, idx2 = self.sel_idx, None
-            data1 = self.file_table.item(idx1.row(), TITLE).data(Qt.UserRole)
-            book1 = self.file_table.item(idx1.row(), TYPE).data(Qt.UserRole)[0]
+            data1 = item(idx1.row(), TITLE).data(Qt.UserRole)
+            book1 = item(idx1.row(), TYPE).data(Qt.UserRole)[0]
             data2 = decode_data(filename)
             name2 = splitext(dirname(filename))[0]
             book2 = name2 + splitext(book1)[1]
             if not self.same_book(data1, data2, book1, book2):
                 self.wrong_book()
                 return
-            if not self.same_cre_version([data1, data2]):
+            if not self.same_cre_version(data1, data2):
                 self.wrong_cre_version()
                 return
-            path1, path2 = self.file_table.item(idx1.row(), PATH).text(), None
+            path1, path2 = item(idx1.row(), PATH).text(), None
         else:  # Merge/Sync two different book files
             idx1, idx2 = self.sel_indexes
-            data1, data2 = [self.file_table.item(idx.row(), TITLE).data(Qt.UserRole)
+            data1, data2 = [item(idx.row(), TITLE).data(Qt.UserRole)
                             for idx in [idx1, idx2]]
-            path1, path2 = [self.file_table.item(idx.row(), PATH).text()
+            path1, path2 = [item(idx.row(), PATH).text()
                             for idx in [idx1, idx2]]
 
         if merge:  # merge highlights
-            args = (data1["highlight"], data2["highlight"],
-                    data1["bookmarks"], data2["bookmarks"])
-            high1, high2, bkm1, bkm2 = self.get_unique_highlights(*args)
-            self.update_data(data1, high2, bkm2)
-            self.update_data(data2, high1, bkm1)
-            if data1["highlight"] or data2["highlight"]:  # since there are highlights
-                for index in [idx1, idx2]:                # set the green icon
-                    if index:
-                        item = self.file_table.item(idx1.row(), TITLE)
-                        item.setIcon(self.ico_label_green)
+            data1_new = data1.get("annotations") is not None
+            data2_new = data2.get("annotations") is not None
+            new_type = data1_new and data2_new
+            datas = [data1, data2]
+            if path2 and (os.stat(path1).st_mtime < os.stat(path2).st_mtime):
+                datas = [data2, data1]  # put the newer metadata first
+            items = []
+            if new_type:  # new format metadata
+                for data in datas:
+                    total = data.get("doc_pages", data.get("stats", {}).get("pages", 0))
+                    items.append([data["annotations"], total])
+                self.merge_new_highs(items)
+                if data1["annotations"]:  # update row data for books
+                    num = str(len([i for i in data1["annotations"].values()
+                                   if i.get("pos0")]))
+                    for index in [idx1, idx2]:
+                        if index:
+                            item(index.row(), TITLE).setIcon(self.ico_label_green)
+                            item(index.row(), HIGH_COUNT).setText(num)
+                            item(index.row(), HIGH_COUNT).setToolTip(num)
+            elif (data1_new and not data2_new) or (data2_new and not data1_new):
+                self.wrong_meta_format()
+                return  # different formats metadata - not supported
+            else:  # old format metadata
+                for data in datas:
+                    total = data.get("doc_pages", data.get("stats", {}).get("pages", 0))
+                    items.append([data["highlight"], data["bookmarks"], total])
+                self.merge_old_highs(items)
+                if data1["highlight"]:  # update row data for books
+                    num = str(len(data1["highlight"]))
+                    for index in [idx1, idx2]:
+                        if index:
+                            item(index.row(), TITLE).setIcon(self.ico_label_green)
+                            item(index.row(), HIGH_COUNT).setText(num)
+                            item(index.row(), HIGH_COUNT).setToolTip(num)
 
         if sync:  # sync position and percent
-            if data1["percent_finished"] > data2["percent_finished"]:
-                data2["percent_finished"] = data1["percent_finished"]
-                data2["last_xpointer"] = data1["last_xpointer"]
-            else:
-                data1["percent_finished"] = data2["percent_finished"]
-                data1["last_xpointer"] = data2["last_xpointer"]
+            to_process = [{"data": data1, "path": path1}, {"data": data2, "path": path2}]
+            percent = self.sync_pos(to_process)
+            for index in [idx1, idx2]:
+                if index:
+                    item(index.row(), PERCENT).setText(percent)
+                    item(index.row(), PERCENT).setToolTip(percent)
 
-            percent = str(int(data1["percent_finished"] * 100)) + "%"
-            self.file_table.item(idx1.row(), PERCENT).setText(percent)
-            if not to_archived and not filename:
-                self.file_table.item(idx2.row(), PERCENT).setToolTip(percent)
-
-        self.file_table.item(idx1.row(), TITLE).setData(Qt.UserRole, data1)
+        data1["annotations_externally_modified"] = True
         self.save_book_data(path1, data1)
         if to_archived:  # update the db item
             self.update_book2db(data2)
         elif filename:  # do nothing with the loaded file
             pass
         else:  # update the second item
-            self.file_table.item(idx2.row(), TITLE).setData(Qt.UserRole, data2)
+            data2["annotations_externally_modified"] = True
             self.save_book_data(path2, data2)
 
         self.reload_highlights = True
 
     @staticmethod
-    def get_unique_highlights(high1, high2, bkm1, bkm2):
-        """ Get the highlights, bookmarks from the first book
-        that do not exist in the second book and vice versa
+    def merge_new_highs(items):
+        """ Merge the highlights of multiple books [new format]
 
-        :type high1: dict
-        :param high1: The first book's highlights
-        :type high2: dict
-        :param high2: The second book's highlights
-        :type bkm1: dict
-        :param bkm1: The first book's bookmarks
-        :type bkm2: dict
-        :param bkm2: The second book's bookmarks
+        :type items: [[dict, int], ...]
+        :param items: [[annotations, total_pg], ...]
+        :param items: The list of books to be processed
         """
-        unique_high1 = defaultdict(dict)
-        for page1 in high1:
-            for page_id1 in high1[page1]:
-                text1 = high1[page1][page_id1]["text"]
-                for page2 in high2:
-                    for page_id2 in high2[page2]:
-                        if text1 == high2[page2][page_id2]["text"]:
-                            break  # highlight found in book2
-                    else:  # highlight was not found yet in book2
-                        continue  # no break in the inner loop, keep looping
-                    break  # highlight already exists in book2 (there was a break)
-                else:  # text not in book2 highlights, add to unique
-                    unique_high1[page1][page_id1] = high1[page1][page_id1]
-        unique_bkm1 = {}
-        for page1 in unique_high1:
-            for page_id1 in unique_high1[page1]:
-                text1 = unique_high1[page1][page_id1]["text"]
-                for idx in bkm1:
-                    if text1 == bkm1[idx]["notes"]:  # add highlight's bookmark to unique
-                        unique_bkm1[idx] = bkm1[idx]
-                        break
+        uni_check_hi = set()
+        uni_highs = []
+        uni_check_bkm = set()
+        uni_bkms = []
+        for book_id, info in enumerate(items):  # find all unique highlights
+            source = info[0]                    # that are not in all books
+            for target_id, target in enumerate(items):
+                if target_id == book_id:
+                    continue  # don't check self
+                target = target[0]
+                for src_hi in source.values():
+                    if src_hi.get("pos0"):  # a highlight
+                        hi_text = src_hi.get("text", "")
+                        for trg_hi in target.values():
+                            if trg_hi.get("pos0"):  # a highlight not a bookmark
+                                if hi_text == trg_hi.get("text", ""):
+                                    if src_hi["datetime"] == trg_hi["datetime"]:
+                                        break  # it's the exact same annotation
+                                    src_comm = src_hi.get("note")  # try to get the
+                                    trg_comm = trg_hi.get("note")  # newest change
+                                    if src_hi["datetime"] > trg_hi["datetime"]:
+                                        if src_comm:  # this is the newer comment
+                                            trg_hi["note"] = src_comm
+                                        elif trg_comm:  # the comment was erased lately
+                                            trg_hi.pop("note", None)
+                                        trg_hi["datetime"] = src_hi["datetime"]
+                                    else:
+                                        if trg_comm:  # this is the newer comment
+                                            src_hi["note"] = trg_comm
+                                        elif src_comm:  # the comment was erased lately
+                                            src_hi.pop("note", None)
+                                        src_hi["datetime"] = trg_hi["datetime"]
+                                    break  # highlight found in target book
+                        else:  # highlight was not found in target book
+                            if src_hi["pos0"] + src_hi["pos1"] not in uni_check_hi:
+                                uni_check_hi.add(src_hi["pos0"] + src_hi["pos1"])
+                                uni_highs.append((src_hi, info[1]))
+                    else:  # a bookmark
+                        if src_hi["page"] not in uni_check_bkm:
+                            uni_check_bkm.add(src_hi["page"])
+                            uni_bkms.append((src_hi, info[1]))
 
-        unique_high2 = defaultdict(dict)
-        for page2 in high2:
-            for page_id2 in high2[page2]:
-                text2 = high2[page2][page_id2]["text"]
-                for page1 in high1:
-                    for page_id1 in high1[page1]:
-                        if text2 == high1[page1][page_id1]["text"]:
-                            break  # highlight found in book1
-                    else:  # highlight was not found yet in book1
-                        continue  # no break in the inner loop, keep looping
-                    break  # highlight already exists in book1 (there was a break)
-                else:  # text not in book1 highlights, add to unique
-                    unique_high2[page2][page_id2] = high2[page2][page_id2]
-        unique_bkm2 = {}
-        for page2 in unique_high2:
-            for page_id2 in unique_high2[page2]:
-                text2 = unique_high2[page2][page_id2]["text"]
-                for idx in bkm2:
-                    if text2 == bkm2[idx]["notes"]:  # add highlight's bookmark to unique
-                        unique_bkm2[idx] = bkm2[idx]
-                        break
-
-        return unique_high1, unique_high2, unique_bkm1, unique_bkm2
+        for info in items:  # update the annotations with the unique found ones
+            annots = deepcopy([i for i in info[0].values()])
+            total = info[1]
+            hi_pos_check = {i["pos0"] + i["pos1"] for i in annots if i.get("pos0")}
+            bkm_pos_check = {i["page"] for i in annots if i.get("page")}
+            for hi_info in uni_highs:
+                hi, hi_total = hi_info
+                if not hi["pos0"] + hi["pos1"] in hi_pos_check:  # new highlight
+                    new_hi = deepcopy(hi)
+                    if hi_total != total:  # re-calculate the page numbers
+                        percent = int(new_hi["pageno"]) / hi_total
+                        new_hi["pageno"] = str(int(round(percent * total)))
+                    annots.append(new_hi)
+            for bkm_info in uni_bkms:
+                bkm, bkm_total = bkm_info
+                if not bkm["page"] in bkm_pos_check:  # new bookmark
+                    new_bkm = deepcopy(bkm)
+                    if bkm_total != total:  # re-calculate the page numbers
+                        percent = int(new_bkm["pageno"]) / bkm_total
+                        new_bkm["pageno"] = str(int(round(percent * total)))
+                    annots.append(new_bkm)
+            info[0].clear()  # repopulate the annotations
+            annots_upd = {}
+            for i, hi in enumerate(sorted(annots, key=lambda x: x["pageno"])):
+                annots_upd[i + 1] = hi
+            info[0].update(annots_upd)
 
     @staticmethod
-    def update_data(data, extra_highlights, extra_bookmarks):
-        """ Adds the new highlights to the book's data
+    def merge_old_highs(items):
+        """ Merge the highlights of multiple books
 
-        :type data: dict
-        :param data: The book's data
-        :type extra_highlights: dict
-        :param extra_highlights: The other book's highlights
-        :type extra_bookmarks: dict
-        :param extra_bookmarks: The other book's bookmarks
+        :type items: [[dict, dict, int], ...]
+        :param items: [[highlights, bookmarks, total_pg], ...]
+        :param items: The list of books to be processed
         """
-        highlights = data["highlight"]
-        for page in extra_highlights:
-            if page in highlights:  # change page number if already exists
-                new_page = page
-                while new_page in highlights:
-                    new_page += 1
-                highlights[new_page] = extra_highlights[page]
-            else:
-                highlights[page] = extra_highlights[page]
+        uni_check = set()
+        all_uni_highs = {}
+        all_uni_bkms = {}
+        # Collect the highlights that are missing even from one book
+        for book_id, s_info in enumerate(items):
+            source = s_info[0]
+            uni_highs = defaultdict(dict)
+            uni_bkms = defaultdict(dict)
+            for target_id, t_info in enumerate(items):
+                if target_id == book_id:
+                    continue  # don't check self
+                target = t_info[0]
+                for src_pg in source:
+                    for src_pg_id in source[src_pg]:
+                        high = source[src_pg][src_pg_id]
+                        src_text = high["text"]
+                        for target_pg in target:
+                            for target_pg_id in target[target_pg]:
+                                targ = target[target_pg][target_pg_id]
+                                if src_text == targ["text"]:  # same annotation
+                                    if high["datetime"] == targ["datetime"]:
+                                        break
+                                    src_comm = ""  # if one comment is newer then the
+                                    trg_comm = ""  # other, we keep the newer for both
+                                    src_bkm = {}
+                                    trg_bkm = {}
+                                    for bk_idx in s_info[1]:
+                                        src_bkm = s_info[1][bk_idx]
+                                        if src_bkm["notes"] == src_text:
+                                            src_comm = src_bkm.get("text", "")
+                                            break
+                                    for bk_idx in t_info[1]:
+                                        trg_bkm = t_info[1][bk_idx]
+                                        if trg_bkm["notes"] == targ["text"]:
+                                            trg_comm = trg_bkm.get("text", "")
+                                            break
+                                    if src_bkm["datetime"] > trg_bkm["datetime"]:
+                                        if src_comm:  # this is the newer comment
+                                            trg_bkm["text"] = src_comm
+                                        elif trg_comm:  # the comment was erased lately
+                                            trg_bkm.pop("text", None)
+                                        trg_bkm["datetime"] = src_bkm["datetime"]
+                                        targ["datetime"] = high["datetime"]
+                                    else:
+                                        if trg_comm:  # this is the newer comment
+                                            src_bkm["text"] = trg_comm
+                                        elif src_comm:  # the comment was erased lately
+                                            src_bkm.pop("text", None)
+                                        src_bkm["datetime"] = trg_bkm["datetime"]
+                                        high["datetime"] = targ["datetime"]
+                                    break  # highlight found in target book
+                            else:  # highlight was not found yet in target book
+                                continue  # no break in the inner loop, keep checking
+                            break  # highlight exists in target (there was a break)
+                        else:  # text not in the target book highlights, add to unique
+                            # but not if already added
+                            if high["pos0"] + high["pos1"] not in uni_check:
+                                uni_check.add(high["pos0"] + high["pos1"])
+                                uni_highs[src_pg][src_pg_id] = high
+            for pg in uni_highs:
+                for pg_id in uni_highs[pg]:
+                    text = uni_highs[pg][pg_id]["text"]
+                    for bkm_idx in s_info[1]:  # get the associated bookmarks
+                        if text == s_info[1][bkm_idx]["notes"]:
+                            uni_bkms[pg][pg_id] = s_info[1][bkm_idx]
+                            break
+            if uni_highs:
+                all_uni_highs[book_id] = dict(uni_highs)
+                all_uni_bkms[book_id] = dict(uni_bkms)
 
-        bookmarks = data["bookmarks"]
-        original = bookmarks.copy()
-        bookmarks.clear()
-        counter = 1
-        for key in original.keys():
-            bookmarks[counter] = original[key]
-            counter += 1
-        for key in extra_bookmarks.keys():
-            bookmarks[counter] = extra_bookmarks[key]
-            counter += 1
+        # Merge the highlights that are not on all books
+        for book_id in all_uni_highs:
+            uni_highs = all_uni_highs[book_id]
+            uni_bkms = all_uni_bkms[book_id]
+            source_total = items[book_id][2]
+            for item_id, target_item in enumerate(items):
+                target_total = target_item[2]
+                recalculate = source_total != target_total
+                all_highs = [target_item[0][pg][pg_id]
+                             for pg in target_item[0] for pg_id in target_item[0][pg]]
+                all_bkms = [i for i in target_item[1].values()]
+                renumber = False  # no change made to the highlights/bookmarks
+                for pg in uni_highs:
+                    new_pg = pg
+                    for pg_id in uni_highs[pg]:
+                        if uni_highs[pg][pg_id] not in all_highs:  # add this highlight
+                            renumber = True  # mark for renumbering the bookmarks
+                            if recalculate:  # diff total pages, recalculate page number
+                                percent = int(pg) / target_total
+                                new_pg = int(round(percent * source_total))
+
+                            if new_pg in target_item[0]:  # sort same page highlights
+                                contents = target_item[0][new_pg]
+                                contents = [contents[i] for i in contents]
+                                extras = uni_highs[pg]
+                                extras = [extras[i] for i in extras
+                                          if extras[i] not in contents]
+                                highs = sorted(contents + extras, key=lambda x: x["pos0"])
+                                target_item[0][new_pg] = {i + 1: h
+                                                          for i, h in enumerate(highs)}
+                            else:  # single highlight in page, just add it
+                                target_item[0][new_pg] = uni_highs[pg]
+                            all_bkms.append(uni_bkms[pg][pg_id])
+                if renumber:  # bookmarks added, so we must merge all and renumber them
+                    bkm_list = target_item[1].copy()
+                    bkm_list = [bkm_list[i] for i in bkm_list]
+                    bkm_check = {i["pos0"] + i["pos1"] for i in bkm_list}
+                    for bkm in all_bkms:
+                        if bkm["pos0"] + bkm["pos1"] not in bkm_check:
+                            bkm_list.append(bkm)
+                    bkm_list = sorted(bkm_list, key=lambda x: x["page"])
+                    target_item[1].clear()
+                    offset = 1
+                    for bkm in bkm_list:
+                        target_item[1][offset] = bkm
+                        offset += 1
+
+    @staticmethod
+    def sync_pos(to_process):
+        """ Sync the reading position of multiple books
+
+        :type to_process: list
+        :param to_process: The list of books to be processed
+        """
+        percents = [i["data"]["percent_finished"] for i in to_process
+                    if i and i.get("data", {}).get("percent_finished", 0) > 0]
+        max_idx = percents.index(max(percents))
+        max_percent = percents[max_idx]
+        max_pointer = to_process[max_idx]["data"]["last_xpointer"]
+
+        for item in to_process:
+            item["data"]["percent_finished"] = max_percent
+            item["data"]["last_xpointer"] = max_pointer
+
+        return str(int(max_percent * 100)) + "%"
 
     def use_meta_files(self):
         """ Selects a metadata files to sync/merge
@@ -2067,26 +2741,37 @@ class Base(QMainWindow, Ui_Base):
 
     # ___ ___________________ SAVING STUFF __________________________
 
-    def get_export_menu(self):
+    def create_export_menu(self):
         """ Creates the `Export Files` button menu
         """
-        menu = QMenu(self)
-        for idx, item in enumerate([(_("To individual text files"), MANY_TEXT),
-                                    (_("Combined to one text file"), ONE_TEXT),
-                                    (_("To individual html files"), MANY_HTML),
-                                    (_("Combined to one html file"), ONE_HTML),
-                                    (_("To individual csv files"), MANY_CSV),
-                                    (_("Combined to one csv file"), ONE_CSV),
-                                    (_("To individual markdown files"), MANY_MD),
-                                    (_("Combined to one markdown file"), ONE_MD)]):
-            action = QAction(item[0], menu)
-            action.triggered.connect(self.export_actions)
-            action.setData(item[1])
-            action.setIcon(self.ico_file_save)
-            if idx and (idx % 2 == 0):
-                menu.addSeparator()
-            menu.addAction(action)
-        return menu
+        self.export_menu.clear()
+        single = len(self.sel_indexes) == 1
+        if single:
+            for idx, item in enumerate([(_("To text file"), MANY_TEXT),
+                                        (_("To html file"), MANY_HTML),
+                                        (_("To csv file"), MANY_CSV),
+                                        (_("To md file"), MANY_MD)]):
+                action = QAction(item[0], self.export_menu)
+                action.triggered.connect(self.export_actions)
+                action.setData(item[1])
+                action.setIcon(self.ico_file_save)
+                self.export_menu.addAction(action)
+        else:
+            for idx, item in enumerate([(_("To individual text files"), MANY_TEXT),
+                                        (_("Combined to one text file"), ONE_TEXT),
+                                        (_("To individual html files"), MANY_HTML),
+                                        (_("Combined to one html file"), ONE_HTML),
+                                        (_("To individual csv files"), MANY_CSV),
+                                        (_("Combined to one csv file"), ONE_CSV),
+                                        (_("To individual md files"), MANY_MD),
+                                        (_("Combined to one md file"), ONE_MD)]):
+                action = QAction(item[0], self.export_menu)
+                action.triggered.connect(self.export_actions)
+                action.setData(item[1])
+                action.setIcon(self.ico_file_save)
+                if idx and (idx % 2 == 0):
+                    self.export_menu.addSeparator()
+                self.export_menu.addAction(action)
 
     # noinspection PyCallByClass
     def on_export(self):
@@ -2095,13 +2780,12 @@ class Base(QMainWindow, Ui_Base):
         if self.current_view == BOOKS_VIEW:
             if not self.sel_indexes:
                 return
+            self.toolbar.export_btn.showMenu()
         elif self.current_view == HIGHLIGHTS_VIEW:  # Save from high_table,
             if self.save_sel_highlights():          # combine to one file
                 self.popup(_("Finished!"),
                            _("The Highlights were exported successfully!"),
                            icon=QMessageBox.Information)
-            return
-        self.toolbar.export_btn.showMenu()
 
     def export_actions(self):
         """ An `Export as...` menu item is clicked
@@ -2146,9 +2830,8 @@ class Base(QMainWindow, Ui_Base):
                 ext = "md"
             else:
                 return
-            filename = QFileDialog.getSaveFileName(self,
-                                                   _("Export to {} file").format(ext),
-                                                   self.last_dir, "*.{}".format(ext))[0]
+            filename = QFileDialog.getSaveFileName(self, _(f"Export to {ext} file"),
+                                                   self.last_dir, f"*.{ext}")[0]
             if not filename:
                 return
             self.last_dir = dirname(filename)
@@ -2156,9 +2839,9 @@ class Base(QMainWindow, Ui_Base):
 
         self.status.animation(False)
         all_files = len(self.sel_indexes)
-        self.popup(_("Finished!"), _("{} texts were exported from the {} processed.\n"
-                                     "{} files with no highlights.")
-                   .format(saved, all_files, all_files - saved),
+        self.popup(_("Finished!"),
+                   _(f"{saved} texts were exported from the {all_files} processed.\n"
+                     f"{all_files - saved} files with no highlights."),
                    icon=QMessageBox.Information)
 
     def save_multi_files(self, dir_path, format_, line_break, space):
@@ -2185,8 +2868,7 @@ class Base(QMainWindow, Ui_Base):
                           format_, line_break, space, sort_by)
                 saved += 1
             except IOError as err:  # any problem when writing (like long filename, etc.)
-                self.popup(_("Warning!"),
-                           _("Could not save the file to disk!\n{}").format(err))
+                self.popup(_("Warning!"), _(f"Could not save the file to disk!\n{err}"))
         return saved
 
     def save_merged_file(self, filename, format_, line_break, space):
@@ -2222,21 +2904,31 @@ class Base(QMainWindow, Ui_Base):
             text_file.write(text)
         return saved
 
-    def get_item_data(self, idx, format_):
+    def get_item_data(self, index, format_):
         """ Get the highlight data for an item
 
-        :type idx: QModelIndex
-        :param idx: The item's index
+        :type index: QModelIndex
+        :param index: The item's index
         :type format_: int
         :param format_: The output format idx
         """
-        row = idx.row()
+        row = index.row()
         data = self.file_table.item(row, 0).data(Qt.UserRole)
 
         highlights = []
-        for page in data["highlight"]:
-            for page_id in data["highlight"][page]:
-                highlights.append(self.get_formatted_high(data, page, page_id, format_))
+        annotations = data.get("annotations")
+        if annotations:  # new format metadata
+            for idx in annotations:
+                highlight = self.get_new_highlight_info(data, idx)
+                if highlight:
+                    formatted_high = self.get_formatted_high(highlight, format_)
+                    highlights.append(formatted_high)
+        else:  # old format metadata
+            for page in data["highlight"]:
+                for page_id in data["highlight"][page]:
+                    highlight = self.get_old_highlight_info(data, page, page_id)
+                    if highlight:
+                        highlights.append(self.get_formatted_high(highlight, format_))
         title = self.file_table.item(row, TITLE).data(0)
         authors = self.file_table.item(row, AUTHOR).data(0)
         if authors in [OLD_TYPE, NO_AUTHOR]:
@@ -2244,19 +2936,14 @@ class Base(QMainWindow, Ui_Base):
         return authors, title, highlights
 
     # noinspection PyTypeChecker
-    def get_formatted_high(self, data, page, page_id, format_):
+    def get_formatted_high(self, highlight, format_):
         """ Create the highlight's texts
 
-        :type data: dict
-        :param data: The highlight's data
-        :type page: int
-        :param page The page where the highlight starts
-        :type page_id: int
-        :param page_id The idx of this page's highlight
+        :type highlight: dict
+        :param highlight: The highlight's data
         :type format_: int
         :param format_ The output format idx
         """
-        highlight = self.get_highlight_info(data, page, page_id)
         linesep = "<br/>" if format_ in [ONE_HTML, MANY_HTML] else os.linesep
         comment = highlight["comment"].replace("\n", linesep)
         chapter = (highlight["chapter"].replace("\n", linesep)
@@ -2267,12 +2954,13 @@ class Base(QMainWindow, Ui_Base):
         date = date if self.date_format == DATE_FORMAT else self.get_date_text(date)
         line_break2 = (os.linesep if self.status.act_text.isChecked() and comment else "")
         if format_ in [ONE_CSV, MANY_CSV]:
-            page_text = str(page) if self.status.act_page.isChecked() else ""
+            page_text = highlight["page"] if self.status.act_page.isChecked() else ""
             date_text = date if self.status.act_date.isChecked() else ""
             high_comment = (comment if self.status.act_comment.isChecked()
                             and comment else "")
         else:
-            page_text = "Page " + str(page) if self.status.act_page.isChecked() else ""
+            page_txt = "Page " + highlight["page"]
+            page_text = page_txt if self.status.act_page.isChecked() else ""
             date_text = "[" + date + "]" if self.status.act_date.isChecked() else ""
             high_comment = (line_break2 + "● " + comment
                             if self.status.act_comment.isChecked() and comment else "")
@@ -2293,7 +2981,7 @@ class Base(QMainWindow, Ui_Base):
             text_out = extra.startswith("text")
             html_out = extra.startswith("html")
             csv_out = extra.startswith("csv")
-            md_out = extra.startswith("mark")
+            md_out = extra.startswith("md")
             if text_out:
                 ext = ".txt"
                 text = ""
@@ -2327,13 +3015,12 @@ class Base(QMainWindow, Ui_Base):
                 comment = comment.replace("\n", "  \n")
 
             if text_out:
-                txt = ("{} [{}]\nPage {} [{}]\n[{}]\n{}{}"
-                       .format(data["title"], data["authors"], data["page"],
-                               data["date"], data["chapter"], data["text"], comment))
+                txt = (f"{data['title']} [{data['authors']}]\nPage {data['page']} "
+                       f"[{data['date']}]\n[{data['chapter']}]\n{data['text']}{comment}")
                 text += txt + "\n\n"
             elif html_out:
-                left = "{} [{}]".format(data["title"], data["authors"])
-                right = "Page {} [{}]".format(data["page"], data["date"])
+                left = f"{data['title']} [{data['authors']}]"
+                right = f"Page {data['page']} [{data['date']}]"
                 text += HIGH_BLOCK % {"page": left, "date": right, "comment": comment,
                                       "highlight": data["text"],
                                       "chapter": data["chapter"]}
@@ -2344,10 +3031,10 @@ class Base(QMainWindow, Ui_Base):
                 txt = data["text"].replace("\n", "  \n")
                 chapter = data["chapter"]
                 if chapter:
-                    chapter = "***{0}***\n\n".format(chapter).replace("\n", "  \n")
-                text += ("\n---\n### {} [{}]  \n*Page {} [{}]*  \n{}{}{}\n"
-                         .format(data["title"], data["authors"], data["page"],
-                                 data["date"], chapter, txt, comment))
+                    chapter = f"***{chapter}***\n\n".replace("\n", "  \n")
+                text += (f'\n---\n### {data["title"]} [{data["authors"]}]  \n'
+                         f'*Page {data["page"]} [{data["date"]}]*  \n'
+                         f'{chapter}{txt}{comment}\n')
             else:
                 print("Unknown format export!")
                 return
@@ -2389,27 +3076,27 @@ class Base(QMainWindow, Ui_Base):
             self.skip_version = app_config.get("skip_version", None)
             self.date_vacuumed = app_config.get("date_vacuumed", self.date_vacuumed)
             self.date_format = app_config.get("date_format", DATE_FORMAT)
+            self.theme = app_config.get("theme", THEME_NONE_OLD)
+            self.status.theme_box.setCurrentIndex(self.theme)
             self.archive_warning = app_config.get("archive_warning", True)
             self.exit_msg = app_config.get("exit_msg", True)
             self.high_merge_warning = app_config.get("high_merge_warning", True)
             self.edit_lua_file_warning = app_config.get("edit_lua_file_warning", True)
 
-            checked = app_config.get("show_items", (True, True, True, True, True))
-            if len(checked) != 5:  # settings from older versions
-                checked = (True, True, True, True, True)
-            self.status.act_page.setChecked(checked[0])
-            self.status.act_date.setChecked(checked[1])
-            self.status.act_chapter.setChecked(checked[2])
-            self.status.act_text.setChecked(checked[3])
-            self.status.act_comment.setChecked(checked[4])
+            self.show_items = app_config.get("show_items", [True, True, True, True, True])
+            if len(self.show_items) != 5:  # settings from older versions
+                self.show_items = [True, True, True, True, True]
             self.high_by_page = app_config.get("high_by_page", False)
         else:
+            self.status.theme_box.setCurrentIndex(self.theme)
             self.resize(800, 600)
         if self.highlight_width:
             self.header_high_view.resizeSection(HIGHLIGHT_H, self.highlight_width)
         if self.comment_width:
             self.header_high_view.resizeSection(COMMENT_H, self.comment_width)
         self.toolbar.set_btn_size(self.toolbar_size)
+        for idx, act in enumerate(self.status.show_actions):
+            act.setChecked(self.show_items[idx])
 
     def settings_save(self):
         """ Saves the jason based configuration settings
@@ -2427,22 +3114,16 @@ class Base(QMainWindow, Ui_Base):
                   "current_view": self.current_view, "db_mode": self.db_mode,
                   "high_by_page": self.high_by_page, "date_vacuumed": self.date_vacuumed,
                   "show_info": self.fold_btn.isChecked(), "date_format": self.date_format,
-                  "show_items": (self.status.act_page.isChecked(),
-                                 self.status.act_date.isChecked(),
-                                 self.status.act_chapter.isChecked(),
-                                 self.status.act_text.isChecked(),
-                                 self.status.act_comment.isChecked()),
+                  "theme": self.theme, "show_items": self.show_items,
                   "skip_version": self.skip_version, "opened_times": self.opened_times,
                   "edit_lua_file_warning": self.edit_lua_file_warning,
                   "high_merge_warning": self.high_merge_warning,
                   }
         try:
-            if not PYTHON2:
-                # noinspection PyUnresolvedReferences
-                for k, v in config.items():
-                    if type(v) == bytes:
-                        # noinspection PyArgumentList
-                        config[k] = str(v, encoding="latin")
+            for k, v in config.items():
+                if type(v) == bytes:
+                    # noinspection PyArgumentList
+                    config[k] = str(v, encoding="latin")
             config_json = json.dumps(config, sort_keys=True, indent=4)
             with gzip.GzipFile(join(SETTINGS_DIR, str("settings.json.gz")),
                                "w+") as gz_file:
@@ -2473,17 +3154,9 @@ class Base(QMainWindow, Ui_Base):
             value = app_config.get(key)
             if not value:
                 return
-            if PYTHON2:
-                try:
-                    # noinspection PyTypeChecker
-                    value = pickle.loads(str(value))
-                except UnicodeEncodeError:  # settings from Python 3.x
-                    return
-            else:
-                # noinspection PyUnresolvedReferences
-                value = value.encode("latin1")
-                # noinspection PyTypeChecker,PyArgumentList
-                value = pickle.loads(value, encoding="bytes")
+            value = value.encode("latin1")
+            # noinspection PyTypeChecker,PyArgumentList
+            value = pickle.loads(value, encoding="bytes")
         except pickle.UnpicklingError as err:
             print("While unPickling:", err)
             return
@@ -2522,7 +3195,7 @@ class Base(QMainWindow, Ui_Base):
         popup.setWindowIcon(self.ico_app)
         if type(icon) == QMessageBox.Icon:
             popup.setIcon(icon)
-        elif type(icon) == unicode:
+        elif type(icon) == str:
             popup.setIconPixmap(QPixmap(icon))
         elif type(icon) == QPixmap:
             popup.setIconPixmap(icon)
@@ -2550,6 +3223,9 @@ class Base(QMainWindow, Ui_Base):
         popup.exec_()
         return popup
 
+    def error(self, error_txt):
+        self.popup(_("Error!"), error_txt, icon=QMessageBox.Critical)
+
     def passed_files(self):
         """ Command line parameters that are passed to the program.
         """
@@ -2573,8 +3249,7 @@ class Base(QMainWindow, Ui_Base):
                 opener = "open" if sys.platform == "darwin" else "xdg-open"
                 subprocess.call([opener, path])
         except OSError:
-            self.popup(_("Error opening target!"),
-                       _('"{}" does not exists!').format(path))
+            self.popup(_("Error opening target!"), _(f'"{path}" does not exists!'))
 
     def copy_text_2clip(self, text):
         """ Copy a text to clipboard
@@ -2609,9 +3284,8 @@ class Base(QMainWindow, Ui_Base):
                 data["stats"]["md5"] = md5
 
             if old_md5:
-                text = _("The MD5 was originally\n{}\nA recalculation produces\n{}\n"
-                         "The MD5 was replaced and saved!").format(old_md5, md5)
-                self.file_table.item(row, TITLE).setData(Qt.UserRole, data)
+                text = _(f"The MD5 was originally\n{old_md5}\nA recalculation produces\n"
+                         f"{md5}\nThe MD5 was replaced and saved!")
                 self.save_book_data(path, data)
             else:
                 text = _("Metadata file has no MD5 information!")
@@ -2659,10 +3333,10 @@ class Base(QMainWindow, Ui_Base):
 
         self.opened_times += 1
         if self.opened_times == 20:
-            text = _("Since you are using {} for some time now, perhaps you find it "
-                     "useful enough to consider a donation.\nWould you like to visit "
-                     "the PayPal donation page?\n\nThis is a one-time message. "
-                     "It will never appear again!").format(APP_NAME)
+            text = _(f"Since you are using {APP_NAME} for some time now, perhaps you find"
+                     f" it useful enough to consider a donation.\nWould you like to visit"
+                     f" the PayPal donation page?\n\nThis is a one-time message. It will "
+                     f"never appear again!")
             popup = self.popup(_("A reminder..."), text,
                                icon=":/stuff/paypal76.png", buttons=3)
 
@@ -2684,9 +3358,8 @@ class Base(QMainWindow, Ui_Base):
         skip_version = version_parse(self.skip_version)
         if version_new > current_version and version_new != skip_version:
             popup = self.popup(_("Newer version exists!"),
-                               _("There is a newer version (v.{}) online.\n"
-                                 "Open the site to download it now?")
-                               .format(version_new),
+                               _(f"There is a newer version (v.{version_new}) online.\n"
+                                 f"Open the site to download it now?"),
                                icon=QMessageBox.Information, buttons=2,
                                check_text=_("Don\"t alert me for this version again"))
             if popup.checked:
@@ -2760,10 +3433,10 @@ class KOHighlights(QApplication):
             del argv[1]
         sys.argv = argv
         self.parser = argparse.ArgumentParser(prog=APP_NAME,
-                                              description=_("{} v{} - A KOReader's "
-                                                            "highlights converter")
-                                              .format(APP_NAME, __version__),
-                                              epilog=_("Thanks for using %s!") % APP_NAME)
+                                              description=_(f"{APP_NAME} v{__version__} -"
+                                                            f" A KOReader's highlights "
+                                                            f"converter"),
+                                              epilog=_(f"Thanks for using {APP_NAME}!"))
         self.base = Base()
         if compiled:  # the app is compiled
             if not on_windows:  # no cli in windows
@@ -2859,7 +3532,7 @@ class KOHighlights(QApplication):
         """ Parse the command line parameters that are passed to the program.
         """
         self.parser.add_argument("-v", "--version", action="version",
-                                 version="%(prog)s v{}".format(__version__))
+                                 version=f"%(prog)s v{__version__}")
 
         self.parser.add_argument("paths", nargs="*",
                                  help="The paths to input files or folder")
@@ -2902,9 +3575,15 @@ class KOHighlights(QApplication):
                                  help="The filename of the file (in merge mode) or "
                                  "the directory for saving the highlight files")
 
+        self.parser.add_argument("-p", "--portable", action="store_true", default=False,
+                                 help="Just run the program in portable mode "
+                                      "(Windows only)")
+
         # args, paths = self.parser.parse_known_args()
         args = self.parser.parse_args()
-        if args.use_cli:
+        if args.portable:
+            print("Running in portable mode...")
+        elif args.use_cli:
             self.cli_save_highlights(args)
             sys.exit(0)  # quit the app if cli execution
 
@@ -2933,15 +3612,14 @@ class KOHighlights(QApplication):
             if isdir(path):
                 ext = ("an .html" if args.html else "a .csv" if args.csv
                        else "an .md" if args.markdown else "a .txt")
-                self.parser.error("The output path (-o/--output) must be {} filename "
-                                  "not a directory!".format(ext))
+                self.parser.error(f"The output path (-o/--output) must be {ext} filename "
+                                  f"not a directory!")
                 return
             saved = self.cli_save_merged_file(args, files, line_break, space)
 
         all_files = len(files)
-        sys.stdout.write(_("\n{} files were exported from the {} processed.\n"
-                           "{} files with no highlights.\n").format(saved, all_files,
-                                                                    all_files - saved))
+        sys.stdout.write(_(f"\n{saved} files were exported from the {all_files} processed"
+                           f".\n{all_files - saved} files with no highlights.\n"))
 
     def cli_save_multi_files(self, args, files, line_break, space):
         """ Save each selected book's highlights to a different file
@@ -2964,7 +3642,7 @@ class KOHighlights(QApplication):
             format_ = MANY_MD
         else:
             format_ = MANY_TEXT
-        sort_by = self.cli_sort
+        sort_by = partial(self.cli_sort, args)
         path = abspath(args.output)
         for file_ in files:
             authors, title, highlights = self.cli_get_item_data(file_, args)
@@ -2973,8 +3651,9 @@ class KOHighlights(QApplication):
             try:
                 save_file(title, authors, highlights, path,
                           format_, line_break, space, sort_by)
+                saved += 1
             except IOError as err:  # any problem when writing (like long filename, etc.)
-                sys.stdout.write(str("Could not save the file to disk!\n{}").format(err))
+                sys.stdout.write(str(f"Could not save the file to disk!\n{err}"))
         return saved
 
     def cli_save_merged_file(self, args, files, line_break, space):
@@ -3024,7 +3703,7 @@ class KOHighlights(QApplication):
             path = name + new_ext
         with open(path, "w+", encoding=encoding, newline="") as text_file:
             text_file.write(text)
-            sys.stdout.write(str("Created {}\n\n").format(path))
+            sys.stdout.write(f"Created {path}\n\n")
         return saved
 
     def cli_get_item_data(self, file_, args):
@@ -3037,13 +3716,25 @@ class KOHighlights(QApplication):
         """
         data = decode_data(file_)
         highlights = []
-        for page in data["highlight"]:
-            for page_id in data["highlight"][page]:
-                highlights.append(self.cli_get_formatted_high(data, page, page_id, args))
+
+        annotations = data.get("annotations")
+        if annotations:  # new format metadata
+            for idx in annotations:
+                highlight = self.base.get_new_highlight_info(data, idx)
+                if highlight:
+                    formatted_high = self.cli_get_formatted_high(highlight, args)
+                    highlights.append(formatted_high)
+        else:  # old format metadata
+            for page in data["highlight"]:
+                for page_id in data["highlight"][page]:
+                    highlight = self.base.get_old_highlight_info(data, page, page_id)
+                    if highlight:
+                        highlights.append(self.cli_get_formatted_high(highlight, args))
         authors = ""
+        stats = "doc_props" if "doc_props" in data else "stats" if "stats" in data else ""
         try:
-            title = data["stats"]["title"]
-            authors = data["stats"]["authors"]
+            title = data[stats]["title"]
+            authors = data[stats]["authors"]
         except KeyError:  # older type file
             title = splitext(basename(file_))[0]
             try:
@@ -3059,20 +3750,15 @@ class KOHighlights(QApplication):
                 title = NO_TITLE
         return authors, title, highlights
 
-    # noinspection PyTypeChecker
-    def cli_get_formatted_high(self, data, page, page_id, args):
-        """ Get the highlight's info (text, comment, date and page)
+    @staticmethod
+    def cli_get_formatted_high(highlight, args):
+        """ Return the highlight's info in a formatted way
 
-        :type data: dict
-        :param data: The highlight's data
-        :type page: int
-        :param page The page where the highlight starts
-        :type page_id: int
-        :param page_id The count of this page's highlight
+        :type highlight: dict
+        :param highlight: The highlight's data
         :type args: argparse.Namespace
         :param args: The parsed cli args
         """
-        highlight = self.base.get_highlight_info(data, page, page_id)
         nl = "<br/>" if args.html else os.linesep
         chapter = highlight["chapter"].replace("\n", nl) if not args.no_chapter else ""
         high_text = highlight["text"]
@@ -3081,11 +3767,11 @@ class KOHighlights(QApplication):
         date = highlight["date"]
         line_break2 = os.linesep if not args.no_highlight and comment else ""
         if args.csv:
-            page_text = str(page) if not args.no_page else ""
+            page_text = highlight["page"] if not args.no_page else ""
             date_text = date if not args.no_date else ""
             high_comment = comment if not args.no_comment and comment else ""
         else:
-            page_text = "Page " + str(page) if not args.no_page else ""
+            page_text = "Page " + highlight["page"] if not args.no_page else ""
             date_text = "[" + date + "]" if not args.no_date else ""
             high_comment = (line_break2 + "● " + comment
                             if not args.no_comment and comment else "")
@@ -3163,10 +3849,11 @@ class KOHighlights(QApplication):
         :type title_counter: list
         :param title_counter: A list with the current NO TITLE counter
         """
+        stats = "doc_props" if "doc_props" in data else "stats" if "stats" in data else ""
         authors = ""
         try:
-            title = data["stats"]["title"]
-            authors = data["stats"]["authors"]
+            title = data[stats]["title"]
+            authors = data[stats]["authors"]
         except KeyError:  # older type file
             title = splitext(basename(meta_path))[0]
             try:
@@ -3183,7 +3870,7 @@ class KOHighlights(QApplication):
                 title_counter[0] += 1
         name = title
         if authors:
-            name = "{} - {}".format(authors, title)
+            name = f"{authors} - {title}"
         return name
 
 
