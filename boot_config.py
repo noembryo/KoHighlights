@@ -129,6 +129,8 @@ TOOLTIP_MERGE = _("Merge the highlights from the same book in two different\ndev
                   "and/or sync their reading position.\nActivated only if two entries "
                   "of the same book are selected.")
 TOOLTIP_SYNC = _("Start the sync process for all enabled groups")
+HIGH_COL_NAMES = ["Highlight", "Comment", "Date", "Title",
+                  "Author", "Page", "Chapter", "Path"]
 SYNC_FILE = join(SETTINGS_DIR, "sync_groups.json")
 
 CSV_HEAD = "Title\tAuthors\tPage\tDate\tChapter\tHighlight\tComment\n"

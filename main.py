@@ -44,7 +44,7 @@ import pickle
 
 
 __author__ = "noEmbryo"
-__version__ = "2.0.0.0"
+__version__ = "2.0.2.0"
 
 
 class Base(QMainWindow, Ui_Base):
@@ -98,8 +98,8 @@ class Base(QMainWindow, Ui_Base):
         self.loaded_paths = set()
         self.books2reload = set()
         self.parent_book_data = {}
+        self.custom_book_data = {}
         self.reload_highlights = True
-        self.sync_groups_loaded = False
         self.threads = []
 
         self.query = None
@@ -109,9 +109,11 @@ class Base(QMainWindow, Ui_Base):
 
         tooltip = _("Right click to ignore english articles")
         self.file_table.horizontalHeaderItem(TITLE).setToolTip(tooltip)
+        self.file_table.horizontalHeaderItem(TITLE).setStatusTip(tooltip)
         self.header_main = self.file_table.horizontalHeader()
         self.header_main.setDefaultAlignment(Qt.AlignLeft)
         self.header_main.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.resize_columns = False
         self.header_high_view = self.high_table.horizontalHeader()
         self.header_high_view.setDefaultAlignment(Qt.AlignLeft)
         # self.header_high_view.setResizeMode(HIGHLIGHT_H, QHeaderView.Stretch)
@@ -190,7 +192,7 @@ class Base(QMainWindow, Ui_Base):
         self.statusbar.addPermanentWidget(self.status)
 
         self.edit_high = TextDialog(self)
-        self.edit_high.setWindowTitle(_("Comments"))
+        self.edit_high.setWindowTitle(_("Comment"))
 
         self.description = TextDialog(self)
         self.description.setWindowTitle(_("Description"))
@@ -210,9 +212,8 @@ class Base(QMainWindow, Ui_Base):
                         (tbar.books_view_btn, "H"), (tbar.high_view_btn, "I"),
                         (tbar.sync_view_btn, "W"), (tbar.loaded_btn, "H"),
                         (tbar.db_btn, "K"), (self.status.show_items_btn, "U"),
-                        (self.description_btn, "V"), (self.filter.filter_btn, "D"),
-                        (self.filter.clear_filter_btn, "G"),
-                        ]
+                        (self.custom_btn, "Q"), (self.filter.filter_btn, "D"),
+                        (self.description_btn, "V"), (self.filter.clear_filter_btn, "G")]
 
         # noinspection PyTypeChecker,PyCallByClass
         QTimer.singleShot(10000, self.auto_check4update)  # check for updates
@@ -227,9 +228,8 @@ class Base(QMainWindow, Ui_Base):
     def on_load(self):
         """ Things that must be done after the initialization
         """
-        fdb = QFontDatabase()
-        fdb.addApplicationFont(":/stuff/font.ttf")
-        # fdb.removeApplicationFont(0)
+        QFontDatabase.addApplicationFont(":/stuff/font.ttf")
+        # QFontDatabase.removeApplicationFont(0)
 
         self.settings_load()
         self.init_db()
@@ -258,6 +258,15 @@ class Base(QMainWindow, Ui_Base):
 
         self.setup_buttons()
         self.show()
+
+        if app_config:
+            # noinspection PyTypeChecker,PyCallByClass
+            QTimer.singleShot(0, self.restore_windows)
+        else:
+            self.resize(800, 600)
+
+        # noinspection PyTypeChecker
+        QTimer.singleShot(0, self.load_sync_groups)
 
     def setup_buttons(self):
         for btn, char in self.buttons:
@@ -379,6 +388,7 @@ class Base(QMainWindow, Ui_Base):
         """
         key, mod = event.key(), event.modifiers()
         # print(key, mod, QKeySequence(key).toString())
+        # if mod == Qt.ControlModifier | Qt.AltModifier:  # if control + alt is pressed
         if mod == Qt.ControlModifier:  # if control is pressed
             if key == Qt.Key_Backspace:
                 self.toolbar.on_clear_btn_clicked()
@@ -617,8 +627,8 @@ class Base(QMainWindow, Ui_Base):
         """
         # self.file_table.setSortingEnabled(False)
         for i in dropped:
-            if splitext(i)[1] == ".lua":
-                self.create_row(normpath(i))
+            if splitext(i)[1] == ".lua" and basename(i).lower() != "custom_metadata.lua":
+                self.create_row(normpath(i))  # no highlights in custom_metadata.lua
         # self.file_table.setSortingEnabled(True)
         folders = [j for j in dropped if isdir(j)]
         for folder in folders:
@@ -639,16 +649,20 @@ class Base(QMainWindow, Ui_Base):
         data = self.file_table.item(row, TITLE).data(Qt.UserRole)
         path = self.file_table.item(row, TYPE).data(Qt.UserRole)[0]
 
+        self.custom_book_data = {}
+        self.custom_btn.setChecked(False)
+        if not self.db_mode:
+            sdr_path = dirname(self.file_table.item(row, PATH).data(0))
+            custom_path = join(sdr_path, "custom_metadata.lua")
+            if isfile(custom_path):
+                custom = decode_data(custom_path)
+                self.custom_book_data = deepcopy(data)
+                self.custom_book_data.get("doc_props", {}).update(custom["custom_props"])
+
         self.high_list.clear()
         self.populate_high_list(data, path)
         self.populate_book_info(data, row)
 
-        description_state = False
-        if "doc_props" in data and "description" in data["doc_props"]:
-            description_state = bool(data["doc_props"]["description"])
-        self.description_btn.setEnabled(description_state)
-
-        # self.high_list.sortItems()  # using XListWidgetItem for custom sorting
         self.high_list.setCurrentRow(0) if reset else None
 
     def populate_book_info(self, data, row):
@@ -659,6 +673,10 @@ class Base(QMainWindow, Ui_Base):
         :type row: int
         :param row: The item's row number
         """
+        self.description_btn.setEnabled(bool(data.get("doc_props",
+                                                      {}).get("description")))
+        self.custom_btn.setEnabled(bool(self.custom_book_data))
+
         stats = "doc_props" if "doc_props" in data else "stats" if "stats" in data else ""
         for key, field in zip(self.info_keys, self.info_fields):
             try:
@@ -678,7 +696,7 @@ class Base(QMainWindow, Ui_Base):
                     keywords = data["doc_props"][key].split("\n")
                     value = "; ".join([i.rstrip("\\") for i in keywords])
                 else:
-                    value = data[stats][key]
+                    value = data.get(stats, {}).get(key)
                 try:
                     field.setText(value)
                 except TypeError:  # Needs string only
@@ -699,15 +717,6 @@ class Base(QMainWindow, Ui_Base):
         self.review_txt.setStyleSheet(f'background-color: "{color}";')
         self.review_txt.setVisible(bool(review))
         self.review_txt.setText(review)
-
-    @Slot()
-    def on_description_btn_clicked(self):
-        """ The book's `Description` button is pressed
-        """
-        data = self.file_table.item(self.sel_idx.row(), TITLE).data(Qt.UserRole)
-        description = data["doc_props"]["description"]
-        self.description.high_edit_txt.setHtml(description)
-        self.description.show()
 
     @Slot(QPoint)
     def on_file_table_customContextMenuRequested(self, point):
@@ -938,6 +947,26 @@ class Base(QMainWindow, Ui_Base):
             self.fold_btn.setArrowType(Qt.DownArrow)
         self.book_info.setHidden(pressed)
 
+    @Slot(bool)
+    def on_custom_btn_toggled(self, pressed):
+        """ The book's `Custom metadata` button is pressed
+        """
+        row = self.sel_idx.row()
+        if pressed:
+            self.populate_book_info(self.custom_book_data, row)
+        else:
+            data = self.file_table.item(row, TITLE).data(Qt.UserRole)
+            self.populate_book_info(data, row)
+
+    @Slot()
+    def on_description_btn_clicked(self):
+        """ The book's `Description` button is pressed
+        """
+        data = self.file_table.item(self.sel_idx.row(), TITLE).data(Qt.UserRole)
+        description = data["doc_props"]["description"]
+        self.description.high_edit_txt.setHtml(description)
+        self.description.show()
+
     def on_archive(self):
         """ Add the selected books to the archive db
         """
@@ -1033,7 +1062,9 @@ class Base(QMainWindow, Ui_Base):
         self.file_table.clearSelection()
         self.sel_idx = None
         self.sel_indexes = []
-        self.file_table.resizeColumnsToContents()
+        if not app_config or self.resize_columns:
+            self.resize_columns = False
+            self.file_table.resizeColumnsToContents()
         self.toolbar.activate_buttons()
 
         self.file_table.setSortingEnabled(True)
@@ -1589,7 +1620,7 @@ class Base(QMainWindow, Ui_Base):
         """
         times = os.stat(path)  # read the file's created/modified times
         encode_data(path, data)
-        if data.get("summary", {}).get("status") in ["abandoned", "complete"]:
+        if data.get("summary", {}).get("status", "") in ["abandoned", "complete"]:
             os.utime(path, (times.st_ctime, times.st_mtime))  # reapply original times
         if self.file_table.isVisible():
             self.on_file_table_itemClicked(self.file_table.item(self.sel_idx.row(), 0),
@@ -1686,17 +1717,20 @@ class Base(QMainWindow, Ui_Base):
             menu.exec_ = getattr(menu, "exec")
 
         row = self.high_table.itemAt(point).row()
+        col = self.high_table.itemAt(point).column()
         self.act_view_book.setData(row)
         self.act_view_book.setEnabled(self.toolbar.open_btn.isEnabled())
         menu.addAction(self.act_view_book)
 
-        highlights, comments = self.get_highlights()
+        highlights, comments, values = self.get_highlights(col)
 
         high_text = _("Copy Highlights")
         com_text = _("Copy Comments")
+        val_text = _("Copy {} values")
         if len(self.sel_high_view) == 1:  # single selection
             high_text = _("Copy Highlight")
             com_text = _("Copy Comment")
+            val_text = _("Copy {} value")
 
             text = _("Find in Archive") if self.db_mode else _("Find in Books")
             action = QAction(text, menu)
@@ -1719,6 +1753,11 @@ class Base(QMainWindow, Ui_Base):
         action.setIcon(self.ico_copy)
         menu.addAction(action)
 
+        action = QAction(val_text.format(HIGH_COL_NAMES[col]), menu)
+        action.triggered.connect(partial(self.copy_text_2clip, values))
+        action.setIcon(self.ico_copy)
+        menu.addAction(action)
+
         action = QAction(_("Export to file"), menu)
         action.triggered.connect(self.on_export)
         action.setData(2)
@@ -1733,11 +1772,13 @@ class Base(QMainWindow, Ui_Base):
 
         menu.exec_(self.high_table.mapToGlobal(point))
 
-    def get_highlights(self):
+    def get_highlights(self, col=None):
         """ Returns the selected highlights and the comments texts
         """
+        col = HIGHLIGHT_H if col is None else col
         highlights = ""
         comments = ""
+        values = ""
         for idx in self.sel_high_view:
             item_row = idx.row()
             data = self.high_table.item(item_row, HIGHLIGHT_H).data(Qt.UserRole)
@@ -1747,9 +1788,11 @@ class Base(QMainWindow, Ui_Base):
             comment = data["comment"]
             if comment:
                 comments += comment + "\n\n"
+            values += self.high_table.item(item_row, col).text() + "\n"
         highlights = highlights.rstrip("\n").replace("\n", os.linesep)
         comments = comments.rstrip("\n").replace("\n", os.linesep)
-        return highlights, comments
+        values = values.rstrip("\n").replace("\n", os.linesep)
+        return highlights, comments, values
 
     def scan_highlights_thread(self):
         """ Gets all the loaded highlights
@@ -1973,6 +2016,9 @@ class Base(QMainWindow, Ui_Base):
                 wdg.on_power_btn_clicked(data.get("enabled", True))
                 wdg.idx = idx
                 self.sync_groups.append(data)
+                folded = data.get("folded", False)
+                wdg.fold_btn.setChecked(folded)
+                wdg.on_fold_btn_toggled(folded)
                 wdg.check_data()
         self.sync_table.setSortingEnabled(True)
         # noinspection PyTypeChecker
@@ -3052,13 +3098,9 @@ class Base(QMainWindow, Ui_Base):
     # ___ ___________________ SETTINGS STUFF ________________________
 
     def settings_load(self):
-        """ Loads the jason based configuration settings
+        """ Loads the json based configuration settings
         """
         if app_config:
-            self.restoreGeometry(self.unpickle("geometry"))
-            self.restoreState(self.unpickle("state"))
-            self.splitter.restoreState(self.unpickle("splitter"))
-            self.about.restoreGeometry(self.unpickle("about_geometry"))
             self.col_sort = app_config.get("col_sort", MODIFIED)
             self.col_sort_asc = app_config.get("col_sort_asc", False)
             self.col_sort_h = app_config.get("col_sort_h", DATE_H)
@@ -3089,7 +3131,6 @@ class Base(QMainWindow, Ui_Base):
             self.high_by_page = app_config.get("high_by_page", False)
         else:
             self.status.theme_box.setCurrentIndex(self.theme)
-            self.resize(800, 600)
         if self.highlight_width:
             self.header_high_view.resizeSection(HIGHLIGHT_H, self.highlight_width)
         if self.comment_width:
@@ -3098,12 +3139,33 @@ class Base(QMainWindow, Ui_Base):
         for idx, act in enumerate(self.status.show_actions):
             act.setChecked(self.show_items[idx])
 
+    def restore_windows(self):
+        """ Restores the windows layout after the main window is build
+        """
+        self.restoreGeometry(self.unpickle("geometry"))
+        # self.restoreState(self.unpickle("state"))  # 2fix makes window wider (if small)
+        self.splitter.restoreState(self.unpickle("splitter"))
+        self.header_main.restoreState(self.unpickle("header_main"))
+        self.filter.restoreGeometry(self.unpickle("filter_geometry"))
+        self.about.restoreGeometry(self.unpickle("about_geometry"))
+        QTimer.singleShot(200, self.get_header_width)
+
+    def get_header_width(self):
+        """ Checks if the header width is smaller than the table
+        """
+        width = 0
+        for i in range(self.header_main.count()):
+            width += self.header_main.sectionSize(i)
+        self.resize_columns = width < self.file_table.width()
+
     def settings_save(self):
-        """ Saves the jason based configuration settings
+        """ Saves the json based configuration settings
         """
         config = {"geometry": self.pickle(self.saveGeometry()),
                   "state": self.pickle(self.saveState()),
                   "splitter": self.pickle(self.splitter.saveState()),
+                  "header_main": self.pickle(self.header_main.saveState()),
+                  "filter_geometry": self.pickle(self.filter.saveGeometry()),
                   "about_geometry": self.pickle(self.about.saveGeometry()),
                   "col_sort_asc": self.col_sort_asc, "col_sort": self.col_sort,
                   "col_sort_asc_h": self.col_sort_asc_h, "col_sort_h": self.col_sort_h,
@@ -3147,7 +3209,7 @@ class Base(QMainWindow, Ui_Base):
     def unpickle(key):
         """ Un-serialize some binary settings
 
-        :type key: str|unicode
+        :type key: str
         :parameter key: The dict key to be un-pickled
         """
         try:

@@ -11,7 +11,16 @@
    </rect>
   </property>
   <layout class="QHBoxLayout" name="horizontalLayout_2">
-   <property name="margin">
+   <property name="leftMargin">
+    <number>4</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>2</number>
+   </property>
+   <property name="bottomMargin">
     <number>0</number>
    </property>
    <item>
@@ -77,6 +86,12 @@
          <iconset resource="images.qrc">
           <normaloff>:/stuff/add.png</normaloff>:/stuff/add.png</iconset>
         </property>
+        <property name="iconSize">
+         <size>
+          <width>10</width>
+          <height>10</height>
+         </size>
+        </property>
        </widget>
       </item>
       <item>
@@ -93,6 +108,12 @@
         <property name="icon">
          <iconset resource="images.qrc">
           <normaloff>:/stuff/del.png</normaloff>:/stuff/del.png</iconset>
+        </property>
+        <property name="iconSize">
+         <size>
+          <width>10</width>
+          <height>10</height>
+         </size>
         </property>
        </widget>
       </item>

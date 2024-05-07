@@ -90,7 +90,7 @@ PySide6 is also supported (download the archive from the releases)
   Can run on any version of Windows from Windows 7 upwards.  
   For Windows 7, Microsoft Visual C++ 14.0 is required. Get it 
   [here](https://aka.ms/vs/17/release/vc_redist.x86.exe).  
-  The Windows 7 32bit version also needs the KB2533623 update thats is included in [KB3063858](https://www.microsoft.com/en-us/download/details.aspx?id=47409) ([direct link](https://download.microsoft.com/download/C/9/6/C96CD606-3E05-4E1C-B201-51211AE80B1E/Windows6.1-KB3063858-x86.msu)).  
+  The Windows 7 32bit version also needs the KB2533623 update that is included in [KB3063858](https://www.microsoft.com/en-us/download/details.aspx?id=47409) ([direct link](https://download.microsoft.com/download/C/9/6/C96CD606-3E05-4E1C-B201-51211AE80B1E/Windows6.1-KB3063858-x86.msu)).  
   * ***Linux***:  
   The binary is compiled using Xubuntu 18.04.  
   Any newer version should work.

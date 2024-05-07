@@ -3,7 +3,7 @@
 # Form implementation generated from reading ui file 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_toolbar.ui',
 # licensing of 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_toolbar.ui' applies.
 #
-# Created: Thu May  2 17:29:33 2024
+# Created: Tue May  7 14:53:08 2024
 #      by: pyside2-uic  running on PySide2 5.13.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -278,6 +278,7 @@ class Ui_ToolBar(object):
 
     def retranslateUi(self, ToolBar):
         self.tool_frame.setToolTip(QtWidgets.QApplication.translate("ToolBar", "Right-click to change icon size", None, -1))
+        self.tool_frame.setStatusTip(QtWidgets.QApplication.translate("ToolBar", "Right-click to change icon size", None, -1))
         self.scan_btn.setToolTip(QtWidgets.QApplication.translate("ToolBar", "Scans a directory for Koreader metadata files\n"
 "Can also be the eReader\'s root directory (Ctrl+L)", None, -1))
         self.scan_btn.setStatusTip(QtWidgets.QApplication.translate("ToolBar", "Scans a directory for Koreader metadata files. Can also be the eReader\'s root directory (Ctrl+L)", None, -1))
@@ -321,8 +322,8 @@ class Ui_ToolBar(object):
 "(Right click for database actions menu)", None, -1))
         self.db_btn.setStatusTip(QtWidgets.QApplication.translate("ToolBar", "Show the archived files in the database (Right click for database actions menu)", None, -1))
         self.db_btn.setText(QtWidgets.QApplication.translate("ToolBar", "Archived", None, -1))
-        self.about_btn.setToolTip(QtWidgets.QApplication.translate("ToolBar", "Info about the KoHighlights (Ctrl+I)", None, -1))
-        self.about_btn.setStatusTip(QtWidgets.QApplication.translate("ToolBar", "Info about the KoHighlights (Ctrl+I)", None, -1))
+        self.about_btn.setToolTip(QtWidgets.QApplication.translate("ToolBar", "Info about KoHighlights (Ctrl+I)", None, -1))
+        self.about_btn.setStatusTip(QtWidgets.QApplication.translate("ToolBar", "Info about KoHighlights (Ctrl+I)", None, -1))
         self.about_btn.setText(QtWidgets.QApplication.translate("ToolBar", "About", None, -1))
 
 from secondary import XToolButton

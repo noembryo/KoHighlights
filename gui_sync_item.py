@@ -3,7 +3,7 @@
 # Form implementation generated from reading ui file 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_sync_item.ui',
 # licensing of 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_sync_item.ui' applies.
 #
-# Created: Thu May  2 17:29:33 2024
+# Created: Tue May  7 14:53:08 2024
 #      by: pyside2-uic  running on PySide2 5.13.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -15,7 +15,7 @@ class Ui_SyncItem(object):
         SyncItem.setObjectName("SyncItem")
         SyncItem.resize(446, 25)
         self.horizontalLayout_2 = QtWidgets.QHBoxLayout(SyncItem)
-        self.horizontalLayout_2.setContentsMargins(0, 0, 0, 0)
+        self.horizontalLayout_2.setContentsMargins(4, 0, 2, 0)
         self.horizontalLayout_2.setObjectName("horizontalLayout_2")
         self.label = QtWidgets.QLabel(SyncItem)
         self.label.setObjectName("label")
@@ -39,6 +39,7 @@ class Ui_SyncItem(object):
         icon = QtGui.QIcon()
         icon.addPixmap(QtGui.QPixmap(":/stuff/add.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         self.add_btn.setIcon(icon)
+        self.add_btn.setIconSize(QtCore.QSize(10, 10))
         self.add_btn.setObjectName("add_btn")
         self.horizontalLayout.addWidget(self.add_btn)
         self.del_btn = QtWidgets.QToolButton(self.frame)
@@ -46,6 +47,7 @@ class Ui_SyncItem(object):
         icon1 = QtGui.QIcon()
         icon1.addPixmap(QtGui.QPixmap(":/stuff/del.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         self.del_btn.setIcon(icon1)
+        self.del_btn.setIconSize(QtCore.QSize(10, 10))
         self.del_btn.setObjectName("del_btn")
         self.horizontalLayout.addWidget(self.del_btn)
         self.horizontalLayout_2.addWidget(self.frame)

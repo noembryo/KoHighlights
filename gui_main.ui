@@ -224,6 +224,32 @@
                <property name="bottomMargin">
                 <number>0</number>
                </property>
+               <item row="4" column="3">
+                <widget class="QLineEdit" name="pages_txt">
+                 <property name="sizePolicy">
+                  <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+                   <horstretch>0</horstretch>
+                   <verstretch>0</verstretch>
+                  </sizepolicy>
+                 </property>
+                 <property name="maximumSize">
+                  <size>
+                   <width>40</width>
+                   <height>16777215</height>
+                  </size>
+                 </property>
+                 <property name="readOnly">
+                  <bool>true</bool>
+                 </property>
+                </widget>
+               </item>
+               <item row="4" column="0">
+                <widget class="QLabel" name="lang_lbl">
+                 <property name="text">
+                  <string>Language</string>
+                 </property>
+                </widget>
+               </item>
                <item row="0" column="0">
                 <widget class="QLabel" name="title_lbl">
                  <property name="text">
@@ -238,6 +264,13 @@
                  </property>
                 </widget>
                </item>
+               <item row="1" column="1" colspan="6">
+                <widget class="QLineEdit" name="author_txt">
+                 <property name="readOnly">
+                  <bool>true</bool>
+                 </property>
+                </widget>
+               </item>
                <item row="1" column="0">
                 <widget class="QLabel" name="author_lbl">
                  <property name="text">
@@ -245,42 +278,7 @@
                  </property>
                 </widget>
                </item>
-               <item row="4" column="0">
-                <widget class="QLabel" name="lang_lbl">
-                 <property name="text">
-                  <string>Language</string>
-                 </property>
-                </widget>
-               </item>
-               <item row="4" column="2">
-                <widget class="QLabel" name="pages_lbl">
-                 <property name="text">
-                  <string>Pages</string>
-                 </property>
-                </widget>
-               </item>
-               <item row="4" column="1">
-                <widget class="QLineEdit" name="lang_txt">
-                 <property name="readOnly">
-                  <bool>true</bool>
-                 </property>
-                </widget>
-               </item>
-               <item row="4" column="3">
-                <widget class="QLineEdit" name="pages_txt">
-                 <property name="readOnly">
-                  <bool>true</bool>
-                 </property>
-                </widget>
-               </item>
-               <item row="3" column="0">
-                <widget class="QLabel" name="tags_lbl">
-                 <property name="text">
-                  <string>Tags</string>
-                 </property>
-                </widget>
-               </item>
-               <item row="4" column="4">
+               <item row="4" column="6">
                 <widget class="QToolButton" name="description_btn">
                  <property name="text">
                   <string>Description</string>
@@ -294,28 +292,67 @@
                  </property>
                 </widget>
                </item>
-               <item row="3" column="1" colspan="4">
+               <item row="4" column="2">
+                <widget class="QLabel" name="pages_lbl">
+                 <property name="text">
+                  <string>Pages</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="4" column="1">
+                <widget class="QLineEdit" name="lang_txt">
+                 <property name="sizePolicy">
+                  <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+                   <horstretch>0</horstretch>
+                   <verstretch>0</verstretch>
+                  </sizepolicy>
+                 </property>
+                 <property name="maximumSize">
+                  <size>
+                   <width>25</width>
+                   <height>16777215</height>
+                  </size>
+                 </property>
+                 <property name="readOnly">
+                  <bool>true</bool>
+                 </property>
+                </widget>
+               </item>
+               <item row="3" column="0">
+                <widget class="QLabel" name="tags_lbl">
+                 <property name="text">
+                  <string>Tags</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="3" column="1" colspan="6">
                 <widget class="QLineEdit" name="tags_txt">
                  <property name="readOnly">
                   <bool>true</bool>
                  </property>
                 </widget>
                </item>
-               <item row="2" column="1" colspan="4">
+               <item row="2" column="1" colspan="6">
                 <widget class="QLineEdit" name="series_txt">
                  <property name="readOnly">
                   <bool>true</bool>
                  </property>
                 </widget>
                </item>
-               <item row="1" column="1" colspan="4">
-                <widget class="QLineEdit" name="author_txt">
-                 <property name="readOnly">
+               <item row="5" column="1" colspan="6">
+                <widget class="QLabel" name="review_txt">
+                 <property name="frameShape">
+                  <enum>QFrame::NoFrame</enum>
+                 </property>
+                 <property name="text">
+                  <string/>
+                 </property>
+                 <property name="wordWrap">
                   <bool>true</bool>
                  </property>
                 </widget>
                </item>
-               <item row="0" column="1" colspan="4">
+               <item row="0" column="1" colspan="6">
                 <widget class="QLineEdit" name="title_txt">
                  <property name="readOnly">
                   <bool>true</bool>
@@ -332,18 +369,41 @@
                  </property>
                 </widget>
                </item>
-               <item row="5" column="1" colspan="4">
-                <widget class="QLabel" name="review_txt">
-                 <property name="frameShape">
-                  <enum>QFrame::NoFrame</enum>
+               <item row="4" column="5">
+                <widget class="QToolButton" name="custom_btn">
+                 <property name="enabled">
+                  <bool>false</bool>
+                 </property>
+                 <property name="toolTip">
+                  <string>Show the custom properties of the book</string>
+                 </property>
+                 <property name="statusTip">
+                  <string>Show the custom properties of the book</string>
                  </property>
                  <property name="text">
                   <string/>
                  </property>
-                 <property name="wordWrap">
+                 <property name="icon">
+                  <iconset resource="images.qrc">
+                   <normaloff>:/stuff/file_edit.png</normaloff>:/stuff/file_edit.png</iconset>
+                 </property>
+                 <property name="checkable">
                   <bool>true</bool>
                  </property>
                 </widget>
+               </item>
+               <item row="4" column="4">
+                <spacer name="horizontalSpacer">
+                 <property name="orientation">
+                  <enum>Qt::Horizontal</enum>
+                 </property>
+                 <property name="sizeHint" stdset="0">
+                  <size>
+                   <width>40</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                </spacer>
                </item>
               </layout>
              </widget>

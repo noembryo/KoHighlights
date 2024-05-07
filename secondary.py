@@ -46,17 +46,17 @@ def decode_data(path):
             return data
 
 
-def encode_data(path, dict_data):
+def encode_data(path, data):
     """ Converts a Python dict to a lua table
 
     :type path: str|unicode
     :param path: The path to the lua file
-    :type dict_data: dict
-    :param dict_data: The dictionary to be encoded as lua table
+    :type data: dict
+    :param data: The dictionary to be encoded as lua table
     """
     with open(path, "w+", encoding="utf8", newline="") as txt_file:
-        lua_text = dict_data.pop("original_header", "") + "\nreturn "
-        lua_text += lua.encode(dict_data)
+        lua_text = f'{data.pop("original_header", "")}\nreturn '
+        lua_text += lua.encode(data)
         txt_file.write(lua_text)
 
 
@@ -476,6 +476,8 @@ class Scanner(QObject):
                         continue
                     for file_ in files:  # get the .lua file not the .old (backup)
                         if splitext(file_)[1].lower() == ".lua":
+                            if file_.lower() == "custom_metadata.lua":
+                                continue  # no highlights in custom_metadata.lua
                             self.found.emit(join(dir_path, file_))
                 # older metadata storage or android history folder
                 elif (dir_path.lower().endswith(join("koreader", "history"))
@@ -725,9 +727,8 @@ class XIconGlyph(QObject):
     """ A Font char to QIcon converter
 
     * Usage in Base:
-    fdb = QFontDatabase()
-    fdb.addApplicationFont(":/stuff/font.ttf")  # add a custom font or use existing
-    # pprint(fdb.families())
+    QFontDatabase.addApplicationFont(":/stuff/font.ttf")  # add custom font or use existing
+    # pprint(QFontDatabase.families())
 
     self.font_ico = XIconGlyph(self, glyph=None)
 
@@ -1108,10 +1109,6 @@ class ToolBar(QWidget, Ui_ToolBar):
             self.base.current_view = SYNC_VIEW
             self.merge_btn.setToolTip(TOOLTIP_SYNC)
             self.merge_btn.setStatusTip(TOOLTIP_SYNC)
-            if not self.base.sync_groups_loaded:
-                # noinspection PyTypeChecker
-                QTimer.singleShot(0, self.base.load_sync_groups)
-                self.base.sync_groups_loaded = True
 
         self.base.views.setCurrentIndex(self.base.current_view)
         self.setup_buttons()
@@ -1710,7 +1707,8 @@ class SyncGroup(QWidget, Ui_SyncGroup):
         self.title_lbl.setFont(font)
 
         power_color = self.base.palette().button().color().name()
-        self.css = 'QFrame#items_frm {background-color: "%s";}'
+        self.css = ('QFrame#items_frm, QFrame#checks_frm,'
+                    'QToolButton {background-color: "%s";}')
         self.setStyleSheet(self.css % power_color)
 
         self.sync_pos_chk.stateChanged.connect(self.update_data)
@@ -1828,6 +1826,23 @@ class SyncGroup(QWidget, Ui_SyncGroup):
         if self.base.merge_warning_stop():
             return
         self.base.synchronize_group(self)
+
+    @Slot(bool)
+    def on_fold_btn_toggled(self, pressed):
+        """ Shows/hides the Sync paths
+
+        :type pressed: bool
+        :param pressed: The arrow button's status
+        """
+        if pressed:  # Closed
+            self.fold_btn.setText(_("Show sync paths"))
+            self.fold_btn.setArrowType(Qt.RightArrow)
+        else:  # Opened
+            self.fold_btn.setText(_("Hide sync paths"))
+            self.fold_btn.setArrowType(Qt.DownArrow)
+        self.items_frm.setHidden(pressed)
+        self.update_data()
+        QTimer.singleShot(200, self.reset_group_height)
 
     def add_item(self, data):
         """ Adds a new sync item
@@ -1969,7 +1984,8 @@ class SyncGroup(QWidget, Ui_SyncGroup):
                 "merge": self.merge_chk.isChecked(),
                 "sync_db": self.sync_db_chk.isChecked(),
                 "items": self.data["items"],
-                "enabled": self.power_btn.isChecked()
+                "enabled": self.power_btn.isChecked(),
+                "folded": self.fold_btn.isChecked(),
                 }
         self.base.sync_groups[self.idx] = data
         self.data = data
