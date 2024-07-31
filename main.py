@@ -44,7 +44,7 @@ import pickle
 
 
 __author__ = "noEmbryo"
-__version__ = "2.0.2.0"
+__version__ = "2.0.3.0"
 
 
 class Base(QMainWindow, Ui_Base):
@@ -995,7 +995,7 @@ class Base(QMainWindow, Ui_Base):
             annotations = data.get("annotations")
             if annotations is not None:  # new format metadata
                 for high_idx in annotations:
-                    if annotations[high_idx]["pos0"]:
+                    if annotations[high_idx].get("pos0"):
                         break  # there is at least one highlight in the book
                 else:  # no highlights don't add
                     empty += 1
