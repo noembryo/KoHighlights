@@ -44,7 +44,7 @@ import pickle
 
 
 __author__ = "noEmbryo"
-__version__ = "2.0.3.0"
+__version__ = "2.0.4.0"
 
 
 class Base(QMainWindow, Ui_Base):
@@ -2510,7 +2510,7 @@ class Base(QMainWindow, Ui_Base):
                     annots.append(new_bkm)
             info[0].clear()  # repopulate the annotations
             annots_upd = {}
-            for i, hi in enumerate(sorted(annots, key=lambda x: x["pageno"])):
+            for i, hi in enumerate(sorted(annots, key=lambda x: int(x["pageno"]))):
                 annots_upd[i + 1] = hi
             info[0].update(annots_upd)
 
