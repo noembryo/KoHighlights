@@ -1,4 +1,7 @@
 # coding=utf-8
+from copy import deepcopy
+from pprint import pprint
+
 from boot_config import *
 from boot_config import _
 import re
@@ -41,7 +44,7 @@ def decode_data(path):
     with open(path, "r", encoding="utf8", newline="\n") as txt_file:
         header, data = txt_file.read().split("\n", 1)
         data = lua.decode(data[7:].replace("--", "—"))
-        if type(data) == dict:
+        if type(data) is dict:
             data["original_header"] = header
             return data
 
@@ -879,6 +882,7 @@ class ToolBar(QWidget, Ui_ToolBar):
         # self.size_menu.aboutToShow.connect(self.create_size_menu)
 
         self.db_menu = QMenu()
+        self.db_menu.setToolTipsVisible(True)
         self.db_menu.aboutToShow.connect(self.create_db_menu)
         self.db_btn.setMenu(self.db_menu)
 
@@ -1050,7 +1054,7 @@ class ToolBar(QWidget, Ui_ToolBar):
     def on_clear_btn_clicked(self):
         """ The `Clear List` button is pressed
         """
-        if self.base.current_view == SYNC_VIEW:
+        if self.base.current_view == SYNC_VIEW and not self.base.reload_from_sync:
             return
         self.base.loaded_paths.clear()
         self.base.reload_highlights = True
@@ -1071,18 +1075,28 @@ class ToolBar(QWidget, Ui_ToolBar):
         self.db_menu.clear()
         action = QAction(_("Create new database"), self.db_menu)
         action.setIcon(self.base.ico_db_add)
+        action.setToolTip(_("Create a new database file"))
         action.triggered.connect(partial(self.base.change_db, NEW_DB))
         self.db_menu.addAction(action)
 
         action = QAction(_("Reload database"), self.db_menu)
         action.setIcon(self.base.ico_refresh)
+        action.setToolTip(_("Reload the current database"))
         action.triggered.connect(partial(self.base.change_db, RELOAD_DB))
         self.db_menu.addAction(action)
 
         action = QAction(_("Change database"), self.db_menu)
         action.setIcon(self.base.ico_db_open)
+        action.setToolTip(_("Load a different database file"))
         action.triggered.connect(partial(self.base.change_db, CHANGE_DB))
         self.db_menu.addAction(action)
+
+        action = QAction(_("Compact database"), self.db_menu)
+        action.setIcon(self.base.ico_db_compact)
+        action.setToolTip(_("Compact the database to minimize file size"))
+        action.triggered.connect(partial(self.base.vacuum_db, True))
+        self.db_menu.addAction(action)
+
         if QT6:  # QT6 requires exec() instead of exec_()
             self.db_menu.exec_ = getattr(self.db_menu, "exec")
 
@@ -1090,7 +1104,8 @@ class ToolBar(QWidget, Ui_ToolBar):
         """ Changes what is shown in the app
         """
         reloaded = False
-        if not self.sync_view_btn.isChecked():  # don't reload when coming from Sync view
+        if self.base.reload_from_sync or not self.sync_view_btn.isChecked():
+            self.base.reload_from_sync = False
             reloaded = (self.update_archived()
                         if self.db_btn.isChecked() else self.update_loaded())
         if self.books_view_btn.isChecked():  # Books view
@@ -1134,8 +1149,9 @@ class ToolBar(QWidget, Ui_ToolBar):
             self.base.db_mode = True
             self.base.reload_highlights = True
             self.base.read_books_from_db()
-            text = _(f"Loading {APP_NAME} database")
-            self.base.loading_thread(DBLoader, self.base.books, text)
+            self.base.load_db_rows()
+            # text = _(f"Loading {APP_NAME} database")
+            # self.base.loading_thread(DBLoader, self.base.books, text)
             if not len(self.base.books):  # no books in the db
                 text = _('There are no books currently in the archive.\nTo add/'
                          'update one or more books, select them in the "Loaded" '
@@ -1553,6 +1569,7 @@ class Status(QWidget, Ui_Status):
             act.triggered.connect(partial(self.on_show_items, act))
 
         self.show_menu = QMenu(self)
+        self.show_menu.setToolTipsVisible(True)
         self.show_menu.aboutToShow.connect(self.get_show_menu)
         self.show_items_btn.setMenu(self.show_menu)
 
@@ -1564,14 +1581,26 @@ class Status(QWidget, Ui_Status):
             act.setChecked(self.base.show_items[idx])
             self.show_menu.addAction(act)
 
+        self.show_menu.addSeparator()
+        self.show_menu.addSeparator()
+        self.show_menu.addSeparator()
+
         action = QAction(_("Date Format"), self.show_menu)
         action.setIcon(self.base.ico_calendar)
         action.triggered.connect(self.set_date_format)
+        action.setToolTip(_("Change the way the date is displayed"))
+        self.show_menu.addAction(action)
+
+        action = QAction(_("Reference page numbers"), self.show_menu)
+        action.setCheckable(True)
+        action.setChecked(self.base.show_ref_pg)
+        action.triggered.connect(self.base.set_show_ref_pg)
+        action.setToolTip(_("Use reference page numbers\nif they are available"))
         self.show_menu.addAction(action)
 
         sort_menu = QMenu(self)
         sort_menu.setIcon(self.base.ico_sort)
-        sort_menu.setTitle(_("Sort by"))
+        sort_menu.setTitle(_("Sort Highlights by"))
         group = QActionGroup(self)
 
         action = QAction(_("Date"), sort_menu)
@@ -1723,23 +1752,39 @@ class SyncGroup(QWidget, Ui_SyncGroup):
         :param point: The point of the click
         """
         menu = QMenu(self)
+        menu.setToolTipsVisible(True)
         if QT6:  # QT6 requires exec() instead of exec_()
             menu.exec_ = getattr(menu, "exec")
 
         action = QAction(_("Rename group"), menu)
         action.setIcon(self.base.ico_file_edit)
+        action.setToolTip(_("Change the name of the Sync group"))
         action.triggered.connect(self.on_rename)
         menu.addAction(action)
 
         action = QAction(_("Sync group"), menu)
         action.setIcon(self.base.ico_files_merge)
+        action.setToolTip(_("Sync the Sync group items"))
         action.triggered.connect(self.on_sync_btn_clicked)
+        menu.addAction(action)
+
+        action = QAction(_("Load group items"), menu)
+        action.setIcon(self.base.ico_folder_open)
+        action.setToolTip(_("Load the Sync group items to the Books View"))
+        action.triggered.connect(self.load_group_items)
+        menu.addAction(action)
+
+        action = QAction(_("Copy Archived to group"), menu)
+        action.setIcon(self.base.ico_files_merge)
+        action.setToolTip(_("Copy the archived version to all Sync group items"))
+        action.triggered.connect(self.archived_to_group)
         menu.addAction(action)
 
         menu.addSeparator()
 
         action = QAction(_("Delete selected"), menu)
         action.setIcon(self.base.ico_delete)
+        action.setToolTip(_("Delete the selected Sync group items"))
         action.triggered.connect(self.base.toolbar.on_delete_btn_clicked)
         menu.addAction(action)
 
@@ -1770,7 +1815,6 @@ class SyncGroup(QWidget, Ui_SyncGroup):
 
     def setup_icons(self):
         if self.base.theme in [THEME_NONE_NEW, THEME_DARK_NEW, THEME_LIGHT_NEW]:
-            # noinspection PyTypeChecker
             QTimer.singleShot(0, self.set_new_icons)
         else:
             self.set_old_icons()
@@ -1991,6 +2035,74 @@ class SyncGroup(QWidget, Ui_SyncGroup):
         self.data = data
         self.base.save_sync_groups()
 
+    def load_group_items(self):
+        """ Loads the group's items in the Books view
+        """
+        self.base.toolbar.reload_from_sync = True
+        self.base.toolbar.books_view_btn.setChecked(True)
+        self.base.toolbar.change_view()
+        self.base.toolbar.loaded_btn.click()
+        self.base.on_file_table_fileDropped([item["path"] for item in self.data["items"]])
+
+    def archived_to_group(self):
+        """ Copies the archived data to all the items of the group
+        """
+        path = self.data["items"][0]["path"]
+        data = decode_data(path)
+        idx = self.base.check4archive_merge({"path": path, "data": data})
+        no_archive_txt = _("Could not find an archived version of the book's metadata")
+        if idx is False:
+            self.base.popup(_("Error"), no_archive_txt, icon=QMessageBox.Critical)
+            return
+        old_format_txt = _("The metadata file is of an older, not supported version.")
+        if not self.new_format:
+            self.base.popup(_("Error"), old_format_txt, icon=QMessageBox.Critical)
+            return
+        warn_txt = _("All the Group versions will be overwritten with the archived "
+                     "version!\n\nAre you sure you want to continue?")
+        popup = self.base.popup(_("Warning"), warn_txt, icon=QMessageBox.Warning,
+                                buttons=2, button_text=(_("Yes"), _("Cancel")))
+        if popup.buttonRole(popup.clickedButton()) == QMessageBox.RejectRole:
+            return
+
+        arch_data = self.base.books[idx]["data"]  # archived data
+        arch_total = arch_data.get("doc_pages",
+                                   arch_data.get("stats", {}).get("pages", 0))
+        for item in self.data["items"]:
+            item_data = item["data"]
+            item_total = item_data.get("doc_pages",
+                                       item_data.get("stats", {}).get("pages", 0))
+            item_data["annotations"] = deepcopy(arch_data["annotations"])
+            if arch_total != item_total:
+                self.recalculate_pages(item_data, item_total, arch_total)
+            item_data["annotations_externally_modified"] = True
+            self.base.save_book_data(item["path"], item_data)
+
+        self.base.reload_from_sync = True
+        if not self.base.db_mode:
+            self.base.db_mode = True  # need this to trigger the reload of the files
+            self.base.books2reload = self.base.loaded_paths.copy()
+            self.base.toolbar.update_loaded()
+
+        self.base.popup(_("Info"), _("The metadata was successfully updated!"),
+                        icon=QMessageBox.Information)
+
+    @staticmethod
+    def recalculate_pages(item_data, item_total, arch_total):
+        """ Recalculates the page number of the annotations
+        based on the total pages number
+
+        :type item_data: dict
+        :param item_data: The item's data
+        :type item_total: int
+        :param item_total: The total number of pages of the item
+        :type arch_total: int
+        :param arch_total: The total number of pages of the archived item
+        """
+        for annot in item_data["annotations"].values():
+            percent = int(annot["pageno"]) / arch_total
+            annot["pageno"] = int(round(percent * item_total))
+
 
 class SyncItem(QWidget, Ui_SyncItem):
 
@@ -2004,8 +2116,8 @@ class SyncItem(QWidget, Ui_SyncItem):
         self.base = parent
         self.group = SyncGroup(self.base)
         self.def_btn_icos = []
-        self.buttons = [(self.add_btn, "F"),
-                        (self.del_btn, "J")]
+        self.buttons = [(self.add_btn, "+"),
+                        (self.del_btn, "-")]
         self.setup_buttons()
         self.setup_icons()
         self.ok = True
@@ -2018,7 +2130,6 @@ class SyncItem(QWidget, Ui_SyncItem):
 
     def setup_icons(self):
         if self.base.theme in [THEME_NONE_NEW, THEME_DARK_NEW, THEME_LIGHT_NEW]:
-            # noinspection PyTypeChecker
             QTimer.singleShot(0, self.set_new_icons)
         else:
             self.set_old_icons()
@@ -2083,7 +2194,6 @@ class SyncItem(QWidget, Ui_SyncItem):
         self.group.add_item(item_data)
         self.group.data["items"].append(item_data)
         self.group.update_data()
-        # noinspection PyTypeChecker
         QTimer.singleShot(200, self.group.reset_group_height)
 
     @Slot()
@@ -2095,7 +2205,6 @@ class SyncItem(QWidget, Ui_SyncItem):
             return
         self.group.remove_item(self)
         self.group.update_data()
-        # noinspection PyTypeChecker
         QTimer.singleShot(100, self.group.reset_group_height)
 
 # if __name__ == "__main__":

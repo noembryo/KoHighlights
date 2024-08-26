@@ -114,6 +114,9 @@ what will be saved to the text/html files.</string>
    <property name="text">
     <string>Page</string>
    </property>
+   <property name="toolTip">
+    <string>Show the highlight's page number</string>
+   </property>
   </action>
   <action name="act_date">
    <property name="checkable">
@@ -121,6 +124,9 @@ what will be saved to the text/html files.</string>
    </property>
    <property name="text">
     <string>Date</string>
+   </property>
+   <property name="toolTip">
+    <string>Show the highlight's date</string>
    </property>
   </action>
   <action name="act_text">
@@ -130,6 +136,9 @@ what will be saved to the text/html files.</string>
    <property name="text">
     <string>Highlight</string>
    </property>
+   <property name="toolTip">
+    <string>Show the highlight's text</string>
+   </property>
   </action>
   <action name="act_comment">
    <property name="checkable">
@@ -137,6 +146,9 @@ what will be saved to the text/html files.</string>
    </property>
    <property name="text">
     <string>Comment</string>
+   </property>
+   <property name="toolTip">
+    <string>Show the highlight's comment</string>
    </property>
   </action>
   <action name="act_chapter">
@@ -147,7 +159,7 @@ what will be saved to the text/html files.</string>
     <string>Chapter</string>
    </property>
    <property name="toolTip">
-    <string>Chapter</string>
+    <string>Show the highlight's chapter</string>
    </property>
   </action>
  </widget>

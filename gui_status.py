@@ -3,7 +3,7 @@
 # Form implementation generated from reading ui file 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_status.ui',
 # licensing of 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_status.ui' applies.
 #
-# Created: Thu May  2 17:29:33 2024
+# Created: Mon Aug 26 13:41:16 2024
 #      by: pyside2-uic  running on PySide2 5.13.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -80,10 +80,14 @@ class Ui_Status(object):
         self.show_items_btn.setStatusTip(QtWidgets.QApplication.translate("Status", "Show/Hide elements of Highlights. Also affects what will be saved to the text/html files.", None, -1))
         self.show_items_btn.setText(QtWidgets.QApplication.translate("Status", "Show in Highlights", None, -1))
         self.act_page.setText(QtWidgets.QApplication.translate("Status", "Page", None, -1))
+        self.act_page.setToolTip(QtWidgets.QApplication.translate("Status", "Show the highlight\'s page number", None, -1))
         self.act_date.setText(QtWidgets.QApplication.translate("Status", "Date", None, -1))
+        self.act_date.setToolTip(QtWidgets.QApplication.translate("Status", "Show the highlight\'s date", None, -1))
         self.act_text.setText(QtWidgets.QApplication.translate("Status", "Highlight", None, -1))
+        self.act_text.setToolTip(QtWidgets.QApplication.translate("Status", "Show the highlight\'s text", None, -1))
         self.act_comment.setText(QtWidgets.QApplication.translate("Status", "Comment", None, -1))
+        self.act_comment.setToolTip(QtWidgets.QApplication.translate("Status", "Show the highlight\'s comment", None, -1))
         self.act_chapter.setText(QtWidgets.QApplication.translate("Status", "Chapter", None, -1))
-        self.act_chapter.setToolTip(QtWidgets.QApplication.translate("Status", "Chapter", None, -1))
+        self.act_chapter.setToolTip(QtWidgets.QApplication.translate("Status", "Show the highlight\'s chapter", None, -1))
 
 import images_rc
