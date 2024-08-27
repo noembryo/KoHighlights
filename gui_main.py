@@ -3,7 +3,7 @@
 # Form implementation generated from reading ui file 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_main.ui',
 # licensing of 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_main.ui' applies.
 #
-# Created: Mon Aug 26 13:41:15 2024
+# Created: Tue Aug 27 20:07:56 2024
 #      by: pyside2-uic  running on PySide2 5.13.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -339,5 +339,5 @@ class Ui_Base(object):
         self.act_view_book.setText(QtWidgets.QApplication.translate("Base", "View Book", None, -1))
         self.act_view_book.setShortcut(QtWidgets.QApplication.translate("Base", "Ctrl+B", None, -1))
 
-from secondary import XTableWidget, DropTableWidget
+from secondary import DropTableWidget, XTableWidget
 import images_rc

@@ -44,7 +44,7 @@ import pickle
 
 
 __author__ = "noEmbryo"
-__version__ = "2.1.0.0"
+__version__ = "2.1.1.0"
 
 
 class Base(QMainWindow, Ui_Base):
@@ -1667,6 +1667,12 @@ class Base(QMainWindow, Ui_Base):
         :type data: dict
         :param data: The book's data
         """
+        if data.get("annotations") is not None:  # new metadata format
+            for annot in data["annotations"].values():
+                note = annot.get("note")
+                if note is not None and not note:
+                    del annot["note"]  # delete key if empty
+
         times = os.stat(path)  # read the file's created/modified times
         encode_data(path, data)
         if data.get("summary", {}).get("status", "") in ["abandoned", "complete"]:
