@@ -117,7 +117,7 @@ FILTER_ALL, FILTER_HIGH, FILTER_COMM, FILTER_TITLES = range(4)  # filter type
 (THEME_NONE_OLD, THEME_NONE_NEW, THEME_DARK_OLD, THEME_DARK_NEW,
  THEME_LIGHT_OLD, THEME_LIGHT_NEW) = range(6)  # theme idx
 ACT_PAGE, ACT_DATE, ACT_TEXT, ACT_CHAPTER, ACT_COMMENT = range(5)  # show items actions
-
+HI_DATE, HI_COMMENT, HI_TEXT, HI_PAGE, HI_CHAPTER = range(5)  # highlight items
 
 NO_TITLE = _("NO TITLE FOUND")
 NO_AUTHOR = _("NO AUTHOR FOUND")
@@ -135,6 +135,8 @@ SYNC_FILE = join(SETTINGS_DIR, "sync_groups.json")
 
 CSV_HEAD = "Title\tAuthors\tPage\tDate\tChapter\tHighlight\tComment\n"
 CSV_KEYS = ["title", "authors", "page", "date", "chapter", "text", "comment"]
+MD_HEAD = "\n---\n## {0}  \n##### {1}  \n---\n"
+MD_HIGH = "*Page {3} [{0}]:*  \n***{4}***  \n  \n{2}  \n● {1}  \n&nbsp;  \n\n"
 HTML_HEAD = """<!DOCTYPE html>
 <html lang="en">
 <head>

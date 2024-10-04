@@ -1,4 +1,5 @@
 # coding=utf-8
+import os
 from copy import deepcopy
 from pprint import pprint
 
@@ -88,11 +89,22 @@ def get_csv_row(data):
     return "\t".join(values)
 
 
-def get_book_text(title, authors, highlights, format_, line_break, space, text):
-    """ Create the book's contents to be added to a single merged exported file
+def get_book_text(title, authors, highlights, format_,
+                  line_break, space, text, custom_md=False):
+    """ Create the book's contents
     """
     nl = os.linesep
-    if format_ == ONE_HTML:
+    if format_ == ONE_TEXT:
+        name = title
+        if authors:
+            name = f"{authors} - {title}"
+        line = "-" * 80
+        text += line + nl + name + nl + line + nl
+        highlights = [i[HI_PAGE] + space + i[HI_DATE] + line_break
+                      + (f"[{i[HI_CHAPTER]}]{nl}" if i[HI_CHAPTER] else "")
+                      + i[HI_TEXT] + i[HI_COMMENT] for i in highlights]
+        text += (nl * 2).join(highlights) + nl * 2
+    elif format_ == ONE_HTML:
         text += BOOK_BLOCK % {"title": title, "authors": authors}
         for high in highlights:
             date_text, high_comment, high_text, page_text, chapter = high
@@ -100,15 +112,6 @@ def get_book_text(title, authors, highlights, format_, line_break, space, text):
                                   "highlight": high_text, "comment": high_comment,
                                   "chapter": chapter}
         text += "</div>\n"
-    elif format_ == ONE_TEXT:
-        name = title
-        if authors:
-            name = f"{authors} - {title}"
-        line = "-" * 80
-        text += line + nl + name + nl + line + nl
-        highlights = [i[3] + space + i[0] + line_break + (f"[{i[4]}]{nl}" if i[4] else "")
-                      + i[2] + i[1] for i in highlights]
-        text += (nl * 2).join(highlights) + nl * 2
     elif format_ == ONE_CSV:
         for high in highlights:
             date_text, high_comment, high_text, page_text, chapter = high
@@ -118,28 +121,38 @@ def get_book_text(title, authors, highlights, format_, line_break, space, text):
             # data = {k.encode("utf8"): v.encode("utf8") for k, v in data.items()}
             text += get_csv_row(data) + "\n"
     elif format_ == ONE_MD:
-        text += f"\n---\n## {title}  \n##### {authors}  \n---\n"
         highs = []
-        for i in highlights:
-            comment = i[1].replace(nl, "  " + nl)
-            if comment:
-                comment = "  " + comment
-            chapter = i[4]
-            if chapter:
-                chapter = f"***{chapter}***{nl}{nl}".replace(nl, "  " + nl)
-            high = i[2].replace(nl, "  " + nl)
-            h = ("*" + i[3] + space + i[0] + line_break + chapter +
-                 high + comment + "  \n&nbsp;  \n")
-            h = h.replace("-", "\\-")
-            highs.append(h)
+        if not custom_md:
+            text += f"\n---\n## {title}  \n##### {authors}  \n---\n"
+            for i in highlights:
+                comment = i[HI_COMMENT].replace(nl, "  " + nl)
+                if comment:
+                    comment = "  " + comment
+                chapter = i[HI_CHAPTER]
+                if chapter:
+                    chapter = f"***{chapter}***{nl}{nl}".replace(nl, "  " + nl)
+                high = i[HI_TEXT].replace(nl, "  " + nl)
+                h = ("*" + i[HI_PAGE] + space + i[HI_DATE] + line_break + chapter +
+                     high + comment + "  \n&nbsp;  \n")
+                highs.append(h.replace("-", "\\-"))
+        else:  # use custom markdown template
+            text += MD_HEAD.format(title, authors)
+            for i in highlights:
+                comment = i[HI_COMMENT].replace(nl, "  " + nl).replace("-", "\\-")
+                if comment:
+                    comment = "  " + comment
+                high = i[HI_TEXT].replace(nl, "  " + nl).replace("-", "\\-")
+                date_ = i[HI_DATE].replace("-", "\\-")
+                highs.append(MD_HIGH.format(date_, comment, high,
+                                            i[HI_PAGE], i[HI_CHAPTER]))
         text += nl.join(highs) + "\n---\n"
     return text
 
 
-def save_file(title, authors, highlights, path, format_, line_break, space, sort_by):
+def save_file(title, authors, highlights, path, format_,
+              line_break, space, custom_md=False):
     """ Saves the book's exported file
     """
-    nl = os.linesep
     ext = text = ""
     encoding = "utf-8"
     name = title
@@ -147,21 +160,18 @@ def save_file(title, authors, highlights, path, format_, line_break, space, sort
         name = f"{authors} - {title}"
     if format_ == MANY_TEXT:
         ext = ".txt"
-        line = "-" * 80
-        text = line + nl + name + nl + line + (2 * nl)
     elif format_ == MANY_HTML:
         ext = ".html"
-        text = HTML_HEAD + BOOK_BLOCK % {"title": title, "authors": authors}
+        text = HTML_HEAD
     elif format_ == MANY_CSV:
         ext = ".csv"
         text = CSV_HEAD
         encoding = "utf-8-sig"
     elif format_ == MANY_MD:
         ext = ".md"
-        text = f"\n---\n## {title}  \n##### {authors}  \n---\n"
 
     filename = join(path, sanitize_filename(name))
-    if _("NO TITLE FOUND") in title:  # don't overwrite unknown title files
+    if NO_TITLE in title:  # don't overwrite unknown title files
         while isfile(filename + ext):
             match = re.match(r"(.+?) \[(\d+?)]$", filename)
             if match:
@@ -171,35 +181,10 @@ def save_file(title, authors, highlights, path, format_, line_break, space, sort
     filename = filename + ext
 
     with open(filename, "w+", encoding=encoding, newline="") as text_file:
-        for highlight in sorted(highlights, key=sort_by):
-            date_text, high_comment, high_text, page_text, chapter = highlight
-            if format_ == MANY_HTML:
-                text += HIGH_BLOCK % {"page": page_text, "date": date_text,
-                                      "highlight": high_text, "comment": high_comment,
-                                      "chapter": chapter}
-            elif format_ == MANY_TEXT:
-                text += (page_text + space + date_text + line_break +
-                         (f"[{chapter}]{nl}" if chapter else "") +
-                         high_text + high_comment)
-                text += 2 * nl
-            elif format_ == MANY_CSV:
-                data = {"title": title, "authors": authors, "page": page_text,
-                        "date": date_text, "text": high_text, "comment": high_comment,
-                        "chapter": chapter}
-                text += get_csv_row(data) + "\n"
-            elif format_ == MANY_MD:
-                high_text = high_text.replace(nl, "  " + nl)
-                high_comment = high_comment.replace(nl, "  " + nl)
-                if high_comment:
-                    high_comment = "  " + high_comment
-                if chapter:
-                    chapter = f"***{chapter}***{nl}{nl}".replace(nl, "  " + nl)
-                text += ("*" + page_text + space + date_text + line_break +
-                         chapter + high_text + high_comment +
-                         "  \n&nbsp;  \n\n").replace("-", "\\-")
+        text = get_book_text(title, authors, highlights, format_ + 1, line_break,
+                             space, text, custom_md)
         if format_ == MANY_HTML:
-            text += "\n</div>\n</body>\n</html>"
-
+            text += "\n</body>\n</html>"
         text_file.write(text)
 
 
@@ -208,7 +193,7 @@ __all__ = ("decode_data", "encode_data", "sanitize_filename", "get_csv_row",
            "XTableWidgetTitleItem", "DropTableWidget", "XMessageBox", "About", "AutoInfo",
            "ToolBar", "TextDialog", "Status", "LogStream", "Scanner", "HighlightScanner",
            "ReLoader", "DBLoader", "XToolButton", "Filter", "XThemes", "XIconGlyph",
-           "SyncGroup", "SyncItem", "XTableWidget")
+           "SyncGroup", "SyncItem", "XTableWidget", "Prefs")
 
 
 # ___ _______________________ SUBCLASSING ___________________________
@@ -860,6 +845,8 @@ from gui_edit import Ui_TextDialog
 from gui_filter import Ui_Filter
 from gui_sync_group import Ui_SyncGroup
 from gui_sync_item import Ui_SyncItem
+from gui_prefs import Ui_Prefs
+from gui_edit_template import Ui_EditTemplate
 
 
 class ToolBar(QWidget, Ui_ToolBar):
@@ -876,7 +863,7 @@ class ToolBar(QWidget, Ui_ToolBar):
         self.buttons = (self.scan_btn, self.export_btn, self.open_btn, self.merge_btn,
                         self.delete_btn, self.clear_btn, self.about_btn, self.filter_btn,
                         self.books_view_btn, self.high_view_btn, self.sync_view_btn,
-                        self.add_btn)
+                        self.add_btn, self.prefs_btn)
 
         self.size_menu = QMenu(self)
         # self.size_menu.aboutToShow.connect(self.create_size_menu)
@@ -1177,7 +1164,6 @@ class ToolBar(QWidget, Ui_ToolBar):
         self.clear_btn.setVisible(not (db_mode or sync_view))
 
         self.mode_grp.setEnabled(not sync_view)
-        self.base.status.show_items_btn.setVisible(books_view)
 
         self.set_btn_menu(self.export_btn, books_view)
         self.set_btn_menu(self.merge_btn, books_view)
@@ -1243,6 +1229,12 @@ class ToolBar(QWidget, Ui_ToolBar):
             btn.setPopupMode(QToolButton.DelayedPopup)
 
     @Slot()
+    def on_prefs_btn_clicked(self):
+        """ The `Preferences` button is pressed
+        """
+        self.base.prefs.show()
+
+    @Slot()
     def on_about_btn_clicked(self):
         """ The `About` button is pressed
         """
@@ -1298,7 +1290,7 @@ class Filter(QDialog, Ui_Filter):
             row_count = self.base.file_table.rowCount()
             for row in range(row_count):
                 title = self.base.file_table.item(row, TITLE).data(0)
-                if title == _("NO TITLE FOUND"):
+                if title == NO_TITLE:
                     title = ""
                 data = self.base.file_table.item(row, TITLE).data(Qt.UserRole)
                 highlights = self.base.get_highlights_from_data(data)
@@ -1403,6 +1395,164 @@ class Filter(QDialog, Ui_Filter):
         """
         self.base.toolbar.filter_btn.setChecked(False)
         self.on_clear_filter_btn_clicked()
+        event.accept()
+
+
+class Prefs(QDialog, Ui_Prefs):
+
+    def __init__(self, parent=None):
+        super(Prefs, self).__init__(parent)
+        self.setupUi(self)
+        self.base = parent
+        self.themes = XThemes(parent)
+        self.show_items = [self.show_page_chk, self.show_date_chk, self.show_high_chk,
+                           self.show_chap_chk, self.show_comm_chk]
+        self.edit_template = EditTemplate(parent=self.base)
+
+    @Slot(int)
+    def on_theme_box_currentIndexChanged(self, idx):
+        """ Selects the app's theme style
+        """
+        if idx == THEME_NONE_OLD:
+            self.themes.normal()
+            self.base.set_old_icons()
+            if self.base.theme not in [THEME_NONE_OLD, THEME_NONE_NEW]:
+                self.no_theme_popup(idx)
+                return
+        elif idx == THEME_NONE_NEW:
+            self.themes.normal()
+            self.base.set_new_icons()
+            if self.base.theme not in [THEME_NONE_OLD, THEME_NONE_NEW]:
+                self.no_theme_popup(idx)
+                return
+        elif idx == THEME_DARK_OLD:
+            self.themes.dark()
+            self.base.set_old_icons()
+        elif idx == THEME_DARK_NEW:
+            self.themes.dark()
+            self.base.set_new_icons()
+        elif idx == THEME_LIGHT_OLD:
+            self.themes.light()
+            self.base.set_old_icons()
+        elif idx == THEME_LIGHT_NEW:
+            self.themes.light()
+            self.base.set_new_icons()
+
+        self.base.theme = idx
+        self.base.reset_theme_colors()
+
+    def no_theme_popup(self, idx):
+        self.base.theme = idx
+        self.base.reset_theme_colors()
+        self.base.popup(_("Warning"), _("The theme will be fully reset after "
+                                        "the application is restarted."))
+
+    @Slot()
+    def on_alt_title_sort_chk_stateChanged(self):
+        """ Ignore the english articles while sorting by Title
+        """
+        self.base.toggle_title_sort()
+
+    @Slot()
+    def on_show_page_chk_stateChanged(self):
+        """ Show the highlight's page number
+        """
+        self.base.show_items[0] = self.show_page_chk.isChecked()
+        self.on_show_items(0)
+
+    @Slot()
+    def on_show_date_chk_stateChanged(self):
+        """ Show the highlight's date
+        """
+        self.base.show_items[1] = self.show_date_chk.isChecked()
+        self.on_show_items(1)
+
+    @Slot()
+    def on_show_high_chk_stateChanged(self):
+        """ Show the highlight's text
+        """
+        self.base.show_items[2] = self.show_high_chk.isChecked()
+        self.on_show_items(2)
+
+    @Slot()
+    def on_show_chap_chk_stateChanged(self):
+        """ Show the highlight's chapter
+        """
+        self.base.show_items[3] = self.show_chap_chk.isChecked()
+        self.on_show_items(3)
+
+    @Slot()
+    def on_show_comm_chk_stateChanged(self):
+        """ Show the highlight's comment
+        """
+        self.base.show_items[4] = self.show_comm_chk.isChecked()
+        self.on_show_items(4)
+
+    @Slot()
+    def on_show_ref_pg_chk_stateChanged(self):
+        """ Use the highlight's reference page if exists
+        """
+        self.base.set_show_ref_pg()
+
+    def on_show_items(self, idx=None):
+        """ Show/Hide elements of the highlight info
+        """
+        if idx is not None:
+            self.base.show_items[idx] = self.show_items[idx].isChecked()
+        try:
+            table_idx = self.base.file_table.selectionModel().selectedRows()[-1]
+        except IndexError:  # nothing selected
+            return
+        item = self.base.file_table.item(table_idx.row(), 0)
+        self.base.on_file_table_itemClicked(item)
+
+    @Slot()
+    def on_custom_date_btn_clicked(self):
+        """ Changes the date format template
+        """
+        popup = self.base.popup(_("Set custom Date format"),
+                                _("The default format is %Y-%m-%d %H:%M:%S\nUse these "
+                                  "symbols in any order, combined with any other "
+                                  "character.\nFor more info about the supported symbols "
+                                  "press Help."),
+                                icon=QMessageBox.Information, buttons=2,
+                                extra_text=_("Help"), input_text=self.base.date_format,
+                                button_text=(_("OK"), _("Use Default")))
+        if popup.buttonRole(popup.clickedButton()) == QMessageBox.AcceptRole:
+            self.base.date_format = popup.typed_text
+        elif popup.buttonRole(popup.clickedButton()) == QMessageBox.RejectRole:
+            self.base.date_format = DATE_FORMAT
+        elif popup.buttonRole(popup.clickedButton()) == QMessageBox.ApplyRole:
+            webbrowser.open("https://docs.python.org/2.7/library/datetime.html"
+                            "#strftime-strptime-behavior")
+        self.on_show_items()
+
+    @Slot()
+    def on_custom_template_chk_stateChanged(self):
+        """ Use a custom tamlate for markdown
+        """
+        self.base.custom_template = self.custom_template_chk.isChecked()
+
+    @Slot()
+    def on_custom_template_btn_clicked(self):
+        """ Changes the Markdown format template
+        """
+        self.edit_template.set_default()
+        self.edit_template.exec_()
+
+    @Slot(int)
+    def on_sort_box_currentIndexChanged(self, idx):
+        """ Change the sort order of the Highlight list
+        """
+        self.base.set_highlight_sort(bool(idx))
+
+    def closeEvent(self, event):
+        """ Accepts or rejects the `exit` command
+
+        :type event: QCloseEvent
+        :parameter event: The `exit` event
+        """
+        self.base.settings_save()
         event.accept()
 
 
@@ -1546,6 +1696,117 @@ class TextDialog(QDialog, Ui_TextDialog):
         self.base.edit_comment_ok()
 
 
+class EditTemplate(QDialog, Ui_EditTemplate):
+
+    def __init__(self, parent=None):
+        super(EditTemplate, self).__init__(parent)
+        self.setupUi(self)
+
+        self.base = parent
+        self.setWindowTitle(_("Edit Markdown template"))
+        self.error =False
+        head_txt = _("You can use the variables: {0}=Title, {1}=Authors")
+        self.head_help_lbl.setText(head_txt)
+        body_txt = _("You can use the variables: {0}=Date, {1}=Comment, "
+                     "{2}=Highlighted text, {3}=Page number, {4}=Chapter name")
+        self.body_help_lbl.setText(body_txt)
+        self.setStyleSheet("QGroupBox{font-weight: bold;}")
+
+    @Slot()
+    def on_head_edit_txt_textChanged(self):
+        try:
+            self.error = False
+            self.head_preview_txt.setStyleSheet(self.styleSheet())
+            text = self.head_edit_txt.toPlainText().format("Book's Title",
+                                                           "Book's Authors")
+        except ValueError:  # single '{' encountered, paint text red
+            self.error = True
+            if self.base.theme in (THEME_DARK_NEW, THEME_DARK_OLD):
+                col = "#DD0000"
+            else:
+                col = "#990000"
+            style = self.head_preview_txt.styleSheet() + f'QTextEdit {{color: "{col}";}}'
+            self.head_preview_txt.setStyleSheet(style)
+            return
+        self.head_preview_txt.setMarkdown(text)
+
+    @Slot()
+    def on_body_edit_txt_textChanged(self):
+        try:
+            self.error = False
+            self.body_preview_txt.setStyleSheet(self.styleSheet())
+            text = (self.body_edit_txt.toPlainText()
+                    .format("2023-03-07 14:43:01", "A comment", "The highlighted Text",
+                            "420", "Chapter name"))
+            # HI_DATE, HI_COMMENT, HI_TEXT, HI_PAGE, HI_CHAPTER
+        except (ValueError, IndexError):  # single '{' encountered, paint text red
+            self.error = True
+            if self.base.theme in (THEME_DARK_NEW, THEME_DARK_OLD):
+                col = "#DD0000"
+            else:
+                col = "#990000"
+            style = self.body_preview_txt.styleSheet() + f'QTextEdit {{color: "{col}";}}'
+            self.body_preview_txt.setStyleSheet(style)
+            return
+        self.body_preview_txt.setMarkdown(text)
+
+    @Slot()
+    def on_default_btn_clicked(self):
+        """ The Default button is pressed
+        """
+        self.set_default(clear=True)
+
+    def set_default(self, clear=False):
+        """ Sets the default template if empty
+
+        :type clear: bool
+        :param clear: Replace the template with the default anyway
+        """
+        if not clear:
+            if not self.head_edit_txt.toPlainText().strip():
+                self.head_edit_txt.setText(MD_HEAD)
+            if not self.body_edit_txt.toPlainText().strip():
+                self.body_edit_txt.setText(MD_HIGH)
+        else:
+            self.head_edit_txt.setText(MD_HEAD)
+            self.body_edit_txt.setText(MD_HIGH)
+
+    @Slot()
+    def on_ok_btn_clicked(self):
+        """ The OK button is pressed
+        """
+        if not self.error:
+            self.set_default()
+            self.base.templ_head = self.head_edit_txt.toPlainText()
+            self.base.templ_body = self.body_edit_txt.toPlainText()
+            self.close()
+        else:
+            popup = self.base.popup(_("Error"),
+                                    _("There is a single '{' or '}' in the template "
+                                      "without its pair."),
+                                    icon=QMessageBox.Critical)
+            popup.exec_()
+
+    @Slot()
+    def on_cancel_btn_clicked(self):
+        """ The Cancel button is pressed
+        """
+        self.head_edit_txt.setText(self.base.templ_head)
+        self.body_edit_txt.setText(self.base.templ_body)
+        self.close()
+
+    def closeEvent(self, event):
+        """ Accepts or rejects the `exit` command
+
+        :type event: QCloseEvent
+        :parameter event: The `exit` event
+        """
+        if self.error:  # don't close if there is an error
+            event.ignore()
+            return
+        event.accept()
+
+
 class Status(QWidget, Ui_Status):
 
     def __init__(self, parent=None):
@@ -1556,141 +1817,10 @@ class Status(QWidget, Ui_Status):
         super(Status, self).__init__(parent)
         self.setupUi(self)
         self.base = parent
-        self.themes = XThemes(parent)
 
         self.wait_anim = QMovie(":/stuff/wait.gif")
         self.anim_lbl.setMovie(self.wait_anim)
         self.anim_lbl.hide()
-
-        self.show_actions = [self.act_page, self.act_date, self.act_text,
-                             self.act_chapter, self.act_comment]
-        for idx, act in enumerate(self.show_actions):
-            act.setData(idx)
-            act.triggered.connect(partial(self.on_show_items, act))
-
-        self.show_menu = QMenu(self)
-        self.show_menu.setToolTipsVisible(True)
-        self.show_menu.aboutToShow.connect(self.get_show_menu)
-        self.show_items_btn.setMenu(self.show_menu)
-
-    def get_show_menu(self):
-        """ Returns the menu with the items to show
-        """
-        self.show_menu.clear()
-        for idx, act in enumerate(self.show_actions):
-            act.setChecked(self.base.show_items[idx])
-            self.show_menu.addAction(act)
-
-        self.show_menu.addSeparator()
-        self.show_menu.addSeparator()
-        self.show_menu.addSeparator()
-
-        action = QAction(_("Date Format"), self.show_menu)
-        action.setIcon(self.base.ico_calendar)
-        action.triggered.connect(self.set_date_format)
-        action.setToolTip(_("Change the way the date is displayed"))
-        self.show_menu.addAction(action)
-
-        action = QAction(_("Reference page numbers"), self.show_menu)
-        action.setCheckable(True)
-        action.setChecked(self.base.show_ref_pg)
-        action.triggered.connect(self.base.set_show_ref_pg)
-        action.setToolTip(_("Use reference page numbers\nif they are available"))
-        self.show_menu.addAction(action)
-
-        sort_menu = QMenu(self)
-        sort_menu.setIcon(self.base.ico_sort)
-        sort_menu.setTitle(_("Sort Highlights by"))
-        group = QActionGroup(self)
-
-        action = QAction(_("Date"), sort_menu)
-        action.setCheckable(True)
-        action.setChecked(not self.base.high_by_page)
-        action.triggered.connect(self.base.set_highlight_sort)
-        action.setData(False)
-        group.addAction(action)
-        sort_menu.addAction(action)
-
-        action = QAction(_("Page"), sort_menu)
-        action.setCheckable(True)
-        action.setChecked(self.base.high_by_page)
-        action.triggered.connect(self.base.set_highlight_sort)
-        action.setData(True)
-        group.addAction(action)
-        sort_menu.addAction(action)
-
-        self.show_menu.addMenu(sort_menu)
-
-    @Slot(int)
-    def on_theme_box_currentIndexChanged(self, idx):
-        """ Selects the app's theme style
-        """
-        if idx == THEME_NONE_OLD:
-            self.themes.normal()
-            self.base.set_old_icons()
-            if self.base.theme not in [THEME_NONE_OLD, THEME_NONE_NEW]:
-                self.no_theme_popup(idx)
-                return
-        elif idx == THEME_NONE_NEW:
-            self.themes.normal()
-            self.base.set_new_icons()
-            if self.base.theme not in [THEME_NONE_OLD, THEME_NONE_NEW]:
-                self.no_theme_popup(idx)
-                return
-        elif idx == THEME_DARK_OLD:
-            self.themes.dark()
-            self.base.set_old_icons()
-        elif idx == THEME_DARK_NEW:
-            self.themes.dark()
-            self.base.set_new_icons()
-        elif idx == THEME_LIGHT_OLD:
-            self.themes.light()
-            self.base.set_old_icons()
-        elif idx == THEME_LIGHT_NEW:
-            self.themes.light()
-            self.base.set_new_icons()
-
-        self.base.theme = idx
-        self.base.reset_theme_colors()
-
-    def no_theme_popup(self, idx):
-        self.base.theme = idx
-        self.base.reset_theme_colors()
-        self.base.popup(_("Warning"), _("The theme will be fully reset after "
-                                        "the application is restarted."))
-
-    def on_show_items(self, action=None):
-        """ Show/Hide elements of the highlight info
-        """
-        if action:
-            act_idx = action.data()
-            self.base.show_items[act_idx] = action.isChecked()
-        try:
-            table_idx = self.base.file_table.selectionModel().selectedRows()[-1]
-        except IndexError:  # nothing selected
-            return
-        item = self.base.file_table.item(table_idx.row(), 0)
-        self.base.on_file_table_itemClicked(item)
-
-    def set_date_format(self):
-        """ Changes the date format
-        """
-        popup = self.base.popup(_("Set custom Date format"),
-                                _("The default format is %Y-%m-%d %H:%M:%S\nUse these "
-                                  "symbols in any order, combined with any other "
-                                  "character.\nFor more info about the supported symbols "
-                                  "press Help."),
-                                icon=QMessageBox.Information, buttons=2,
-                                extra_text=_("Help"), input_text=self.base.date_format,
-                                button_text=(_("OK"), _("Use Default")))
-        if popup.buttonRole(popup.clickedButton()) == QMessageBox.AcceptRole:
-            self.base.date_format = popup.typed_text
-        elif popup.buttonRole(popup.clickedButton()) == QMessageBox.RejectRole:
-            self.base.date_format = DATE_FORMAT
-        elif popup.buttonRole(popup.clickedButton()) == QMessageBox.ApplyRole:
-            webbrowser.open("https://docs.python.org/2.7/library/datetime.html"
-                            "#strftime-strptime-behavior")
-        self.on_show_items()
 
     def animation(self, run):
         """ Creates or deletes temporary files and folders
@@ -1978,17 +2108,18 @@ class SyncGroup(QWidget, Ui_SyncGroup):
                 self.set_erroneous(sync_item, text)
                 continue
 
-            # check if the book's md5 is the same
-            if not self.base.same_book(source["data"], data, source["path"], path):
-                text = _("The book file is different from the rest")
-                self.set_erroneous(sync_item, text)
-                continue
-
             # check if the books have the same cre version
             if not self.base.same_cre_version(source["data"], data):
                 text = _("The metadata files were produced with a different version "
                          "of the reader engine")
                 self.set_erroneous(sync_item, text)
+                continue
+
+            # check if the book's md5 is the same KEEP IT AS THE LAST CHECK
+            if not self.base.same_book(source["data"], data, source["path"], path):
+                text = _("The book file is different from the rest")
+                self.set_erroneous(sync_item, text)
+                sync_item.md5_diff = True
                 continue
 
     def set_txt_normal(self, item):
@@ -2121,6 +2252,10 @@ class SyncItem(QWidget, Ui_SyncItem):
         self.setup_buttons()
         self.setup_icons()
         self.ok = True
+        self.md5_diff = False
+        self.md5_ignore_exists = False
+
+        QTimer.singleShot(0, self.check_ignore_md5)
 
     def setup_buttons(self):
         for btn, char in self.buttons:
@@ -2150,6 +2285,45 @@ class SyncItem(QWidget, Ui_SyncItem):
         for idx, item in enumerate(self.buttons):
             btn = item[0]
             btn.setIcon(self.def_btn_icos[idx])
+
+    @Slot(QPoint)
+    def on_sync_path_txt_customContextMenuRequested(self, point):
+        """ When the context menu of the SyncGroup is requested
+
+        :type point: QPoint
+        :param point: The point of the click
+        """
+        if self.md5_diff or self.md5_ignore_exists:
+            menu = QMenu(self)
+            menu.setToolTipsVisible(True)
+            if QT6:  # QT6 requires exec() instead of exec_()
+                menu.exec_ = getattr(menu, "exec")
+
+            action = QAction(_("Ignore MD5"), menu)
+            action.setCheckable(True)
+            is_active = isfile(join(dirname(self.sync_path_txt.text()), "ignore_md5"))
+            action.setChecked(is_active)
+            action.setToolTip(_("Ignore MD5 checksum comparisons for this file"))
+            action.triggered.connect(self.create_ignore_md5)
+            menu.addAction(action)
+
+            menu.exec_(self.mapToGlobal(point))
+
+    def create_ignore_md5(self):
+        """ Creates the `ignore_md5` file
+        """
+        ignore_md5_path = join(dirname(self.sync_path_txt.text()), "ignore_md5")
+        if not isfile(ignore_md5_path):
+            open(ignore_md5_path, "w").close()
+        else:
+            os.remove(ignore_md5_path)
+        self.group.on_refresh_btn_clicked()
+
+    def check_ignore_md5(self):
+        """ Checks if there is an md5_ignore file present
+        """
+        ignore_md5_path = join(dirname(self.sync_path_txt.text()), "ignore_md5")
+        self.md5_ignore_exists = isfile(ignore_md5_path)
 
     @Slot()
     def on_sync_path_btn_clicked(self, ):

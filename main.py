@@ -44,7 +44,7 @@ import pickle
 
 
 __author__ = "noEmbryo"
-__version__ = "2.1.1.0"
+__version__ = "2.2.0.0"
 
 
 class Base(QMainWindow, Ui_Base):
@@ -58,6 +58,17 @@ class Base(QMainWindow, Ui_Base):
         self.setupUi(self)
         self.version = __version__
         self.setWindowTitle(APP_NAME + " portable" if PORTABLE else APP_NAME)
+
+        # ___ ________ PREFS SETTINGS ___________
+        self.theme = THEME_NONE_OLD
+        self.alt_title_sort = False
+        self.show_items = [True, True, True, True, True]
+        self.show_ref_pg = True
+        self.custom_template = False
+        self.templ_head = MD_HEAD
+        self.templ_body = MD_HIGH
+        self.high_by_page = True
+        self.date_format = DATE_FORMAT
 
         # ___ ________ SAVED SETTINGS ___________
         self.col_sort = MODIFIED
@@ -73,17 +84,11 @@ class Base(QMainWindow, Ui_Base):
         self.current_view = BOOKS_VIEW
         self.db_mode = False
         self.toolbar_size = 48
-        self.alt_title_sort = False
-        self.high_by_page = True
-        self.show_ref_pg = False
         self.high_merge_warning = True
         self.archive_warning = True
         self.exit_msg = True
         self.db_path = join(SETTINGS_DIR, "data.db")
         self.date_vacuumed = datetime.now().strftime(DATE_FORMAT)
-        self.theme = THEME_NONE_OLD
-        self.date_format = DATE_FORMAT
-        self.show_items = [True, True, True, True, True]
         # ___ ___________________________________
 
         self.file_selection = None
@@ -118,7 +123,6 @@ class Base(QMainWindow, Ui_Base):
         self.resize_columns = False
         self.header_high_view = self.high_table.horizontalHeader()
         self.header_high_view.setDefaultAlignment(Qt.AlignLeft)
-        # self.header_high_view.setResizeMode(HIGHLIGHT_H, QHeaderView.Stretch)
 
         self.file_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
         self.header_main.setSectionsMovable(True)
@@ -131,7 +135,7 @@ class Base(QMainWindow, Ui_Base):
         self.info_fields = [self.title_txt, self.author_txt, self.series_txt,
                             self.lang_txt, self.pages_txt, self.tags_txt]
         self.info_keys = ["title", "authors", "series", "language", "pages", "keywords"]
-        self.kor_text = _("Scanning for KOReader metadata files")
+        self.kor_text = _("Scanning for KOReader metadata files.")
 
         self.ico_file_save = QIcon(":/stuff/file_save.png")
         self.ico_files_merge = QIcon(":/stuff/files_merge.png")
@@ -141,30 +145,27 @@ class Base(QMainWindow, Ui_Base):
         self.ico_db_compact = QIcon(":/stuff/db_compact.png")
         self.ico_refresh = QIcon(":/stuff/refresh16.png")
         self.ico_folder_open = QIcon(":/stuff/folder_open.png")
-        self.ico_calendar = QIcon(":/stuff/calendar.png")
         self.ico_sort = QIcon(":/stuff/sort.png")
         self.ico_view_books = QIcon(":/stuff/view_books.png")
         self.ico_files_view = QIcon(":/stuff/files_view.png")
         self.ico_file_edit = QIcon(":/stuff/file_edit.png")
         self.ico_copy = QIcon(":/stuff/copy.png")
         self.ico_delete = QIcon(":/stuff/delete.png")
-        self.def_icons = [
-            self.ico_file_save,
-            self.ico_files_merge,
-            self.ico_files_delete,
-            self.ico_db_add,
-            self.ico_db_open,
-            self.ico_refresh,
-            self.ico_folder_open,
-            self.ico_calendar,
-            self.ico_sort,
-            self.ico_view_books,
-            self.ico_files_view,
-            self.ico_file_edit,
-            self.ico_copy,
-            self.ico_delete,
-            self.ico_db_compact,
-            ]
+        self.def_icons = [self.ico_file_save,
+                          self.ico_files_merge,
+                          self.ico_files_delete,
+                          self.ico_db_add,
+                          self.ico_db_open,
+                          self.ico_refresh,
+                          self.ico_folder_open,
+                          self.ico_sort,
+                          self.ico_view_books,
+                          self.ico_files_view,
+                          self.ico_file_edit,
+                          self.ico_copy,
+                          self.ico_delete,
+                          self.ico_db_compact,
+                          ]
         self.ico_file_exists = QIcon(":/stuff/file_exists.png")
         self.ico_file_missing = QIcon(":/stuff/file_missing.png")
         self.ico_label_green = QIcon(":/stuff/label_green.png")
@@ -177,6 +178,7 @@ class Base(QMainWindow, Ui_Base):
         self.about = About(self)
         self.auto_info = AutoInfo(self)
         self.filter = Filter(self)
+        self.prefs = Prefs(self)
 
         self.toolbar = ToolBar(self)
         self.tool_bar.addWidget(self.toolbar)
@@ -217,16 +219,19 @@ class Base(QMainWindow, Ui_Base):
                         (tbar.add_btn, "X"),
                         (tbar.delete_btn, "O"),
                         (tbar.clear_btn, "G"),
+                        (tbar.prefs_btn, "F"),
                         (tbar.books_view_btn, "H"),
                         (tbar.high_view_btn, "I"),
                         (tbar.sync_view_btn, "W"),
                         (tbar.loaded_btn, "H"),
                         (tbar.db_btn, "K"),
-                        (self.status.show_items_btn, "U"),
                         (self.custom_btn, "Q"),
                         (self.filter.filter_btn, "D"),
                         (self.description_btn, "V"),
-                        (self.filter.clear_filter_btn, "G")]
+                        (self.filter.clear_filter_btn, "G"),
+                        (self.prefs.custom_date_btn, "T"),
+                        (self.prefs.custom_template_btn, "Q"),
+                        ]
 
         QTimer.singleShot(10000, self.auto_check4update)  # check for updates
 
@@ -261,7 +266,6 @@ class Base(QMainWindow, Ui_Base):
             else:
                 self.toolbar.db_btn.setChecked(True)  # open in Archived mode
                 QTimer.singleShot(0, self.load_db_rows)
-                # self.load_db_rows()
         self.read_books_from_db()  # always load db on start
         if self.current_view == BOOKS_VIEW:
             self.toolbar.books_view_btn.click()  # open in Books view
@@ -281,7 +285,8 @@ class Base(QMainWindow, Ui_Base):
     def load_db_rows(self):
         """ Load the rows from the database
         """
-        self.loading_thread(DBLoader, self.books, _(f"Loading {APP_NAME} database"))
+        self.loading_thread(DBLoader, self.books,
+                            _("Loading {} database.").format(APP_NAME))
 
     def setup_buttons(self):
         for btn, char in self.buttons:
@@ -310,7 +315,7 @@ class Base(QMainWindow, Ui_Base):
 
         if menus:  # recreate the menu icons
             xig = XIconGlyph(self, {"family": "XFont", "size": (16, 16)})
-            self.export_menu.setIcon(xig.get_icon({"char": "B"}))
+
             self.ico_file_save = xig.get_icon({"char": "B"})
             self.ico_files_merge = xig.get_icon({"char": "E"})
             self.ico_files_delete = xig.get_icon({"char": "O"})
@@ -318,7 +323,6 @@ class Base(QMainWindow, Ui_Base):
             self.ico_db_open = xig.get_icon({"char": "M"})
             self.ico_refresh = xig.get_icon({"char": "N"})
             self.ico_folder_open = xig.get_icon({"char": "P"})
-            self.ico_calendar = xig.get_icon({"char": "T"})
             self.ico_sort = xig.get_icon({"char": "S"})
             self.ico_view_books = xig.get_icon({"char": "H"})
             self.act_view_book.setIcon(xig.get_icon({"char": "C"}))
@@ -326,6 +330,8 @@ class Base(QMainWindow, Ui_Base):
             self.ico_copy = xig.get_icon({"char": "R"})
             self.ico_delete = xig.get_icon({"char": "O"})
             self.ico_db_compact = xig.get_icon({"char": "J"})
+
+            self.export_menu.setIcon(self.ico_file_save)
 
     def set_old_icons(self):
         """ Reload the old icons
@@ -341,23 +347,21 @@ class Base(QMainWindow, Ui_Base):
         self.ico_db_open = self.def_icons[4]
         self.ico_refresh = self.def_icons[5]
         self.ico_folder_open = self.def_icons[6]
-        self.ico_calendar = self.def_icons[7]
-        self.ico_sort = self.def_icons[8]
-        self.ico_view_books = self.def_icons[9]
-        self.act_view_book.setIcon(self.def_icons[10])
-        self.ico_file_edit = self.def_icons[11]
-        self.ico_copy = self.def_icons[12]
-        self.ico_delete = self.def_icons[13]
-        self.ico_db_compact = self.def_icons[14]
+        self.ico_sort = self.def_icons[7]
+        self.ico_view_books = self.def_icons[8]
+        self.act_view_book.setIcon(self.def_icons[9])
+        self.ico_file_edit = self.def_icons[10]
+        self.ico_copy = self.def_icons[11]
+        self.ico_delete = self.def_icons[12]
+        self.ico_db_compact = self.def_icons[13]
+
+        self.export_menu.setIcon(self.ico_file_save)
 
     def reset_theme_colors(self):
         """ Resets the widget colors after a theme change
         """
         color = self.app.palette().base().color().name()
         self.review_txt.setStyleSheet(f'background-color: "{color}";')
-        color = self.app.palette().window().color().name()
-        for item in [self.status.show_items_btn, self.status.theme_box]:
-            item.setStyleSheet(f'background-color: "{color}";')
 
         color = self.app.palette().button().color().name()
         for row in range(self.sync_table.rowCount()):
@@ -412,6 +416,8 @@ class Base(QMainWindow, Ui_Base):
                 self.toolbar.on_scan_btn_clicked()
             elif key == Qt.Key_S:
                 self.on_export()
+            elif key == Qt.Key_P:
+                self.toolbar.on_prefs_btn_clicked()
             elif key == Qt.Key_I:
                 self.toolbar.on_about_btn_clicked()
             elif key == Qt.Key_F:
@@ -449,7 +455,7 @@ class Base(QMainWindow, Ui_Base):
             self.bye_bye_stuff()
             event.accept()
             return
-        popup = self.popup(_("Confirmation"), _(f"Exit {APP_NAME}?"), buttons=2,
+        popup = self.popup(_("Confirmation"), _("Exit {}?").format(APP_NAME), buttons=2,
                            check_text=DO_NOT_SHOW)
         self.exit_msg = not popup.checked
         if popup.buttonRole(popup.clickedButton()) == QMessageBox.AcceptRole:
@@ -950,9 +956,12 @@ class Base(QMainWindow, Ui_Base):
         """ Toggles the way titles are sorted (use or not A/The)
         """
         self.alt_title_sort = not self.alt_title_sort
+        self.blocked_change(self.prefs.alt_title_sort_chk, self.alt_title_sort)
         self.reload_table(_("ReSorting books..."))
 
     def reload_table(self, text):
+        """ Reloads the table depending on the current View mode
+        """
         if not self.db_mode:
             self.loading_thread(ReLoader, self.loaded_paths.copy(), text)
         else:
@@ -1002,7 +1011,7 @@ class Base(QMainWindow, Ui_Base):
         if self.archive_warning:  # warn about book replacement in archive
             extra = _("these books") if len(self.sel_indexes) > 1 else _("this book")
             popup = self.popup(_("Question!"),
-                               _(f"Add or replace {extra} in the archive?"),
+                               _("Add or replace {} in the archive?").format(extra),
                                buttons=2, icon=QMessageBox.Question,
                                check_text=DO_NOT_SHOW)
             self.archive_warning = not popup.checked
@@ -1027,7 +1036,7 @@ class Base(QMainWindow, Ui_Base):
                     empty += 1
                     continue
             else:  # old format metadata
-                if not data["highlight"]:  # no highlights, don't add
+                if not data.get("highlight"):  # no highlights, don't add
                     empty += 1
                     continue
             try:
@@ -1035,7 +1044,10 @@ class Base(QMainWindow, Ui_Base):
             except KeyError:  # older metadata, don't add
                 older += 1
                 continue
-            data["stats"]["performance_in_pages"] = {}
+            try:
+                data["stats"]["performance_in_pages"] = {}
+            except KeyError:  # statistics not available
+                pass
             data["page_positions"] = {}  # can be cluttered
             books.append({"md5": md5, "path": path, "date": date,
                           "data": json.dumps(data)})
@@ -1044,13 +1056,13 @@ class Base(QMainWindow, Ui_Base):
 
         extra = ""
         if empty:
-            extra += _(f"\nNot added {empty} books with no highlights.")
+            extra += _("\nNot added {} books with no highlights.").format(empty)
         if older:
-            extra += _(f"\nNot added {older} books with old type metadata.")
+            extra += _("\nNot added {} books with old type metadata.").format(older)
 
         self.popup(_("Added!"),
-                   _(f"{added} books were added/updated to the Archive from the "
-                     f"{len(self.sel_indexes)} processed."),
+                   _("{} books were added/updated to the Archive from the "
+                     "{} processed.".format(added, len(self.sel_indexes))),
                    icon=QMessageBox.Information)
 
     def loading_thread(self, worker, args, text, clear=True):
@@ -1062,7 +1074,7 @@ class Base(QMainWindow, Ui_Base):
         self.file_table.setSortingEnabled(False)  # re-enable it after populating table
 
         self.status.animation(True)
-        self.auto_info.set_text(_(f"{text}.\nPlease Wait..."))
+        self.auto_info.set_text(text + _("\nPlease Wait..."))
         self.auto_info.show()
 
         scan_thread = QThread()
@@ -1111,8 +1123,11 @@ class Base(QMainWindow, Ui_Base):
             try:
                 data = decode_data(meta_path)
             except PermissionError:
-                self.base.error(_(f"Could not access the book's metadata file\n"
-                                  f"{meta_path}"))
+                self.error(_("Could not access the book's metadata file\n{}")
+                           .format(meta_path))
+                return
+            except FileNotFoundError:
+                self.error(_("Missing book's metadata file: {}".format(meta_path)))
                 return
             if not data:
                 print("No data here!", meta_path)
@@ -1147,7 +1162,7 @@ class Base(QMainWindow, Ui_Base):
         book_icon = self.ico_file_exists if book_exists else self.ico_file_missing
         type_item = QTableWidgetItem(book_icon, ext)
         type_item.setToolTip(book_path if book_exists else
-                             _(f"The {ext} file is missing!"))
+                             _("The {} file is missing!").format(ext))
         type_item.setData(Qt.UserRole, (book_path, book_exists))
         self.file_table.setItem(0, TYPE, type_item)
 
@@ -1205,10 +1220,11 @@ class Base(QMainWindow, Ui_Base):
             high_count = len([i for i in annotations.values() if i.get("pos0")])
         else:  # old format metadata
             high_count = 0
-            if data["highlight"]:
+            try:
                 for page in data["highlight"]:
                     high_count += len(data["highlight"][page])
-                high_count = str(high_count) if high_count else ""
+            except KeyError:  # no highlights
+                pass
         high_count = str(high_count) if high_count else ""
 
         try:
@@ -1244,7 +1260,8 @@ class Base(QMainWindow, Ui_Base):
                 name = title.split("#] ")[1]
                 title = splitext(name)[0]
             except IndexError:  # no "#] " in filename
-                pass
+                if splitext(dirname(filename))[1] == ".sdr":
+                    title = splitext(basename(dirname(filename)))[0]
             authors = OLD_TYPE
         if not title:
             try:
@@ -1253,7 +1270,7 @@ class Base(QMainWindow, Ui_Base):
             except IndexError:  # no "#] " in filename
                 title = NO_TITLE
         authors = authors if authors else NO_AUTHOR
-        return title, authors
+        return title, authors.replace("\\\n", ", ")
 
     # ___ ___________________ HIGHLIGHTS LIST STUFF _________________
 
@@ -1265,25 +1282,26 @@ class Base(QMainWindow, Ui_Base):
         :type path: str|unicode
         :param path: The item/book's path
         """
-        space = (" " if self.status.act_page.isChecked() and
-                 self.status.act_date.isChecked() else "")
-        line_break = (":\n" if self.status.act_page.isChecked() or
-                      self.status.act_date.isChecked() else "")
+        space = (" " if self.prefs.show_page_chk.isChecked() and
+                 self.prefs.show_date_chk.isChecked() else "")
+        line_break = (":\n" if self.prefs.show_page_chk.isChecked() or
+                      self.prefs.show_date_chk.isChecked() else "")
         def_date_format = self.date_format == DATE_FORMAT
         highlights = self.get_highlights_from_data(data, path)
         new = data.get("annotations") is not None
         for i in sorted(highlights, key=self.sort_high4view):
             chapter_text = (f"[{i['chapter']}]\n"
-                            if (i["chapter"] and self.status.act_chapter.isChecked())
+                            if (i["chapter"] and self.prefs.show_chap_chk.isChecked())
                             else "")
             page = i["page"]
             if new and self.show_ref_pg and i.get("ref_page"):
                 page = i["ref_page"]
-            page_text = _(f"Page {page}") if self.status.act_page.isChecked() else ""
+            page_text = (_("Page {}").format(page)
+                         if self.prefs.show_page_chk.isChecked() else "")
             date = i["date"] if def_date_format else self.get_date_text(i["date"])
-            date_text = "[" + date + "]" if self.status.act_date.isChecked() else ""
-            high_text = i["text"] if self.status.act_text.isChecked() else ""
-            line_break2 = ("\n" if self.status.act_comment.isChecked() and i["comment"]
+            date_text = "[" + date + "]" if self.prefs.show_date_chk.isChecked() else ""
+            high_text = i["text"] if self.prefs.show_high_chk.isChecked() else ""
+            line_break2 = ("\n" if self.prefs.show_comm_chk.isChecked() and i["comment"]
                            else "")
             high_comment = line_break2 + "● " + i["comment"] if line_break2 else ""
             highlight = (page_text + space + date_text + line_break + chapter_text +
@@ -1318,13 +1336,16 @@ class Base(QMainWindow, Ui_Base):
                     highlight.update(common)
                     highlights.append(highlight)
         else:
-            for page in data["highlight"]:
-                for page_id in data["highlight"][page]:
-                    highlight = self.get_old_highlight_info(data, page, page_id)
-                    if highlight:
-                        # noinspection PyTypeChecker
-                        highlight.update(common)
-                        highlights.append(highlight)
+            try:
+                for page in data["highlight"]:
+                    for page_id in data["highlight"][page]:
+                        highlight = self.get_old_highlight_info(data, page, page_id)
+                        if highlight:
+                            # noinspection PyTypeChecker
+                            highlight.update(common)
+                            highlights.append(highlight)
+            except KeyError:  # no highlights
+                pass
         return highlights
 
     @staticmethod
@@ -1336,20 +1357,20 @@ class Base(QMainWindow, Ui_Base):
         :type idx: int
         :param idx: The highlight's idx
         """
-        high_stuff = data["annotations"][idx]
-        if not high_stuff.get("pos0"):
+        high_data = data["annotations"][idx]
+        if not high_data.get("pos0"):
             return  # this is a bookmark not a highlight
         pages = data["doc_pages"]
-        page = high_stuff.get("pageno", 0)
-        ref_page = high_stuff.get("pageref")
+        page = high_data.get("pageno", 0)
+        ref_page = high_data.get("pageref")
         if ref_page and ref_page.isdigit():
             ref_page = int(ref_page)
         else:
             ref_page = None
-        highlight = {"text": high_stuff.get("text", "").replace("\\\n", "\n"),
-                     "chapter": high_stuff.get("chapter", ""),
-                     "comment": high_stuff.get("note", "").replace("\\\n", "\n"),
-                     "date": high_stuff.get("datetime", ""), "idx": idx,
+        highlight = {"text": high_data.get("text", "").replace("\\\n", "\n"),
+                     "chapter": high_data.get("chapter", ""),
+                     "comment": high_data.get("note", "").replace("\\\n", "\n"),
+                     "date": high_data.get("datetime", ""), "idx": idx,
                      "page": page, "ref_page": ref_page, "pages": pages, "new": True}
         return highlight
 
@@ -1692,10 +1713,13 @@ class Base(QMainWindow, Ui_Base):
         """
         self.sel_high_list = self.high_list_selection.selectedRows()
 
-    def set_highlight_sort(self):
+    def set_highlight_sort(self, by_page):
         """ Sets the sorting method of displayed highlights
+
+        :type by_page: bool
+        :param by_page: If True, highlights are sorted by page number
         """
-        self.high_by_page = self.sender().data()
+        self.high_by_page = by_page
         try:
             row = self.sel_idx.row()
             self.on_file_table_itemClicked(self.file_table.item(row, 0), False)
@@ -1733,7 +1757,7 @@ class Base(QMainWindow, Ui_Base):
         :type data: tuple
         param: data: The highlight's data
         """
-        if self.high_by_page and self.status.act_page.isChecked():
+        if self.high_by_page and self.prefs.show_page_chk.isChecked():
             page = data[3]
             if page.startswith("Page"):
                 page = page[5:]
@@ -1754,6 +1778,11 @@ class Base(QMainWindow, Ui_Base):
         # self.get_parent_book_data(row)
 
     def get_parent_book_data(self, row):
+        """ Returns the data of the parent book of the given highlight
+
+        :type row: int
+        :param row: The row of the highlight
+        """
         meta_path = self.high_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)["meta_path"]
         for row in range(self.file_table.rowCount()):  # 2check: need to optimize?
             if meta_path == self.file_table.item(row, PATH).data(0):
@@ -2043,7 +2072,6 @@ class Base(QMainWindow, Ui_Base):
         """
         # row = item.row()
         # # path = self.high_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)["path"]
-        # print(row)
 
     # noinspection PyUnusedLocal
     def sync_view_selection_update(self, selected, deselected):
@@ -2259,27 +2287,31 @@ class Base(QMainWindow, Ui_Base):
 
     # ___ ___________________ MERGING - SYNCING STUFF _______________
 
-    def same_book(self, data1, data2, book1="", book2=""):
+    def same_book(self, data1, data2, meta_path1="", meta_path2=""):
         """ Check if the supplied metadata comes from the same book
 
         :type data1: dict
         :param data1: The data of the first book
         :type data2: dict
         :param data2: The data of the second book
-        :type book1: str|unicode
-        :param book1: The path to the first book
-        :type book2: str|unicode
-        :param book2: The path to the second book
+        :type meta_path1: str|unicode
+        :param meta_path1: The path to the first book
+        :type meta_path2: str|unicode
+        :param meta_path2: The path to the second book
         """
+        if ((meta_path1 and isfile(join(dirname(meta_path1), "ignore_md5")))
+                or (meta_path2 and isfile(join(dirname(meta_path2), "ignore_md5")))):
+            return True  # hack to totally ignore the MD5 check
+
         md5_1 = data1.get("partial_md5_checksum", data1["stats"].get("md5", None)
                           if "stats" in data1 else None)
-        if not md5_1 and book1:
-            md5_1 = self.md5_from_file(book1)
+        if not md5_1 and meta_path1:
+            md5_1 = self.md5_from_file(meta_path1)
         if md5_1:  # got the first MD5, check for the second
             md5_2 = data2.get("partial_md5_checksum", data2["stats"].get("md5", None)
                               if "stats" in data2 else None)
-            if not md5_2 and book2:
-                md5_2 = self.md5_from_file(book2)
+            if not md5_2 and meta_path2:
+                md5_2 = self.md5_from_file(meta_path2)
             if md5_2 and md5_1 == md5_2:  # same MD5 for both books
                 return True
         return False
@@ -2400,10 +2432,10 @@ class Base(QMainWindow, Ui_Base):
         """ Stop if the merge warning is answered "No"
         """
         if self.high_merge_warning:
-            text = _(f"Merging highlights is experimental so, always do backups ;o)\n"
-                     f"Because of the different page formats and sizes, some page "
-                     f"numbers in {APP_NAME} might be inaccurate. "
-                     f"Do you want to continue?")
+            text = _("Merging highlights is experimental so, always do backups ;o)\n"
+                     "Because of the different page formats and sizes, some page "
+                     "numbers in {} might be inaccurate. "
+                     "Do you want to continue?").format(APP_NAME)
             popup = self.popup(_("Warning!"), text, buttons=2,
                                button_text=(_("Yes"), _("No")),
                                check_text=DO_NOT_SHOW)
@@ -2920,14 +2952,14 @@ class Base(QMainWindow, Ui_Base):
         :param idx: The action type
         """
         saved = 0
-        space = (" " if self.status.act_page.isChecked() and
-                 self.status.act_date.isChecked() else "")
+        space = (" " if self.prefs.show_page_chk.isChecked() and
+                 self.prefs.show_date_chk.isChecked() else "")
         if idx not in [MANY_MD, ONE_MD]:
-            line_break = (":" + os.linesep if self.status.act_page.isChecked() or
-                          self.status.act_date.isChecked() else "")
+            line_break = (":" + os.linesep if self.prefs.show_page_chk.isChecked() or
+                          self.prefs.show_date_chk.isChecked() else "")
         else:
-            line_break = (":*  " + os.linesep if self.status.act_page.isChecked() or
-                          self.status.act_date.isChecked() else " ")
+            line_break = (":*  " + os.linesep if self.prefs.show_page_chk.isChecked() or
+                          self.prefs.show_date_chk.isChecked() else " ")
         # Save from file_table to different files
         if idx in [MANY_TEXT, MANY_HTML, MANY_CSV, MANY_MD]:
             text = _("Select destination folder for the exported file(s)")
@@ -2949,7 +2981,8 @@ class Base(QMainWindow, Ui_Base):
                 ext = "md"
             else:
                 return
-            filename = QFileDialog.getSaveFileName(self, _(f"Export to {ext} file"),
+            filename = QFileDialog.getSaveFileName(self,
+                                                   _("Export to {} file").format(ext),
                                                    self.last_dir, f"*.{ext}")[0]
             if not filename:
                 return
@@ -2959,8 +2992,8 @@ class Base(QMainWindow, Ui_Base):
         self.status.animation(False)
         all_files = len(self.sel_indexes)
         self.popup(_("Finished!"),
-                   _(f"{saved} texts were exported from the {all_files} processed.\n"
-                     f"{all_files - saved} files with no highlights."),
+                   _("{} texts were exported from {} processed.\n{} files with no "
+                     "highlights.").format(saved, all_files, all_files - saved),
                    icon=QMessageBox.Information)
 
     def save_multi_files(self, dir_path, format_, line_break, space):
@@ -2976,18 +3009,20 @@ class Base(QMainWindow, Ui_Base):
         :param space: The space used at the header, depending on the contents
         """
         self.status.animation(True)
-        saved = 0
+        count = 0
         for idx in self.sel_indexes:
             authors, title, highlights = self.get_item_data(idx, format_)
             if not highlights:  # no highlights in book
                 continue
+            highlights = sorted(highlights, key=self.sort_high4write)
             try:
                 save_file(title, authors, highlights, dir_path, format_,
-                          line_break, space, self.sort_high4write)
-                saved += 1
+                          line_break, space, self.custom_template)
+                count += 1
             except IOError as err:  # any problem when writing (like long filename, etc.)
-                self.popup(_("Warning!"), _(f"Could not save the file to disk!\n{err}"))
-        return saved
+                self.popup(_("Warning!"),
+                           _("Could not save the file to disk!\n{}").format(err))
+        return count
 
     def save_merged_file(self, filename, format_, line_break, space):
         """ Save the selected books' highlights to a single file
@@ -3002,7 +3037,7 @@ class Base(QMainWindow, Ui_Base):
         :param space: The space used at the header, depending on the contents
         """
         self.status.animation(True)
-        saved = 0
+        count = 0
         text = (HTML_HEAD if format_ == ONE_HTML
                 else CSV_HEAD if format_ == ONE_CSV else "")
         encoding = "utf-8-sig" if ONE_CSV else "utf-8"
@@ -3013,14 +3048,14 @@ class Base(QMainWindow, Ui_Base):
                 continue
             highlights = sorted(highlights, key=self.sort_high4write)
             text = get_book_text(title, authors, highlights, format_,
-                                 line_break, space, text)
-            saved += 1
+                                 line_break, space, text, self.custom_template)
+            count += 1
         if format_ == ONE_HTML:
             text += "\n</body>\n</html>"
 
         with open(filename, "w+", encoding=encoding, newline="") as text_file:
             text_file.write(text)
-        return saved
+        return count
 
     def get_item_data(self, index, format_):
         """ Get the highlight data for an item
@@ -3032,20 +3067,22 @@ class Base(QMainWindow, Ui_Base):
         """
         row = index.row()
         data = self.file_table.item(row, 0).data(Qt.UserRole)
-        args = {"page": self.status.act_page.isChecked(),
-                "date": self.status.act_date.isChecked(),
-                "text": self.status.act_text.isChecked(),
-                "chapter": self.status.act_chapter.isChecked(),
-                "comment": self.status.act_comment.isChecked(),
+        args = {"page": self.prefs.show_page_chk.isChecked(),
+                "date": self.prefs.show_date_chk.isChecked(),
+                "text": self.prefs.show_high_chk.isChecked(),
+                "chapter": self.prefs.show_chap_chk.isChecked(),
+                "comment": self.prefs.show_comm_chk.isChecked(),
                 "ref_pg": self.show_ref_pg,
                 "html": format_ in [ONE_HTML, MANY_HTML],
                 "csv": format_ in [ONE_CSV, MANY_CSV],
+                "custom_md": self.custom_template,
                 }
         highlights = self.get_formatted_highlights(data, args)
         title = self.file_table.item(row, TITLE).data(0)
         authors = self.file_table.item(row, AUTHOR).data(0)
         if authors in [OLD_TYPE, NO_AUTHOR]:
             authors = ""
+        authors.replace("\\\n", ", ")
         return authors, title, highlights
 
     def get_formatted_highlights(self, data, args):
@@ -3069,17 +3106,19 @@ class Base(QMainWindow, Ui_Base):
                     else:
                         highlight["page"] = str(highlight.get("ref_page", "")
                                                 or highlight["page"])
-                    # highlight["page"] = str(highlight["page"])
                     if self.date_format != DATE_FORMAT:
                         highlight["date"] = self.get_date_text(highlight["date"])
                     formatted_high = self.get_formatted_high(highlight, args)
                     highlights.append(formatted_high)
         else:  # old format metadata
-            for page in data["highlight"]:
-                for page_id in data["highlight"][page]:
-                    highlight = self.get_old_highlight_info(data, page, page_id)
-                    if highlight:
-                        highlights.append(self.get_formatted_high(highlight, args))
+            try:
+                for page in data["highlight"]:
+                    for page_id in data["highlight"][page]:
+                        highlight = self.get_old_highlight_info(data, page, page_id)
+                        if highlight:
+                            highlights.append(self.get_formatted_high(highlight, args))
+            except KeyError:  # no highlights
+                pass
         return highlights
 
     @staticmethod
@@ -3102,6 +3141,10 @@ class Base(QMainWindow, Ui_Base):
             page_text = highlight["page"] if args["page"] else ""
             date_text = date if args["date"] else ""
             high_comment = comment if args["comment"] and comment else ""
+        elif args["custom_md"]:
+            page_text = str(highlight["page"]) if args["page"] else ""
+            date_text = date if args["date"] else ""
+            high_comment = (comment if args["comment"] and comment else "")
         else:
             page_text = "Page " + str(highlight["page"]) if args["page"] else ""
             date_text = "[" + date + "]" if args["date"] else ""
@@ -3118,34 +3161,19 @@ class Base(QMainWindow, Ui_Base):
         filename = QFileDialog.getSaveFileName(self, _("Export to file"), self.last_dir,
                                                "text file (*.txt);;html file (*.html);;"
                                                "csv file (*.csv);;markdown file (*.md)")
-        if filename[0]:
-            filename, extra = filename
-            encoding = "utf-8"
-            text_out = extra.startswith("text")
-            html_out = extra.startswith("html")
-            csv_out = extra.startswith("csv")
-            md_out = extra.startswith("markdown")
-            if text_out:
-                ext = ".txt"
-                text = ""
-            elif html_out:
-                ext = ".html"
-                text = HTML_HEAD
-            elif csv_out:
-                ext = ".csv"
-                text = CSV_HEAD
-                encoding = "utf-8-sig"
-            elif md_out:
-                ext = ".md"
-                text = ""
-            else:
-                return
-            filename = splitext(filename)[0] + ext
-            self.last_dir = dirname(filename)
-        else:
+        if not filename[0]:
             return
+        filename, extra = filename
+        self.last_dir = dirname(filename)
 
+        text_out = extra.startswith("text")
+        html_out = extra.startswith("html")
+        csv_out = extra.startswith("csv")
+        md_out = extra.startswith("markdown")
+        text = HTML_HEAD if html_out else CSV_HEAD if csv_out else ""
+        encoding = "utf-8-sig" if csv_out else "utf-8"
         def_date_format = self.date_format == DATE_FORMAT
+
         for i in sorted(self.sel_high_view):
             row = i.row()
             data = self.high_table.item(row, HIGHLIGHT_H).data(Qt.UserRole)
@@ -3154,8 +3182,7 @@ class Base(QMainWindow, Ui_Base):
                 data["date"] = self.get_date_text(data["date"])
 
             comment = "\n● " + data["comment"] if data["comment"] else ""
-            if md_out and comment:
-                comment = comment.replace("\n", "  \n")
+            authors = data["authors"].replace("\\\n", ", ")
 
             if data["new"] and self.show_ref_pg and data.get("ref_page"):
                 page = data["ref_page"]
@@ -3163,11 +3190,11 @@ class Base(QMainWindow, Ui_Base):
                 page = data["page"]
 
             if text_out:
-                txt = (f"{data['title']} [{data['authors']}]\nPage {page} "
-                       f"[{data['date']}]\n[{data['chapter']}]\n{data['text']}{comment}")
-                text += txt + "\n\n"
+                hi_txt = (f"{data['title']} [{authors}]\nPage {page} [{data['date']}]\n"
+                          f"[{data['chapter']}]\n{data['text']}{comment}")
+                text += hi_txt + "\n\n"
             elif html_out:
-                left = f"{data['title']} [{data['authors']}]"
+                left = f"{data['title']} [{authors}]"
                 right = f"Page {page} [{data['date']}]"
                 text += HIGH_BLOCK % {"page": left, "date": right, "comment": comment,
                                       "highlight": data["text"],
@@ -3176,15 +3203,23 @@ class Base(QMainWindow, Ui_Base):
             elif csv_out:
                 csv_data = data.copy()
                 csv_data["page"] = str(page)
+                csv_data["authors"] = authors
                 text += get_csv_row(csv_data) + "\n"
             elif md_out:
-                txt = data["text"].replace("\n", "  \n")
+                hi_txt = data["text"].replace("\n", "  \n")
                 chapter = data["chapter"]
-                if chapter:
-                    chapter = f"***{chapter}***\n\n".replace("\n", "  \n")
-                text += (f'\n---\n### {data["title"]} [{data["authors"]}]  \n'
-                         f'*Page {page} [{data["date"]}]*  \n'
-                         f'{chapter}{txt}{comment}\n')
+                date_txt = data["date"].replace("-", "\\-")
+                if not self.custom_template:
+                    comment = comment.replace("\n", "  \n")
+                    if chapter:
+                        chapter = f"***{chapter}***\n\n".replace("\n", "  \n")
+                    text += (f'\n---\n### {data["title"]} [{authors}]  \n'
+                             f'*Page {page} [{date_txt}]*  \n'
+                             f'{chapter}{hi_txt}{comment}\n')
+                else:
+                    comment = data["comment"].replace("\n", "  \n")
+                    text += MD_HEAD.format(data["title"], authors)
+                    text += MD_HIGH.format(date_txt, comment, hi_txt, page, chapter)
             else:
                 print("Unknown format export!")
                 return
@@ -3221,9 +3256,11 @@ class Base(QMainWindow, Ui_Base):
             self.toolbar_size = app_config.get("toolbar_size", 48)
             self.skip_version = app_config.get("skip_version", None)
             self.date_vacuumed = app_config.get("date_vacuumed", self.date_vacuumed)
+            self.custom_template = app_config.get("custom_template", False)
+            self.templ_head = app_config.get("templ_head", MD_HEAD)
+            self.templ_body = app_config.get("templ_body", MD_HIGH)
             self.date_format = app_config.get("date_format", DATE_FORMAT)
             self.theme = app_config.get("theme", THEME_NONE_OLD)
-            self.status.theme_box.setCurrentIndex(self.theme)
             self.archive_warning = app_config.get("archive_warning", True)
             self.exit_msg = app_config.get("exit_msg", True)
             self.high_merge_warning = app_config.get("high_merge_warning", True)
@@ -3232,17 +3269,21 @@ class Base(QMainWindow, Ui_Base):
             self.show_items = app_config.get("show_items", [True, True, True, True, True])
             if len(self.show_items) != 5:  # settings from older versions
                 self.show_items = [True, True, True, True, True]
+            for idx, chk in enumerate(self.prefs.show_items):
+                self.blocked_change(chk, self.show_items[idx])
             self.high_by_page = app_config.get("high_by_page", False)
             self.show_ref_pg = app_config.get("show_ref_pg", True)
-        else:
-            self.status.theme_box.setCurrentIndex(self.theme)
+            self.blocked_change(self.prefs.show_ref_pg_chk, self.show_ref_pg)
         if self.highlight_width:
             self.header_high_view.resizeSection(HIGHLIGHT_H, self.highlight_width)
         if self.comment_width:
             self.header_high_view.resizeSection(COMMENT_H, self.comment_width)
+        self.prefs.theme_box.setCurrentIndex(self.theme)
+        self.blocked_change(self.prefs.alt_title_sort_chk, self.alt_title_sort)
+        self.blocked_change(self.prefs.custom_template_chk, self.custom_template)
+        self.prefs.edit_template.body_edit_txt.setText(self.templ_body)
+        self.prefs.edit_template.head_edit_txt.setText(self.templ_head)
         self.toolbar.set_btn_size(self.toolbar_size)
-        for idx, act in enumerate(self.status.show_actions):
-            act.setChecked(self.show_items[idx])
 
     def restore_windows(self):
         """ Restores the windows layout after the main window is build
@@ -3253,6 +3294,13 @@ class Base(QMainWindow, Ui_Base):
         self.header_main.restoreState(self.unpickle("header_main"))
         self.header_high_view.restoreState(self.unpickle("header_high_view"))
         self.filter.restoreGeometry(self.unpickle("filter_geometry"))
+        self.prefs.restoreGeometry(self.unpickle("prefs_geometry"))
+        self.prefs.edit_template.restoreGeometry(self.unpickle("templ_geometry"))
+        self.prefs.edit_template.splitter.restoreState(self.unpickle("templ_split"))
+        self.prefs.edit_template.head_split.restoreState(
+            self.unpickle("templ_head_split"))
+        self.prefs.edit_template.body_split.restoreState(
+            self.unpickle("templ_body_split"))
         self.about.restoreGeometry(self.unpickle("about_geometry"))
         QTimer.singleShot(200, self.get_header_width)
 
@@ -3274,6 +3322,16 @@ class Base(QMainWindow, Ui_Base):
                   "header_high_view": self.pickle(self.header_high_view.saveState()),
                   "filter_geometry": self.pickle(self.filter.saveGeometry()),
                   "about_geometry": self.pickle(self.about.saveGeometry()),
+                  "prefs_geometry": self.pickle(self.prefs.saveGeometry()),
+                  "templ_geometry": self.pickle(self.prefs.edit_template.saveGeometry()),
+                  "templ_split": self.pickle(
+                      self.prefs.edit_template.splitter.saveState()),
+                  "templ_head_split": self.pickle(
+                      self.prefs.edit_template.head_split.saveState()),
+                  "templ_body_split": self.pickle(
+                      self.prefs.edit_template.body_split.saveState()),
+                  "templ_head": self.templ_head, "templ_body": self.templ_body,
+                  "custom_template": self.custom_template,
                   "col_sort_asc": self.col_sort_asc, "col_sort": self.col_sort,
                   "col_sort_asc_h": self.col_sort_asc_h, "col_sort_h": self.col_sort_h,
                   "highlight_width": self.highlight_width, "db_path": self.db_path,
@@ -3296,7 +3354,7 @@ class Base(QMainWindow, Ui_Base):
                     try:
                         config[k] = v.decode("latin1")
                     except UnicodeDecodeError as e:
-                        print(f"Error decoding bytes to string: {e}")
+                        print("Error decoding bytes to string: {}".format(e))
                         config[k] = v.decode("latin1", errors="ignore")
             config_json = json.dumps(config, sort_keys=True, indent=4)
             with gzip.GzipFile(join(SETTINGS_DIR, str("settings.json.gz")),
@@ -3453,8 +3511,8 @@ class Base(QMainWindow, Ui_Base):
                 data["stats"]["md5"] = md5
 
             if old_md5:
-                text = _(f"The MD5 was originally\n{old_md5}\nA recalculation produces\n"
-                         f"{md5}\nThe MD5 was replaced and saved!")
+                text = _("The MD5 was originally\n{}\nA recalculation produces\n{}\n"
+                         "The MD5 was replaced and saved!").format(old_md5, md5)
                 self.save_book_data(path, data)
             else:
                 text = _("Metadata file has no MD5 information!")
@@ -3495,6 +3553,22 @@ class Base(QMainWindow, Ui_Base):
                                           int(sec % 3600 / 60),
                                           int(sec % 60))
 
+    @staticmethod
+    def blocked_change(widget, state):
+        """ Check/Uncheck a switch or change index to a combo while blocking its signals
+
+        :type widget: QWidget
+        :param widget: The widget to change
+        :type state: bool|int
+        :param state: The new state we want
+        """
+        widget.blockSignals(True)
+        if type(state) is bool:  # switch
+            widget.setChecked(state)
+        elif type(state) is int:  # combo
+            widget.setCurrentIndex(state)
+        widget.blockSignals(False)
+
     def auto_check4update(self):
         """ Checks online for an updated version
         """
@@ -3502,10 +3576,10 @@ class Base(QMainWindow, Ui_Base):
 
         self.opened_times += 1
         if self.opened_times == 20:
-            text = _(f"Since you are using {APP_NAME} for some time now, perhaps you find"
-                     f" it useful enough to consider a donation.\nWould you like to visit"
-                     f" the PayPal donation page?\n\nThis is a one-time message. It will "
-                     f"never appear again!")
+            text = _("Since you are using {} for some time now, perhaps you find it "
+                     "useful enough to consider a donation.\nWould you like to visit the "
+                     "PayPal donation page?\n\nThis is a one-time message. It will never "
+                     "appear again!").format(APP_NAME)
             popup = self.popup(_("A reminder..."), text,
                                icon=":/stuff/paypal76.png", buttons=3)
 
@@ -3527,8 +3601,8 @@ class Base(QMainWindow, Ui_Base):
         skip_version = version_parse(self.skip_version)
         if version_new > current_version and version_new != skip_version:
             popup = self.popup(_("Newer version exists!"),
-                               _(f"There is a newer version (v.{version_new}) online.\n"
-                                 f"Open the site to download it now?"),
+                               _("There is a newer version (v.{}) online.\n"
+                                 "Open the site to download it now?").format(version_new),
                                icon=QMessageBox.Information, buttons=2,
                                check_text=_("Don\"t alert me for this version again"))
             if popup.checked:
@@ -3579,9 +3653,6 @@ class Base(QMainWindow, Ui_Base):
                 except WindowsError:  # the file is locked
                     pass
 
-    def on_check_btn(self):
-        pass
-
 
 class KOHighlights(QApplication):
 
@@ -3602,10 +3673,10 @@ class KOHighlights(QApplication):
             del argv[1]
         sys.argv = argv
         self.parser = argparse.ArgumentParser(prog=APP_NAME,
-                                              description=_(f"{APP_NAME} v{__version__} -"
-                                                            f" A KOReader's highlights "
-                                                            f"converter"),
-                                              epilog=_(f"Thanks for using {APP_NAME}!"))
+                                              description=f"{APP_NAME} v{__version__} - "
+                                                          f"A KOReader's "
+                                                          f"highlights converter",
+                                              epilog=f"Thank you for using {APP_NAME}!")
         self.base = Base()
         if compiled:  # the app is compiled
             if not on_windows:  # no cli in windows
@@ -3789,8 +3860,8 @@ class KOHighlights(QApplication):
             saved = self.cli_save_merged_file(args, files, line_break, space)
 
         all_files = len(files)
-        sys.stdout.write(_(f"\n{saved} files were exported from the {all_files} processed"
-                           f".\n{all_files - saved} files with no highlights.\n"))
+        sys.stdout.write(f"\n{saved} files were exported from the {all_files} processed"
+                         f".\n{all_files - saved} files with no highlights.\n")
 
     def cli_save_multi_files(self, args, files, line_break, space):
         """ Save each selected book's highlights to a different file
@@ -3819,9 +3890,10 @@ class KOHighlights(QApplication):
             authors, title, highlights = self.cli_get_item_data(file_, args)
             if not highlights:  # no highlights
                 continue
+            highlights = sorted(highlights, key=partial(self.cli_sort, args))
             try:
                 save_file(title, authors, highlights, path,
-                          format_, line_break, space, sort_by)
+                          format_, line_break, space)
                 saved += 1
             except IOError as err:  # any problem when writing (like long filename, etc.)
                 sys.stdout.write(str(f"Could not save the file to disk!\n{err}"))
@@ -3894,6 +3966,7 @@ class KOHighlights(QApplication):
                  "ref_pg": args.ref_page,
                  "html": args.html,
                  "csv": args.csv,
+                 "custom_md": False  # not used from cli
                  }
         highlights = self.base.get_formatted_highlights(data, args_)
         title, authors = self.base.get_title_authors(data, file_)

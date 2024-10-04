@@ -3,7 +3,7 @@
 # Form implementation generated from reading ui file 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_toolbar.ui',
 # licensing of 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_toolbar.ui' applies.
 #
-# Created: Tue May  7 14:53:08 2024
+# Created: Fri Oct  4 21:42:42 2024
 #      by: pyside2-uic  running on PySide2 5.13.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -13,7 +13,7 @@ from PySide2 import QtCore, QtGui, QtWidgets
 class Ui_ToolBar(object):
     def setupUi(self, ToolBar):
         ToolBar.setObjectName("ToolBar")
-        ToolBar.resize(1035, 91)
+        ToolBar.resize(1107, 91)
         ToolBar.setContextMenuPolicy(QtCore.Qt.PreventContextMenu)
         ToolBar.setWindowTitle("")
         ToolBar.setLocale(QtCore.QLocale(QtCore.QLocale.English, QtCore.QLocale.UnitedStates))
@@ -256,6 +256,21 @@ class Ui_ToolBar(object):
         self.db_btn.setObjectName("db_btn")
         self.verticalLayout.addWidget(self.db_btn)
         self.horizontalLayout.addWidget(self.mode_grp)
+        self.prefs_btn = QtWidgets.QToolButton(self.tool_frame)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Fixed)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.prefs_btn.sizePolicy().hasHeightForWidth())
+        self.prefs_btn.setSizePolicy(sizePolicy)
+        self.prefs_btn.setMinimumSize(QtCore.QSize(80, 0))
+        icon13 = QtGui.QIcon()
+        icon13.addPixmap(QtGui.QPixmap(":/stuff/prefs.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        self.prefs_btn.setIcon(icon13)
+        self.prefs_btn.setIconSize(QtCore.QSize(48, 48))
+        self.prefs_btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextUnderIcon)
+        self.prefs_btn.setAutoRaise(True)
+        self.prefs_btn.setObjectName("prefs_btn")
+        self.horizontalLayout.addWidget(self.prefs_btn)
         self.about_btn = QtWidgets.QToolButton(self.tool_frame)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Fixed)
         sizePolicy.setHorizontalStretch(0)
@@ -263,9 +278,9 @@ class Ui_ToolBar(object):
         sizePolicy.setHeightForWidth(self.about_btn.sizePolicy().hasHeightForWidth())
         self.about_btn.setSizePolicy(sizePolicy)
         self.about_btn.setMinimumSize(QtCore.QSize(80, 0))
-        icon13 = QtGui.QIcon()
-        icon13.addPixmap(QtGui.QPixmap(":/stuff/logo64.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
-        self.about_btn.setIcon(icon13)
+        icon14 = QtGui.QIcon()
+        icon14.addPixmap(QtGui.QPixmap(":/stuff/logo64.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        self.about_btn.setIcon(icon14)
         self.about_btn.setIconSize(QtCore.QSize(48, 48))
         self.about_btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextUnderIcon)
         self.about_btn.setAutoRaise(True)
@@ -322,6 +337,10 @@ class Ui_ToolBar(object):
 "(Right click for database actions menu)", None, -1))
         self.db_btn.setStatusTip(QtWidgets.QApplication.translate("ToolBar", "Show the archived files in the database (Right click for database actions menu)", None, -1))
         self.db_btn.setText(QtWidgets.QApplication.translate("ToolBar", "Archived", None, -1))
+        self.prefs_btn.setToolTip(QtWidgets.QApplication.translate("ToolBar", "User Preferences (Ctrl+P)", None, -1))
+        self.prefs_btn.setStatusTip(QtWidgets.QApplication.translate("ToolBar", "User Preferences (Ctrl+P)", None, -1))
+        self.prefs_btn.setText(QtWidgets.QApplication.translate("ToolBar", "Preferences", None, -1))
+        self.prefs_btn.setShortcut(QtWidgets.QApplication.translate("ToolBar", "Ctrl+P", None, -1))
         self.about_btn.setToolTip(QtWidgets.QApplication.translate("ToolBar", "Info about KoHighlights (Ctrl+I)", None, -1))
         self.about_btn.setStatusTip(QtWidgets.QApplication.translate("ToolBar", "Info about KoHighlights (Ctrl+I)", None, -1))
         self.about_btn.setText(QtWidgets.QApplication.translate("ToolBar", "About", None, -1))

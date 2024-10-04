@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>286</width>
-    <height>32</height>
+    <width>188</width>
+    <height>38</height>
    </rect>
   </property>
   <layout class="QHBoxLayout" name="horizontalLayout_2">
@@ -30,76 +30,6 @@
        <widget class="QLabel" name="anim_lbl">
         <property name="text">
          <string/>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QComboBox" name="theme_box">
-        <item>
-         <property name="text">
-          <string>No theme - Old icons</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>No theme - New icons</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Dark theme - Old icons</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Dark theme - New icons</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Light theme - Old icons</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Light theme - New icons</string>
-         </property>
-        </item>
-       </widget>
-      </item>
-      <item>
-       <widget class="QToolButton" name="show_items_btn">
-        <property name="toolTip">
-         <string>Show/Hide elements of Highlights. Also affects
-what will be saved to the text/html files.</string>
-        </property>
-        <property name="statusTip">
-         <string>Show/Hide elements of Highlights. Also affects what will be saved to the text/html files.</string>
-        </property>
-        <property name="locale">
-         <locale language="English" country="UnitedStates"/>
-        </property>
-        <property name="text">
-         <string>Show in Highlights</string>
-        </property>
-        <property name="icon">
-         <iconset resource="images.qrc">
-          <normaloff>:/stuff/show_pages.png</normaloff>:/stuff/show_pages.png</iconset>
-        </property>
-        <property name="iconSize">
-         <size>
-          <width>24</width>
-          <height>24</height>
-         </size>
-        </property>
-        <property name="checked">
-         <bool>false</bool>
-        </property>
-        <property name="popupMode">
-         <enum>QToolButton::InstantPopup</enum>
-        </property>
-        <property name="toolButtonStyle">
-         <enum>Qt::ToolButtonTextBesideIcon</enum>
         </property>
        </widget>
       </item>

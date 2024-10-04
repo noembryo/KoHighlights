@@ -32,6 +32,9 @@
    </item>
    <item>
     <widget class="QLineEdit" name="sync_path_txt">
+     <property name="contextMenuPolicy">
+      <enum>Qt::CustomContextMenu</enum>
+     </property>
      <property name="toolTip">
       <string>The path to the  book's metadata file</string>
      </property>

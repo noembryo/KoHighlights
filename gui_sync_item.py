@@ -3,7 +3,7 @@
 # Form implementation generated from reading ui file 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_sync_item.ui',
 # licensing of 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_sync_item.ui' applies.
 #
-# Created: Tue May  7 14:53:08 2024
+# Created: Fri Oct  4 21:42:42 2024
 #      by: pyside2-uic  running on PySide2 5.13.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -21,6 +21,7 @@ class Ui_SyncItem(object):
         self.label.setObjectName("label")
         self.horizontalLayout_2.addWidget(self.label)
         self.sync_path_txt = QtWidgets.QLineEdit(SyncItem)
+        self.sync_path_txt.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.sync_path_txt.setReadOnly(True)
         self.sync_path_txt.setObjectName("sync_path_txt")
         self.horizontalLayout_2.addWidget(self.sync_path_txt)
