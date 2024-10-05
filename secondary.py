@@ -89,10 +89,20 @@ def get_csv_row(data):
     return "\t".join(values)
 
 
-def get_book_text(title, authors, highlights, format_,
-                  line_break, space, text, custom_md=False):
+def get_book_text(args):
     """ Create the book's contents
     """
+    title = args["title"]
+    authors = args["authors"]
+    highlights = args["highlights"]
+    format_ = args["format_"]
+    line_break = args["line_break"]
+    space = args["space"]
+    text = args["text"]
+    custom_template = args.get("custom_template")
+    templ_head = args.get("templ_head")
+    templ_body = args.get("templ_body")
+
     nl = os.linesep
     if format_ == ONE_TEXT:
         name = title
@@ -122,7 +132,7 @@ def get_book_text(title, authors, highlights, format_,
             text += get_csv_row(data) + "\n"
     elif format_ == ONE_MD:
         highs = []
-        if not custom_md:
+        if not custom_template:
             text += f"\n---\n## {title}  \n##### {authors}  \n---\n"
             for i in highlights:
                 comment = i[HI_COMMENT].replace(nl, "  " + nl)
@@ -136,42 +146,43 @@ def get_book_text(title, authors, highlights, format_,
                      high + comment + "  \n&nbsp;  \n")
                 highs.append(h.replace("-", "\\-"))
         else:  # use custom markdown template
-            text += MD_HEAD.format(title, authors)
+            text += templ_head.format(title, authors)
             for i in highlights:
                 comment = i[HI_COMMENT].replace(nl, "  " + nl).replace("-", "\\-")
                 if comment:
                     comment = "  " + comment
                 high = i[HI_TEXT].replace(nl, "  " + nl).replace("-", "\\-")
                 date_ = i[HI_DATE].replace("-", "\\-")
-                highs.append(MD_HIGH.format(date_, comment, high,
-                                            i[HI_PAGE], i[HI_CHAPTER]))
+                highs.append(templ_body.format(date_, comment, high,
+                                               i[HI_PAGE], i[HI_CHAPTER]))
         text += nl.join(highs) + "\n---\n"
     return text
 
 
-def save_file(title, authors, highlights, path, format_,
-              line_break, space, custom_md=False):
+def save_file(args):
     """ Saves the book's exported file
     """
     ext = text = ""
     encoding = "utf-8"
-    name = title
-    if authors:
-        name = f"{authors} - {title}"
-    if format_ == MANY_TEXT:
+    name = args["title"]
+    if args["authors"]:
+        name = f"{args['authors']} - {args['title']}"
+    if args["format_"] == MANY_TEXT:
         ext = ".txt"
-    elif format_ == MANY_HTML:
+    elif args["format_"] == MANY_HTML:
         ext = ".html"
         text = HTML_HEAD
-    elif format_ == MANY_CSV:
+    elif args["format_"] == MANY_CSV:
         ext = ".csv"
         text = CSV_HEAD
         encoding = "utf-8-sig"
-    elif format_ == MANY_MD:
+    elif args["format_"] == MANY_MD:
         ext = ".md"
+    args["text"] = text
+    args["format_"] += 1
 
-    filename = join(path, sanitize_filename(name))
-    if NO_TITLE in title:  # don't overwrite unknown title files
+    filename = join(args["dir_path"], sanitize_filename(name))
+    if NO_TITLE in args["title"]:  # don't overwrite unknown title files
         while isfile(filename + ext):
             match = re.match(r"(.+?) \[(\d+?)]$", filename)
             if match:
@@ -181,9 +192,8 @@ def save_file(title, authors, highlights, path, format_,
     filename = filename + ext
 
     with open(filename, "w+", encoding=encoding, newline="") as text_file:
-        text = get_book_text(title, authors, highlights, format_ + 1, line_break,
-                             space, text, custom_md)
-        if format_ == MANY_HTML:
+        text = get_book_text(args)
+        if args["format_"] == MANY_HTML:
             text += "\n</body>\n</html>"
         text_file.write(text)
 

@@ -44,7 +44,7 @@ import pickle
 
 
 __author__ = "noEmbryo"
-__version__ = "2.2.0.0"
+__version__ = "2.2.1.0"
 
 
 class Base(QMainWindow, Ui_Base):
@@ -3016,8 +3016,12 @@ class Base(QMainWindow, Ui_Base):
                 continue
             highlights = sorted(highlights, key=self.sort_high4write)
             try:
-                save_file(title, authors, highlights, dir_path, format_,
-                          line_break, space, self.custom_template)
+                args = {"title": title, "authors": authors, "highlights": highlights,
+                        "dir_path": dir_path, "format_": format_,
+                        "line_break": line_break, "space": space,
+                        "custom_template": self.custom_template,
+                        "templ_head": self.templ_head, "templ_body": self.templ_body}
+                save_file(args)
                 count += 1
             except IOError as err:  # any problem when writing (like long filename, etc.)
                 self.popup(_("Warning!"),
@@ -3047,8 +3051,11 @@ class Base(QMainWindow, Ui_Base):
             if not highlights:  # no highlights
                 continue
             highlights = sorted(highlights, key=self.sort_high4write)
-            text = get_book_text(title, authors, highlights, format_,
-                                 line_break, space, text, self.custom_template)
+            args = {"title": title, "authors": authors, "highlights": highlights,
+                    "format_": format_, "line_break": line_break, "space": space,
+                    "text": text, "custom_template": self.custom_template,
+                    "templ_head": self.templ_head, "templ_body": self.templ_body}
+            text = get_book_text(args)
             count += 1
         if format_ == ONE_HTML:
             text += "\n</body>\n</html>"
@@ -3884,7 +3891,6 @@ class KOHighlights(QApplication):
             format_ = MANY_MD
         else:
             format_ = MANY_TEXT
-        sort_by = partial(self.cli_sort, args)
         path = abspath(args.output)
         for file_ in files:
             authors, title, highlights = self.cli_get_item_data(file_, args)
@@ -3892,8 +3898,10 @@ class KOHighlights(QApplication):
                 continue
             highlights = sorted(highlights, key=partial(self.cli_sort, args))
             try:
-                save_file(title, authors, highlights, path,
-                          format_, line_break, space)
+                exp_args = {"title": title, "authors": authors, "highlights": highlights,
+                            "dir_path": path, "format_": format_,
+                            "line_break": line_break, "space": space}
+                save_file(exp_args)
                 saved += 1
             except IOError as err:  # any problem when writing (like long filename, etc.)
                 sys.stdout.write(str(f"Could not save the file to disk!\n{err}"))
@@ -3935,8 +3943,10 @@ class KOHighlights(QApplication):
             if not highlights:  # no highlights
                 continue
             highlights = sorted(highlights, key=partial(self.cli_sort, args))
-            text = get_book_text(title, authors, highlights, format_,
-                                 line_break, space, text)
+            exp_args = {"title": title, "authors": authors, "highlights": highlights,
+                        "format_": format_, "line_break": line_break, "space": space,
+                        "text": text}
+            text = get_book_text(exp_args)
             saved += 1
         if args.html:
             text += "\n</body>\n</html>"
