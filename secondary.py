@@ -164,25 +164,26 @@ def save_file(args):
     """
     ext = text = ""
     encoding = "utf-8"
-    name = args["title"]
-    if args["authors"]:
-        name = f"{args['authors']} - {args['title']}"
-    if args["format_"] == MANY_TEXT:
+    title = name = args["title"]
+    authors = args["authors"]
+    format_ = args["format_"]
+    if authors:
+        name = f"{authors} - {name}"
+    if format_ == MANY_TEXT:
         ext = ".txt"
-    elif args["format_"] == MANY_HTML:
+    elif format_ == MANY_HTML:
         ext = ".html"
         text = HTML_HEAD
-    elif args["format_"] == MANY_CSV:
+    elif format_ == MANY_CSV:
         ext = ".csv"
         text = CSV_HEAD
         encoding = "utf-8-sig"
-    elif args["format_"] == MANY_MD:
+    elif format_ == MANY_MD:
         ext = ".md"
     args["text"] = text
-    args["format_"] += 1
 
     filename = join(args["dir_path"], sanitize_filename(name))
-    if NO_TITLE in args["title"]:  # don't overwrite unknown title files
+    if NO_TITLE in title:  # don't overwrite unknown title files
         while isfile(filename + ext):
             match = re.match(r"(.+?) \[(\d+?)]$", filename)
             if match:
@@ -192,8 +193,9 @@ def save_file(args):
     filename = filename + ext
 
     with open(filename, "w+", encoding=encoding, newline="") as text_file:
+        args["format_"] += 1  # the format is changed to the MERGED file, to get the text
         text = get_book_text(args)
-        if args["format_"] == MANY_HTML:
+        if format_ == MANY_HTML:
             text += "\n</body>\n</html>"
         text_file.write(text)
 

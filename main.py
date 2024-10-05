@@ -44,7 +44,7 @@ import pickle
 
 
 __author__ = "noEmbryo"
-__version__ = "2.2.1.0"
+__version__ = "2.2.1.1"
 
 
 class Base(QMainWindow, Ui_Base):
