@@ -86,7 +86,7 @@ There are two sources from which KH can load highlights and other metadata:
 
 ### B. Views
 
-KH can present book metadata in either [**Books**](#i-books-view) or **[Highlights](#ii-highlights-view)** layout view.  
+KH can present book metadata in either **[Books](#i-books-view)** or **[Highlights](#ii-highlights-view)** layout view.  
 These views are explained in more detail later in this guide.  
 In addition, there is a special **[Sync Groups](#iii-sync-groups-view)** view, used to synchronize highlights across multiple devices running KOReader.
 
