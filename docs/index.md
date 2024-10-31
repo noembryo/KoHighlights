@@ -51,8 +51,6 @@ Periodically, all devices would need to be connected to a PC running KH, at whic
 
 Additionally, one can create an archived copy stored in KH's internal database as a backup or as a way to have it handy, without the need of a reader connection.  
 
-[//]: # (~~In contrast, other solutions such as Syncthing only support **file-level** synchronization whereas the book's metadata file is being overwritten with a more recent version from another device. For this solution to work properly, all devices must be connected to a centralized server and remain in the "on" state to always sync their changed states to the server, which may be difficult to achieve.~~  )
-
 Note, KOReader usually stores the epub book metadata information including the highlights and comments in `metadata.epub.lua` files (a.k.a. "metadata").  
 These files are automatically created by KOReader for each epub book and kept in .sdr folders with the same names as the corresponding epub files.  
 
@@ -182,8 +180,6 @@ Note the Highlight Options specified in the Preferences dialog also impact what 
 
 4.  Your edits will be directly applied to (written into) the book's metadata file.
 
-[//]: # (Note, we define "annotation" as either a highlight, a comment or both. When we refer to annotation editing we specifically mean editing a comment &#40;note&#41; that is associated with a pre-existing highlight.  )
-
 For clarity, the highlights themselves must be created in KOReader and cannot be created/edited with KH.  
 However, you can create/edit notes (comments) of the highlights both in KOReader and KH.  
 
@@ -215,8 +211,6 @@ Only book entries that contain these words will be displayed.
    ![4]
 
 1.  From the "Filter ..." drop down menu select where to search for the words, limiting the filtering to specific text areas like the "Book Titles" only.
-
-[//]: # (Note, that other options under the drop-down are not relevant under the Book's view)
 
 
 #### Viewing the book's epub
