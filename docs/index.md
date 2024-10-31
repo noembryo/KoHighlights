@@ -1,4 +1,4 @@
-# KoHighlights User Guide
+## User Guide
 
 ### Table of contents
 
