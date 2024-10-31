@@ -34,7 +34,7 @@
     * [Deleting a Sync Group](#deleting-a-sync-group)
     * [Troubleshooting Path Errors](#troubleshooting-path-errors)
     * [Replacing book metadata with Archived copy](#replacing-book-metadata-with-archived-copy)
-  * [Advanced Features](#advanced-features)
+* [Advanced Features](#advanced-features)
     * [Database management](#database-management)
     * [Exporting to markdown with collapsible TOC levels](#exporting-to-markdown-with-collapsible-toc-levels)
       * [KOReader user patch installation](#koreader-user-patch-installation)
@@ -490,7 +490,7 @@ KH can replace the book metadata files for the selected sync group, with the mos
 7.  Click OK to accept
 
 
-## Advanced Features
+# Advanced Features
 
 
 ### Database management
