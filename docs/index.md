@@ -1,6 +1,8 @@
+# KoHighlights User Guide
+
 ### Table of contents
 
-* [KOHighlights User Guide](#kohighlights-user-guide)
+* [Introduction](#introduction)
 * [Sources, Views and Actions](#sources-views-and-actions)
   * [Main toolbar](#main-toolbar)
     * [A. Metadata sources](#a-metadata-sources)
@@ -37,7 +39,7 @@
     * [MD5 Mismatch Correction](#md5-mismatch-correction)
 
 
-### KOHighlights User Guide
+### Introduction
 
 KOHighlights **(KH)** is a powerful highlight manager, designed to work seamlessly with [KOReader](https://github.com/koreader/koreader), a popular open-source e-book reading software.  
 
