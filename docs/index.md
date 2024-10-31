@@ -23,6 +23,8 @@
       * [Using Custom Markdown Template](#using-custom-markdown-template)
 * [II. Highlights View](#ii-highlights-view)
 * [III. Sync Groups View](#iii-sync-groups-view)
+    * [Sync Groups View elements](#sync-groups-view-elements)
+    * [Functionality accessible via right-click menu](#functionality-accessible-via-right-click-menu)
     * [Creating a New (blank) Sync Group](#creating-a-new-blank-sync-group)
     * [Adding Books from connected devices to a Sync Group](#adding-books-from-connected-devices-to-a-sync-group)
     * [Specifying sync options for the sync group](#specifying-sync-options-for-the-sync-group)
@@ -327,10 +329,10 @@ KH can synchronize (merge) highlights / reading positions between:
 2.  KH's Internal database copy (archive)
 
 
+### Sync Groups View elements
+
 ![9]
 
-
-**Sync Groups View elements**
 
 (1) Add a new group (KH will create a new empty group at the bottom of the group list)
 
@@ -368,7 +370,7 @@ KH can synchronize (merge) highlights / reading positions between:
 Note, that you can re-arrange the Sync Groups order by dragging specific groups to the desired position.
 
 
-   **Functionality accessible via right-click menu**
+### Functionality accessible via right-click menu
 
 Right-clicking on a sync group will bring up the following menu:
 
