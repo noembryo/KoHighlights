@@ -79,9 +79,9 @@ There are two sources from which KH can load highlights and other metadata:
 
 2. Copies of metadata files stored in the KH's internal database (provided that the user manually archived these copies of metadata, internally)
 
--   Use "**Loaded"** button to set the connected devices/drives as the source.
+-   Use **"Loaded"** button to set the connected devices/drives as the source.
 
--   Use "**Archived"** button to set the KH's database as the source.
+-   Use **"Archived"** button to set the KH's database as the source.
 
 
 ### B. Views
