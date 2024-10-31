@@ -110,6 +110,7 @@ The Book Info panel provides additional information for the select book such as 
 
 The Highlights panel shows the selected book's highlights and comments.  
 
+
 ### Action buttons in a glance
 
 ![2]
@@ -136,6 +137,7 @@ The Highlights panel shows the selected book's highlights and comments.
 7. **Clear List** - [(Usage)](#clearing-the-book-list)  
     Removes all the entries from the Book Selector panel.  
     Nothing gets deleted from the devices/drives.
+
 
 ### Usage Info - Common Tasks
 
@@ -506,6 +508,7 @@ This action allows you to change the current database file, by loading a differe
 - **Compact database**  
 This just executes a vacuum command to the database.  
 It might make it a little smaller if it's been used for a long time.
+
 
 ### Exporting to markdown with collapsible TOC levels
 
