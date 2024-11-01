@@ -182,7 +182,7 @@ Note the Highlight Options specified in the Preferences dialog also impact what 
 
 3.  Press OK to save the changes, Cancel to discard them 
 
-4.  Your edits will be directly applied to (written into) the book's metadata file.
+4.  Your edits will be directly applied to (written into) the book's metadata file
 
 For clarity, the highlights themselves must be created in KOReader and cannot be created/edited with KH.  
 However, you can create/edit notes (comments) of the highlights both in KOReader and KH.  
@@ -194,7 +194,7 @@ However, you can create/edit notes (comments) of the highlights both in KOReader
 
 2.  Right-click on the selection and chose "Delete"
 
-3.  When KH displays a warning lick "Yes" to proceed and "No" to cancel
+3.  When KH displays a warning, click "Yes" to proceed and "No" to cancel
 
 <u>Warning: Do not use any of the options under the Delete button in the toolbar to delete specific highlights!</u>  
 Those options are used only to delete the entire metadata file for the book or even the underlying epub book file too.  
