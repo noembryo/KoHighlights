@@ -552,14 +552,10 @@ Make sure the "chapter" key contains full path headings in the format:
   ```lua
   local ReaderAnnotation = require("apps/reader/modules/readerannotation")
   
-  ReaderAnnotation.addItem\_orig = ReaderAnnotation.addItem
-  
-  ReaderAnnotation.addItem = function(self, item)
-  
+  ReaderAnnotation.addItem_orig = ReaderAnnotation.addItem
+  ReaderAnnotation.addItem = function(self, item)  
   item.chapter = table.concat(self.ui.toc:getFullTocTitleByPage(item.page), " ▸ ")
-  
-  return self:addItem\_orig(item)
-  
+  return self:addItem_orig(item)
   end
   ```
  
