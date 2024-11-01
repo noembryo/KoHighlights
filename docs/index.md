@@ -7,7 +7,7 @@
   * [Main toolbar](#main-toolbar)
     * [A. Metadata sources](#a-metadata-sources)
     * [B. Views](#b-views)
-    * [C. Action buttons](#c-action-buttons-)
+    * [C. Action buttons](#c-action-buttons)
 * [I. Books View](#i-books-view)
     * [Action buttons in a glance](#action-buttons-in-a-glance)
     * [Usage Info - Common Tasks](#usage-info---common-tasks)
@@ -43,7 +43,7 @@
 
 ### Introduction
 
-KOHighlights **(KH)** is a powerful highlight manager, designed to work seamlessly with [KOReader](https://github.com/koreader/koreader), a popular open-source e-book reading software.  
+[KOHighlights](https://github.com/noembryo/KoHighlights) **(KH)** is a powerful highlight manager, designed to work seamlessly with [KOReader](https://github.com/koreader/koreader), a popular open-source e-book reading software.  
 
 KH provides a robust solution for viewing, editing, synchronizing, and exporting your KOReader highlights across multiple devices.  
 
@@ -92,7 +92,7 @@ KH can present book metadata in either **[Books](#i-books-view)** or **[Highligh
 These views are explained in more detail later in this guide.  
 In addition, there is a special **[Sync Groups](#iii-sync-groups-view)** view, used to synchronize highlights across multiple devices running KOReader.
 
-### C. Action buttons 
+### C. Action buttons
 
 Depending on the metadata source and the specific View selected, KH will display/hide and/or activate/deactivate the action buttons that are appropriate for the given context.  
 The action buttons execute KH functionality as described in their corresponding sections.
@@ -117,26 +117,26 @@ The Highlights panel shows the selected book's highlights and comments.
 
 ![2]
 
-1. **Scan Directory** - [(Usage)](#scanning-for-books)  
+1. **Scan Directory** [(Usage)](#scanning-for-books)  
     Used to select some directory that contains `.sdr` metadata folders of books, for scanning.  
     Could be a reader's partition or a folder somewhere on a hard drive.
-2. **Export** - [(Usage)](#exporting-highlights)  
+2. **Export** [(Usage)](#exporting-highlights)  
     Used to export the highlights from the selected books.  
     It opens a drop-down menu to select the format of the export.
 3. **View**  
     Used to open the selected book with your system's default viewer.
-4. **Filter** - [(Usage)](#filtering-content)  
+4. **Filter** [(Usage)](#filtering-content)  
     Used to filter the content of the Book Selector panel with keywords that can be found in the book's title, highlights or comments. 
 5. **Merge/Sync**  
     This button is only activated if two entries of the _**same**_ book are selected in the book selector pane.  
     It will try to sync the position and/or merge the highlights of the selected books.
-6. **Delete** - [(Usage)](#deleting-highlights)  
+6. **Delete** [(Usage)](#deleting-highlights)  
     <u>Warning: use this with extreme caution!</u>  
     This button will open a drop-down menu to select one of the actions that will execute to the selected books. These are:
     - Delete their metadata
     - Delete the book files and their metadata
     - Delete the metadata of all the book entries with missing book files  
-7. **Clear List** - [(Usage)](#clearing-the-book-list)  
+7. **Clear List** [(Usage)](#clearing-the-book-list)  
     Removes all the entries from the Book Selector panel.  
     Nothing gets deleted from the devices/drives.
 
@@ -509,7 +509,10 @@ This action refreshes the current database to reflect potentially external chang
 This action allows you to change the current database file, by loading a different one.
 - **Compact database**  
 This just executes a vacuum command to the database.  
-It might make it a little smaller if it's been used for a long time.
+It might make it a little smaller if it's been used for a long time.  
+
+
+To quickly change the current database, you can drag a database (`.db`) file from the explorer, and drop it on the Book selector panel of the Books View, while in the database mode (the "Archived" button pressed)
 
 
 ### MD5 Mismatch Correction
@@ -557,7 +560,8 @@ Make sure the "chapter" key contains full path headings in the format:
 
 3.  _**Right-click**_ on the "Edit" button next to the "Custom Markdown" checkbox.  
   This will open the "Edit Markdown Template" dialog like the normal click would, but with a notable difference.  
-  At the bottom of the dialog window there will be a checkbox called "Split Chapters" with the level selectors from Levels 1 to Level 6 ![6]
+  At the bottom of the dialog window there will be a checkbox called "Split Chapters" with the level selectors from Levels 1 to Level 6  
+![6]
 
 4.  Customize the template to reflect your preferences. In the screenshot above, the template will map the book's name to the Heading 1 and assign Headings 2 to 6 to other TOC levels. The highlights will appear under the pages numbers (in p-{page\#} format) and will also use Obsidian's "Quote" callout '\>\[!quote\]' . The comments will appear in Italics.
 
@@ -567,6 +571,7 @@ Make sure the "chapter" key contains full path headings in the format:
 #### KOReader user patch installation
 
 - To install the user patch on KOReader, copy the content of the following patch code, and paste it to an empty text file.  
+     
   For KOReader version 2024.07 use:
   ```lua
   local ReaderAnnotation = require("apps/reader/modules/readerannotation")
@@ -599,7 +604,7 @@ Make sure the "chapter" key contains full path headings in the format:
       return self:addItem_orig(item)
   end
   ```
-  
+     
   For KOReader versions after 2024.07 use:
 
   ```lua
@@ -616,7 +621,6 @@ Make sure the "chapter" key contains full path headings in the format:
 - Rename this file to "2-save-full-chapter-path.lua".  
 - Then, place the file into your KOReader's "patches" directory.
 
- 
 
   [1]:  ./images/1_2.png
   [2]:  ./images/2_2.png
@@ -629,3 +633,4 @@ Make sure the "chapter" key contains full path headings in the format:
   [9]:  ./images/9_2.png
   [10]: ./images/10_2.png
   [11]: ./images/11.png
+
