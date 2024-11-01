@@ -36,9 +36,9 @@
     * [Replacing book metadata with Archived copy](#replacing-book-metadata-with-archived-copy)
 * [Advanced Features](#advanced-features)
     * [Database management](#database-management)
+    * [MD5 Mismatch Correction](#md5-mismatch-correction)
     * [Exporting to markdown with collapsible TOC levels](#exporting-to-markdown-with-collapsible-toc-levels)
       * [KOReader user patch installation](#koreader-user-patch-installation)
-    * [MD5 Mismatch Correction](#md5-mismatch-correction)
 
 
 ### Introduction
@@ -512,6 +512,25 @@ This just executes a vacuum command to the database.
 It might make it a little smaller if it's been used for a long time.
 
 
+### MD5 Mismatch Correction
+
+There is a common reason why the MD5 checksum between two seemingly identical files, can be different.  
+**One of them, has been re-saved.**  
+
+Let's say we copy the same `epub` file to our reader and keep a copy at our PC.
+Then, we open the file on our PC with an editor to change a minor detail in the book.  
+Or we don't edit the file at all. Just read it with a software that saves the reading position inside the file itself (like older and perhaps also current(?) versions of  Calibre).  
+
+In every case, the book gets re-saved, and the re-saved book is a totally different file than the one in our reader.  
+The reason the MD5 check exists is that, if we try to sync the highlights of different books, all sorts of strange things can (and will) happen.  
+But if we're absolutely sure that nothing has actually changed in the contents of the epub, then, there is a way to bypass the MD5 check.  
+
+<u>Warning! Use this at your own risk!</u>  
+If there is an MD5 mismatch, you can right-click the erroneous sync path (13) and select "Ignore MD5" on the popup menu.  
+This will create an empty `ignore_md5` file next to the metadata file, and will allow sync to proceed.  
+Right-clicking again on this path, will give you the option to delete the `ignore_md5` file by un-checking the "Ignore MD5" option. 
+
+
 ### Exporting to markdown with collapsible TOC levels
 
 Note, this is an experimental feature designed to work with "2-save-full-chapter-path.lua" user patch.  
@@ -596,25 +615,6 @@ Make sure the "chapter" key contains full path headings in the format:
  
 - Rename this file to "2-save-full-chapter-path.lua".  
 - Then, place the file into your KOReader's "patches" directory.
-
-
-### MD5 Mismatch Correction
-
-There is a common reason why the MD5 checksum between two seemingly identical files, can be different.  
-**One of them, has been re-saved.**  
-
-Let's say we copy the same `epub` file to our reader and keep a copy at our PC.
-Then, we open the file on our PC with an editor to change a minor detail in the book.  
-Or we don't edit the file at all. Just read it with a software that saves the reading position inside the file itself (like older and perhaps also current(?) versions of  Calibre).  
-
-In every case, the book gets re-saved, and the re-saved book is a totally different file than the one in our reader.  
-The reason the MD5 check exists is that, if we try to sync the highlights of different books, all sorts of strange things can (and will) happen.  
-But if we're absolutely sure that nothing has actually changed in the contents of the epub, then, there is a way to bypass the MD5 check.  
-
-<u>Warning! Use this at your own risk!</u>  
-If there is an MD5 mismatch, you can right-click the erroneous sync path (13) and select "Ignore MD5" on the popup menu.  
-This will create an empty `ignore_md5` file next to the metadata file, and will allow sync to proceed.  
-Right-clicking again on this path, will give you the option to delete the `ignore_md5` file by un-checking the "Ignore MD5" option. 
 
  
 
