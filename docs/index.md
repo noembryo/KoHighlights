@@ -39,7 +39,7 @@
     * [MD5 Mismatch Correction](#md5-mismatch-correction)
     * [Exporting to markdown with collapsible TOC levels](#exporting-to-markdown-with-collapsible-toc-levels)
       * [KOReader user patch installation](#koreader-user-patch-installation)
-
+___
 
 ### Introduction
 
@@ -117,28 +117,16 @@ The Highlights panel shows the selected book's highlights and comments.
 
 ![2]
 
-1. **Scan Directory** [(Usage)](#scanning-for-books)  
-    Used to select some directory that contains `.sdr` metadata folders of books, for scanning.  
-    Could be a reader's partition or a folder somewhere on a hard drive.
-2. **Export** [(Usage)](#exporting-highlights)  
-    Used to export the highlights from the selected books.  
-    It opens a drop-down menu to select the format of the export.
-3. **View**  
-    Used to open the selected book with your system's default viewer.
-4. **Filter** [(Usage)](#filtering-content)  
-    Used to filter the content of the Book Selector panel with keywords that can be found in the book's title, highlights or comments. 
-5. **Merge/Sync**  
-    This button is only activated if two entries of the _**same**_ book are selected in the book selector pane.  
-    It will try to sync the position and/or merge the highlights of the selected books.
-6. **Delete** [(Usage)](#deleting-highlights)  
-    <u>Warning: use this with extreme caution!</u>  
-    This button will open a drop-down menu to select one of the actions that will execute to the selected books. These are:
+1. **Scan Directory** [(Usage)](#scanning-for-books) - Used to select some directory that contains `.sdr` metadata folders of books, for scanning. Could be a reader's partition or a folder somewhere on a hard drive.
+2. **Export** [(Usage)](#exporting-highlights) - Used to export the highlights from the selected books. It opens a drop-down menu to select the format of the export.
+3. **View** - Used to open the selected book with your system's default viewer.
+4. **Filter** [(Usage)](#filtering-content) - Used to filter the content of the Book Selector panel with keywords that can be found in the book's title, highlights or comments. 
+5. **Merge/Sync** - This button is only activated if two entries of the _**same**_ book are selected in the book selector pane. It will try to sync the position and/or merge the highlights of the selected books.
+6. **Delete** [(Usage)](#deleting-highlights) - <u>Warning: Use this with extreme caution!</u> This button will open a drop-down menu to select one of the actions that will execute to the selected books. These are:
     - Delete their metadata
     - Delete the book files and their metadata
     - Delete the metadata of all the book entries with missing book files  
-7. **Clear List** [(Usage)](#clearing-the-book-list)  
-    Removes all the entries from the Book Selector panel.  
-    Nothing gets deleted from the devices/drives.
+7. **Clear List** [(Usage)](#clearing-the-book-list) - Removes all the entries from the Book Selector panel. Nothing gets deleted from the devices/drives.
 
 
 ### Usage Info - Common Tasks
@@ -378,17 +366,15 @@ Right-clicking on a sync group will bring up the following menu:
    ![10]
 
 
--  Rename group - allows to change the name of the Sync Group
+-  **Rename group** - Allows to change the name of the Sync Group
 
--  Sync group - same as the "Sync this group" button (9)
+-  **Sync group** - Same as the "Sync this group" button (9)
 
--  Load group items - will load all metadata files in a group in the Books view
+-  **Load group items** - Will load all metadata files in a group in the Books view
 
--  Copy Archived to group:  
-<u>Caution! Using this feature will overwrite all highlights in the group files with the archived version stored in KH database.</u>  
-This feature can also be used when you edited the archived version of the book, and you want to propagate it to all devices.
+-  **Copy Archived to group** - <u>Caution! Using this feature will overwrite all highlights in the group files with the archived version stored in KH database.</u> This feature can also be used when you edited the archived version of the book, and you want to propagate it to all devices.
 
--  Delete selected - same as the "Delete" button (3).
+-  **Delete selected** - Same as the "Delete" button (3).
 
 
 ### Creating a New (blank) Sync Group
@@ -500,19 +486,13 @@ Right-clicking or pressing the arrow at the right edge of the "Archived" button,
    ![11]
 
 The following options are available:
-- **Create new database**  
-KH keeps the archived metadata in a default `data.db` file.   
-With this action we can create a different database file to store a different group of book metadata.
-- **Reload database**  
-This action refreshes the current database to reflect potentially external changes.
-- **Change database**  
-This action allows you to change the current database file, by loading a different one.
-- **Compact database**  
-This just executes a vacuum command to the database.  
-It might make it a little smaller if it's been used for a long time.  
+- **Create new database** - KH keeps the archived metadata in a default `data.db` file. With this action we can create a different database file to store a different group of book metadata.
+- **Reload database** - This action refreshes the current database to reflect potentially external changes.
+- **Change database** - This action allows you to change the current database file, by loading a different one.
+- **Compact database** - This just executes a vacuum command to the database. It might make it a little smaller if it's been used for a long time.  
 
 
-To quickly change the current database, you can drag a database (`.db`) file from the explorer, and drop it on the Book selector panel of the Books View, while in the database mode (the "Archived" button pressed)
+To quickly change the current database, you can drag a database file (`.db`) from the explorer, and drop it on the Book Selector panel of the Books View, while in the database mode (the "Archived" button pressed)
 
 
 ### MD5 Mismatch Correction
@@ -572,7 +552,7 @@ Make sure the "chapter" key contains full path headings in the format:
 
 - To install the user patch on KOReader, copy the content of the following patch code, and paste it to an empty text file.  
      
-  For KOReader version 2024.07 use:
+  **For KOReader version 2024.07 use:**
   ```lua
   local ReaderAnnotation = require("apps/reader/modules/readerannotation")
   local ReaderToc = require("apps/reader/modules/readertoc")
@@ -605,7 +585,7 @@ Make sure the "chapter" key contains full path headings in the format:
   end
   ```
      
-  For KOReader versions after 2024.07 use:
+  **For KOReader versions after 2024.07 use:**
 
   ```lua
   local ReaderAnnotation = require("apps/reader/modules/readerannotation")
@@ -634,3 +614,4 @@ Make sure the "chapter" key contains full path headings in the format:
   [10]: ./images/10_2.png
   [11]: ./images/11.png
 
+ 
