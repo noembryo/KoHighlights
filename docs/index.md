@@ -547,7 +547,41 @@ Make sure the "chapter" key contains full path headings in the format:
 
 #### KOReader user patch installation
 
-- To install the user patch on KOReader, copy the content of the following patch code, and paste it to an empty text file. 
+- To install the user patch on KOReader, copy the content of the following patch code, and paste it to an empty text file.  
+  For KOReader version 2024.07 use:
+  ```lua
+  local ReaderAnnotation = require("apps/reader/modules/readerannotation")
+  local ReaderToc = require("apps/reader/modules/readertoc")
+  
+  ReaderToc.getFullTocTitleByPage = ReaderToc.getFullTocTitleByPage or function(self, pn_or_xp)
+      local chapters = {}
+      local toc_ticks_ignored_levels_orig = {}
+      local toc_chapter_title_bind_to_ticks_orig = self.toc_chapter_title_bind_to_ticks -- backup the flag
+      self.toc_chapter_title_bind_to_ticks = true -- honor self.toc_ticks_ignored_levels
+      local max_depth = self:getMaxDepth()
+      for depth = max_depth, 1, -1 do
+          toc_ticks_ignored_levels_orig[depth] = self.toc_ticks_ignored_levels[depth] -- backup the level
+          -- ignore the level if it should be ignored due to original settings
+          self.toc_ticks_ignored_levels[depth] = self.toc_ticks_ignored_levels[depth] and toc_chapter_title_bind_to_ticks_orig
+          local chapter = self:getTocTitleByPage(pn_or_xp)
+          if chapter ~= "" and chapter ~= chapters[1] then
+              table.insert(chapters, 1, chapter)
+          end
+          self.toc_ticks_ignored_levels[depth] = true -- ignore the level on next iterations
+      end
+      self.toc_chapter_title_bind_to_ticks = toc_chapter_title_bind_to_ticks_orig -- restore the flag
+      table.move(toc_ticks_ignored_levels_orig, 1, max_depth, 1, self.toc_ticks_ignored_levels) -- restore all levels
+      return chapters
+  end
+  
+  ReaderAnnotation.addItem_orig = ReaderAnnotation.addItem
+  ReaderAnnotation.addItem = function(self, item)
+      item.chapter = table.concat(self.ui.toc:getFullTocTitleByPage(item.page), " ▸ ")
+      return self:addItem_orig(item)
+  end
+  ```
+  
+  For KOReader versions after 2024.07 use:
 
   ```lua
   local ReaderAnnotation = require("apps/reader/modules/readerannotation")
