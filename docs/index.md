@@ -554,6 +554,7 @@ Make sure the "chapter" key contains full path headings in the format:
   
   ReaderAnnotation.addItem_orig = ReaderAnnotation.addItem
   ReaderAnnotation.addItem = function(self, item)  
+  
   item.chapter = table.concat(self.ui.toc:getFullTocTitleByPage(item.page), " ▸ ")
   return self:addItem_orig(item)
   end
