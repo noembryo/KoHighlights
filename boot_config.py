@@ -3,7 +3,7 @@ import time
 import sys, os
 import traceback
 import gzip, json
-from os.path import dirname, join, isdir, expanduser
+from os.path import dirname, join, isdir, expanduser, abspath
 
 __author__ = "noEmbryo"
 
@@ -13,10 +13,16 @@ def _(text):  # for future gettext support
 
 
 APP_NAME = "KOHighlights"
-APP_DIR = dirname(os.path.abspath(sys.argv[0]))
-os.chdir(APP_DIR)  # Set the current working directory to the app's directory
+APP_DIR = dirname(abspath(__file__))
+try:
+    # noinspection PyUnresolvedReferences,PyProtectedMember
+    BASE_DIR = sys._MEIPASS
+except AttributeError:  # loading from py, not an exe
+    BASE_DIR = APP_DIR
+os.chdir(BASE_DIR)  # Set the current working directory to the app's directory
 
 USE_QT6 = False  # select between PySide2/Qt5 and Pyside6/Qt6 if both are installed
+
 if USE_QT6:
     from PySide6.QtCore import qVersion
 else:
@@ -118,6 +124,8 @@ FILTER_ALL, FILTER_HIGH, FILTER_COMM, FILTER_TITLES = range(4)  # filter type
  THEME_LIGHT_OLD, THEME_LIGHT_NEW) = range(6)  # theme idx
 ACT_PAGE, ACT_DATE, ACT_TEXT, ACT_CHAPTER, ACT_COMMENT = range(5)  # show items actions
 HI_DATE, HI_COMMENT, HI_TEXT, HI_PAGE, HI_CHAPTER = range(5)  # highlight items
+DEL_META, DEL_BOOKS, DEL_MISSING = range(3)
+
 
 NO_TITLE = _("NO TITLE FOUND")
 NO_AUTHOR = _("NO AUTHOR FOUND")
@@ -132,6 +140,7 @@ TOOLTIP_SYNC = _("Start the sync process for all enabled groups")
 HIGH_COL_NAMES = ["Highlight", "Comment", "Date", "Title",
                   "Author", "Page", "Chapter", "Path"]
 SYNC_FILE = join(SETTINGS_DIR, "sync_groups.json")
+SPLITTER = " ▸ "
 
 CSV_HEAD = "Title\tAuthors\tPage\tDate\tChapter\tHighlight\tComment\n"
 CSV_KEYS = ["title", "authors", "page", "date", "chapter", "text", "comment"]

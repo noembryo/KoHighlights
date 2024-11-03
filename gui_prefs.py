@@ -3,7 +3,7 @@
 # Form implementation generated from reading ui file 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_prefs.ui',
 # licensing of 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_prefs.ui' applies.
 #
-# Created: Fri Oct  4 21:42:42 2024
+# Created: Mon Nov  4 00:35:07 2024
 #      by: pyside2-uic  running on PySide2 5.13.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -104,6 +104,7 @@ class Ui_Prefs(object):
         self.custom_template_chk.setObjectName("custom_template_chk")
         self.horizontalLayout_3.addWidget(self.custom_template_chk)
         self.custom_template_btn = QtWidgets.QToolButton(self.frame_6)
+        self.custom_template_btn.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         icon1 = QtGui.QIcon()
         icon1.addPixmap(QtGui.QPixmap(":/stuff/file_edit.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         self.custom_template_btn.setIcon(icon1)

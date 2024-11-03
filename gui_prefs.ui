@@ -256,6 +256,9 @@
          </item>
          <item>
           <widget class="QToolButton" name="custom_template_btn">
+           <property name="contextMenuPolicy">
+            <enum>Qt::CustomContextMenu</enum>
+           </property>
            <property name="toolTip">
             <string>Edit the Markdown export template</string>
            </property>

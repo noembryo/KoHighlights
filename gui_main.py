@@ -3,7 +3,7 @@
 # Form implementation generated from reading ui file 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_main.ui',
 # licensing of 'D:\Apps\DEV\PROJECTS\KoHighlights\gui_main.ui' applies.
 #
-# Created: Tue Aug 27 20:07:56 2024
+# Created: Mon Nov  4 00:35:07 2024
 #      by: pyside2-uic  running on PySide2 5.13.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -36,6 +36,7 @@ class Ui_Base(object):
         self.splitter.setObjectName("splitter")
         self.file_table = DropTableWidget(self.splitter)
         self.file_table.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.file_table.setAcceptDrops(True)
         self.file_table.setFrameShape(QtWidgets.QFrame.WinPanel)
         self.file_table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.file_table.setDragDropMode(QtWidgets.QAbstractItemView.DropOnly)

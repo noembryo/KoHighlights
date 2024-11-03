@@ -44,7 +44,7 @@ import pickle
 
 
 __author__ = "noEmbryo"
-__version__ = "2.2.1.1"
+__version__ = "2.3.0.0"
 
 
 class Base(QMainWindow, Ui_Base):
@@ -64,9 +64,14 @@ class Base(QMainWindow, Ui_Base):
         self.alt_title_sort = False
         self.show_items = [True, True, True, True, True]
         self.show_ref_pg = True
+
         self.custom_template = False
         self.templ_head = MD_HEAD
         self.templ_body = MD_HIGH
+        self.split_chapters = False
+        self.head_min = 2
+        self.head_max = 6
+
         self.high_by_page = True
         self.date_format = DATE_FORMAT
 
@@ -441,7 +446,7 @@ class Base(QMainWindow, Ui_Base):
             self.close()
         elif key == Qt.Key_Delete:
             if self.current_view == BOOKS_VIEW:
-                self.delete_actions(0)
+                self.remove_book_items()
             else:
                 self.toolbar.on_delete_btn_clicked()
 
@@ -476,8 +481,6 @@ class Base(QMainWindow, Ui_Base):
         """ Initialize the database tables
         """
         self.db = QSqlDatabase.addDatabase("QSQLITE")
-        if not isfile(self.db_path):
-            self.db_path = join(SETTINGS_DIR, "data.db")
         self.db.setDatabaseName(self.db_path)
         if not self.db.open():
             print("Could not open database!")
@@ -647,6 +650,17 @@ class Base(QMainWindow, Ui_Base):
         :type dropped: list
         :param dropped: The items dropped
         """
+        if len(dropped) == 1:
+            if splitext(dropped[0])[1] == ".db":
+                self.db_path = normpath(dropped[0])
+                self.change_db(RELOAD_DB)
+                if (self.about.isVisible() and  # update db path on System tab text
+                        self.about.about_tabs.currentWidget()
+                            .objectName() == "system_tab"):
+                    self.about.system_txt.setPlainText(self.about.get_system_info())
+                self.popup(_("Information"), _("Database loaded!"),
+                           QMessageBox.Information)
+                return
         # self.file_table.setSortingEnabled(False)
         for i in dropped:
             if splitext(i)[1] == ".lua" and basename(i).lower() != "custom_metadata.lua":
@@ -835,7 +849,7 @@ class Base(QMainWindow, Ui_Base):
             menu.addSeparator()
             action = QAction(_("Delete") + "\tDel", menu)
             action.setIcon(self.ico_files_delete)
-            action.triggered.connect(partial(self.delete_actions, 0))
+            action.triggered.connect(partial(self.delete_actions, DEL_META))
             menu.addAction(action)
 
         menu.exec_(self.file_table.mapToGlobal(point))
@@ -1834,7 +1848,7 @@ class Base(QMainWindow, Ui_Base):
             action.setIcon(self.ico_view_books)
             menu.addAction(action)
 
-            action = QAction(_("Comments"), menu)
+            action = QAction(_("Edit Comment"), menu)
             action.triggered.connect(self.on_edit_comment)
             action.setIcon(self.ico_file_edit)
             menu.addAction(action)
@@ -2781,9 +2795,9 @@ class Base(QMainWindow, Ui_Base):
         """ Creates the `Delete` button menu
         """
         menu = QMenu(self)
-        for idx, title in enumerate([_("Selected books' info"),
-                                     _("Selected books"),
-                                     _("All missing books' info")]):
+        for idx, title in [(DEL_META, _("Selected books' info")),
+                           (DEL_BOOKS, _("Selected books")),
+                           (DEL_MISSING, _("All missing books' info"))]:
             action = QAction(self.ico_files_delete, title, menu)
             action.triggered.connect(self.on_delete_actions)
             action.setData(idx)
@@ -2796,33 +2810,33 @@ class Base(QMainWindow, Ui_Base):
         idx = self.sender().data()
         self.delete_actions(idx)
 
-    def delete_actions(self, idx):
+    def delete_actions(self, idx=DEL_META):
         """ Execute the selected `Delete action`
 
         :type idx: int
         :param idx: The action type
         """
         if not self.db_mode:  # Loaded mode
-            if not self.sel_indexes and idx in [0, 1]:
+            if not self.sel_indexes and idx in [DEL_META, DEL_BOOKS]:
                 return
             text = ""
-            if idx == 0:
+            if idx == DEL_META:
                 text = _("This will delete the selected books' information\n"
                          "but will keep the equivalent books.")
-            elif idx == 1:
+            elif idx == DEL_BOOKS:
                 text = _("This will delete the selected books and their information.")
-            elif idx == 2:
+            elif idx == DEL_MISSING:
                 text = _("This will delete all the books' information "
                          "that refers to missing books.")
             popup = self.popup(_("Warning!"), text, buttons=2)
             if popup.buttonRole(popup.clickedButton()) == QMessageBox.RejectRole:
                 return
 
-            if idx == 0:  # delete selected books' info
+            if idx == DEL_META:  # delete selected books' info
                 self.remove_sel_books()
-            elif idx == 1:  # delete selected books
+            elif idx == DEL_BOOKS:  # delete selected books
                 self.remove_sel_books(delete=True)
-            elif idx == 2:  # delete all missing books info
+            elif idx == DEL_MISSING:  # delete all missing books info
                 self.clear_missing_info()
         else:  # Archived mode
             text = _("Delete the selected books from the Archive?")
@@ -2839,7 +2853,7 @@ class Base(QMainWindow, Ui_Base):
         self.reload_highlights = True
 
     def remove_sel_books(self, delete=False):
-        """ Remove the selected book entries from the file_table
+        """ Remove the selected book entries
 
         :type delete: bool
         :param delete: Delete the book file too
@@ -2869,6 +2883,15 @@ class Base(QMainWindow, Ui_Base):
                 path = self.get_sdr_folder(row)
                 shutil.rmtree(path) if isdir(path) else os.remove(path)
                 self.remove_book_row(row)
+
+    def remove_book_items(self):
+        """ Remove the selected book entries from the file_table
+        """
+        if self.db_mode:
+            self.delete_actions()
+        else:
+            for index in sorted(self.sel_indexes)[::-1]:
+                self.remove_book_row(index.row())  # remove file_table entry
 
     def remove_book_row(self, row):
         """ Remove a book entry from the file table
@@ -3015,12 +3038,14 @@ class Base(QMainWindow, Ui_Base):
             if not highlights:  # no highlights in book
                 continue
             highlights = sorted(highlights, key=self.sort_high4write)
+            template = {"active": self.custom_template, "templ_head": self.templ_head,
+                        "templ_body": self.templ_body,
+                        "split_chapters": self.split_chapters,
+                        "head_min": self.head_min, "head_max": self.head_max}
             try:
                 args = {"title": title, "authors": authors, "highlights": highlights,
-                        "dir_path": dir_path, "format_": format_,
-                        "line_break": line_break, "space": space,
-                        "custom_template": self.custom_template,
-                        "templ_head": self.templ_head, "templ_body": self.templ_body}
+                        "dir_path": dir_path, "format_": format_, "space": space,
+                        "line_break": line_break, "custom_template": template}
                 save_file(args)
                 count += 1
             except IOError as err:  # any problem when writing (like long filename, etc.)
@@ -3051,10 +3076,13 @@ class Base(QMainWindow, Ui_Base):
             if not highlights:  # no highlights
                 continue
             highlights = sorted(highlights, key=self.sort_high4write)
+            template = {"active": self.custom_template, "templ_head": self.templ_head,
+                        "templ_body": self.templ_body,
+                        "split_chapters": self.split_chapters,
+                        "head_min": self.head_min, "head_max": self.head_max}
             args = {"title": title, "authors": authors, "highlights": highlights,
                     "format_": format_, "line_break": line_break, "space": space,
-                    "text": text, "custom_template": self.custom_template,
-                    "templ_head": self.templ_head, "templ_body": self.templ_body}
+                    "text": text, "custom_template": template}
             text = get_book_text(args)
             count += 1
         if format_ == ONE_HTML:
@@ -3263,9 +3291,14 @@ class Base(QMainWindow, Ui_Base):
             self.toolbar_size = app_config.get("toolbar_size", 48)
             self.skip_version = app_config.get("skip_version", None)
             self.date_vacuumed = app_config.get("date_vacuumed", self.date_vacuumed)
+
             self.custom_template = app_config.get("custom_template", False)
             self.templ_head = app_config.get("templ_head", MD_HEAD)
             self.templ_body = app_config.get("templ_body", MD_HIGH)
+            self.split_chapters = app_config.get("split_chapters", False)
+            self.head_min = app_config.get("head_min", 2)
+            self.head_max = app_config.get("head_max", 6)
+
             self.date_format = app_config.get("date_format", DATE_FORMAT)
             self.theme = app_config.get("theme", THEME_NONE_OLD)
             self.archive_warning = app_config.get("archive_warning", True)
@@ -3290,6 +3323,9 @@ class Base(QMainWindow, Ui_Base):
         self.blocked_change(self.prefs.custom_template_chk, self.custom_template)
         self.prefs.edit_template.body_edit_txt.setText(self.templ_body)
         self.prefs.edit_template.head_edit_txt.setText(self.templ_head)
+        self.prefs.edit_template.split_chapters_chk.setChecked(self.split_chapters)
+        self.prefs.edit_template.head_min_box.setCurrentIndex(self.head_min - 1)
+        self.prefs.edit_template.head_max_box.setCurrentIndex(self.head_max - 1)
         self.toolbar.set_btn_size(self.toolbar_size)
 
     def restore_windows(self):
@@ -3329,6 +3365,7 @@ class Base(QMainWindow, Ui_Base):
                   "header_high_view": self.pickle(self.header_high_view.saveState()),
                   "filter_geometry": self.pickle(self.filter.saveGeometry()),
                   "about_geometry": self.pickle(self.about.saveGeometry()),
+
                   "prefs_geometry": self.pickle(self.prefs.saveGeometry()),
                   "templ_geometry": self.pickle(self.prefs.edit_template.saveGeometry()),
                   "templ_split": self.pickle(
@@ -3339,6 +3376,8 @@ class Base(QMainWindow, Ui_Base):
                       self.prefs.edit_template.body_split.saveState()),
                   "templ_head": self.templ_head, "templ_body": self.templ_body,
                   "custom_template": self.custom_template,
+                  "split_chapters": self.split_chapters,
+                  "head_min": self.head_min, "head_max": self.head_max,
                   "col_sort_asc": self.col_sort_asc, "col_sort": self.col_sort,
                   "col_sort_asc_h": self.col_sort_asc_h, "col_sort_h": self.col_sort_h,
                   "highlight_width": self.highlight_width, "db_path": self.db_path,

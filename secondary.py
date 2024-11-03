@@ -1,19 +1,19 @@
 # coding=utf-8
-import os
+from boot_config import *
+from boot_config import _
+
+import os, re
+import webbrowser
+import platform
+from functools import partial
+from ntpath import normpath
+from os.path import join, basename, splitext, isfile, abspath
 from copy import deepcopy
 from pprint import pprint
 
-from boot_config import *
-from boot_config import _
-import re
-import webbrowser
-from functools import partial
-from ntpath import normpath
-from os.path import join, basename, splitext, isfile
-
 if QT5:  # ___ ______________ DEPENDENCIES __________________________
     from PySide2.QtCore import (QObject, Qt, Signal, QPoint, Slot, QSize, QEvent, QRect,
-                                QTimer)
+                                QTimer, QUrl)
     from PySide2.QtGui import (QFont, QMovie, QIcon, QCursor, QPalette, QColor, QPixmap,
                                QPainter, QPen)
     from PySide2.QtWidgets import (QTableWidgetItem, QTableWidget, QMessageBox, QLineEdit,
@@ -22,7 +22,7 @@ if QT5:  # ___ ______________ DEPENDENCIES __________________________
                                    QToolButton, QCheckBox)
 else:  # Qt6
     from PySide6.QtCore import (QObject, Qt, Signal, QEvent, QPoint, Slot, QSize, QRect,
-                                QTimer)
+                                QTimer, QUrl)
     from PySide6.QtGui import (QFont, QActionGroup, QAction, QCursor, QMovie, QIcon,
                                QPalette, QColor, QPixmap, QPainter, QPen)
     from PySide6.QtWidgets import (QTableWidgetItem, QTableWidget, QApplication,
@@ -30,6 +30,7 @@ else:  # Qt6
                                    QDialog, QMessageBox, QCheckBox, QStyleFactory)
 import requests
 from bs4 import BeautifulSoup
+from future.moves.urllib.parse import unquote, urlencode
 from packaging.version import parse as version_parse
 from slppu import slppu as lua  # https://github.com/noembryo/slppu
 
@@ -89,6 +90,83 @@ def get_csv_row(data):
     return "\t".join(values)
 
 
+def create_chapter_map(all_chapter_parts):
+    """ Create the chapter map
+
+    :type all_chapter_parts: list
+    :param all_chapter_parts: The list of all chapter parts
+    """
+    chapter_map = {}
+
+    # Build the chapter map
+    for chapter_parts in all_chapter_parts:
+        current_level = chapter_map
+
+        highlight = chapter_parts[-1]["Highlight"]
+        parts = chapter_parts[:-1]
+        for part in parts:
+            if part not in current_level:
+                current_level[part] = {}
+            current_level = current_level[part]
+
+        # Initialize highlights list if not present
+        if "highlight" not in current_level:
+            current_level["highlight"] = []
+        current_level["highlight"].append(highlight)
+
+    # Construct the final chapter map
+    final_chapter_map = []
+    for part, chapters in chapter_map.items():
+        part_structure = [part]
+        for chapter, details in chapters.items():
+            chapter_structure = [chapter]
+
+            if "highlight" in details:  # If highlights exist, add them to the structure
+                chapter_structure.extend(details["highlight"])
+
+            chapter_structure.extend(build_structure(details))
+            part_structure.append(chapter_structure)
+        final_chapter_map.append(part_structure)
+
+    return final_chapter_map
+
+
+def build_structure(mapping):
+    """ Construct the final nested list structure
+
+    :type mapping: dict
+    :param mapping: The mapping to be processed
+    """
+    result = []
+    for key, value in mapping.items():
+        if key != "highlight":
+            sub_structure = [key]
+            # If there are highlights, include them in the structure
+            if "highlight" in value and value["highlight"]:
+                sub_structure.extend(value["highlight"])
+            # Recursively build sub-structures for deeper levels
+            sub_structure.extend(build_structure(value))
+            result.append(sub_structure)
+    return result
+
+
+def generate_markdown(chapter_list, level=1, max_level=6):
+    """ Generate a markdown string from a chapter list
+    """
+    markdown = ""
+    for item in chapter_list:
+        if isinstance(item, list):
+            # Determine the appropriate heading level
+            current_level = level if level <= max_level else max_level
+            markdown += f"{'#' * current_level} {item[0]}\n\n"
+            # Recursively process the sub-chapters
+            markdown += generate_markdown(item[1:], level + 1, max_level)
+        else:
+            # Add highlight texts without any heading
+            markdown += f"{item}\n"
+    return markdown
+
+
 def get_book_text(args):
     """ Create the book's contents
     """
@@ -99,9 +177,14 @@ def get_book_text(args):
     line_break = args["line_break"]
     space = args["space"]
     text = args["text"]
-    custom_template = args.get("custom_template")
-    templ_head = args.get("templ_head")
-    templ_body = args.get("templ_body")
+
+    custom_template = args.get("custom_template", {})
+    customize = custom_template.get("active")
+    templ_head = custom_template.get("templ_head")
+    templ_body = custom_template.get("templ_body")
+    split_chapters = custom_template.get("split_chapters")
+    head_min = custom_template.get("head_min")
+    head_max = custom_template.get("head_max")
 
     nl = os.linesep
     if format_ == ONE_TEXT:
@@ -132,29 +215,51 @@ def get_book_text(args):
             text += get_csv_row(data) + "\n"
     elif format_ == ONE_MD:
         highs = []
-        if not custom_template:
+        if not customize:
             text += f"\n---\n## {title}  \n##### {authors}  \n---\n"
             for i in highlights:
                 comment = i[HI_COMMENT].replace(nl, "  " + nl)
-                if comment:
-                    comment = "  " + comment
+                # if comment:
+                #     comment = "  " + comment
                 chapter = i[HI_CHAPTER]
                 if chapter:
                     chapter = f"***{chapter}***{nl}{nl}".replace(nl, "  " + nl)
                 high = i[HI_TEXT].replace(nl, "  " + nl)
-                h = ("*" + i[HI_PAGE] + space + i[HI_DATE] + line_break + chapter +
-                     high + comment + "  \n&nbsp;  \n")
-                highs.append(h.replace("-", "\\-"))
+                hi_text = ("*" + i[HI_PAGE] + space + i[HI_DATE] + line_break + chapter +
+                           high + comment + "  \n&nbsp;  \n")
+                highs.append(hi_text.replace("-", "\\-"))
         else:  # use custom markdown template
             text += templ_head.format(title, authors)
-            for i in highlights:
-                comment = i[HI_COMMENT].replace(nl, "  " + nl).replace("-", "\\-")
-                if comment:
-                    comment = "  " + comment
-                high = i[HI_TEXT].replace(nl, "  " + nl).replace("-", "\\-")
-                date_ = i[HI_DATE].replace("-", "\\-")
-                highs.append(templ_body.format(date_, comment, high,
-                                               i[HI_PAGE], i[HI_CHAPTER]))
+            do_split = False
+            if split_chapters:
+                for i in highlights:
+                    if SPLITTER in i[HI_CHAPTER]:
+                        do_split = True
+                        break
+            if do_split:
+                all_chapter_parts = []
+                for idx, i in enumerate(highlights):
+                    if SPLITTER in i[HI_CHAPTER]:
+                        chap_parts = [j.rstrip(SPLITTER)
+                                      for j in i[HI_CHAPTER].split(SPLITTER)]
+                        # get the highlight's formated text
+                        comment = i[HI_COMMENT].replace(nl, "  " + nl).replace("-", "\\-")
+                        high = i[HI_TEXT].replace(nl, "  " + nl).replace("-", "\\-")
+                        date_ = i[HI_DATE].replace("-", "\\-")
+                        hi_text = templ_body.format(date_, comment, high, i[HI_PAGE], "")
+
+                        chap_parts.append({"Highlight": hi_text})
+                        all_chapter_parts.append(chap_parts)
+                chapter_map = create_chapter_map(all_chapter_parts)
+                text += generate_markdown(chapter_map, head_min, head_max)
+            else:
+                for i in highlights:
+                    comment = i[HI_COMMENT].replace(nl, "  " + nl).replace("-", "\\-")
+                    # comment = "  " + comment if comment.strip() else ""
+                    high = i[HI_TEXT].replace(nl, "  " + nl).replace("-", "\\-")
+                    date_ = i[HI_DATE].replace("-", "\\-")
+                    highs.append(templ_body.format(date_, comment, high,
+                                                   i[HI_PAGE], i[HI_CHAPTER]))
         text += nl.join(highs) + "\n---\n"
     return text
 
@@ -216,16 +321,19 @@ class XTableWidgetIntItem(QTableWidgetItem):
     """
 
     def __lt__(self, value):
-        try:
-            return int(self.data(Qt.DisplayRole)) < int(value.data(Qt.DisplayRole))
-        except ValueError:  # no text
-            this_text = self.data(Qt.DisplayRole)
-            if not this_text:
-                this_text = "0"
-            that_text = value.data(Qt.DisplayRole)
-            if not that_text:
-                that_text = "0"
-            return int(this_text) < int(that_text)
+        parts1 = re.split(r'(\d+)', self.data(Qt.DisplayRole))
+        parts2 = re.split(r'(\d+)', value.data(Qt.DisplayRole))
+
+        for part1, part2 in zip(parts1, parts2):
+            if part1 != part2:
+                if part1.isdigit() and part2.isdigit():
+                    return int(part1) < int(part2)
+                else:
+                    return part1 < part2
+
+        # If we reach this point, it means that the string have a common prefix,
+        # so we need to check the lengths of the remaining parts
+        return len(parts1) < len(parts2)
 
 
 class XTableWidgetPercentItem(QTableWidgetItem):
@@ -263,9 +371,18 @@ class DropTableWidget(QTableWidget):
         self.app = QApplication.instance()
 
     def dragEnterEvent(self, event):
-        if event.mimeData().hasUrls and not self.app.base.db_mode:
-            event.accept()
-            return True
+        # if event.mimeData().hasUrls and not self.app.base.db_mode:
+        if event.mimeData().hasUrls:
+            if self.app.base.db_mode:
+                links = [i.toLocalFile() for i in event.mimeData().urls()]
+                if len(links) == 1 and splitext(links[0])[1].lower() == ".db":
+                    event.accept()
+                    return True
+                event.ignore()
+                return False
+            else:
+                event.accept()
+                return True
         else:
             event.ignore()
             return False
@@ -1039,7 +1156,7 @@ class ToolBar(QWidget, Ui_ToolBar):
             if not self.base.db_mode:
                 self.delete_btn.showMenu()
             else:
-                self.base.delete_actions(0)
+                self.base.delete_actions()
         elif self.base.current_view == HIGHLIGHTS_VIEW:
             self.base.on_delete_highlights()
         elif self.base.current_view == SYNC_VIEW:
@@ -1250,7 +1367,7 @@ class ToolBar(QWidget, Ui_ToolBar):
     def on_about_btn_clicked(self):
         """ The `About` button is pressed
         """
-        self.base.about.create_text()
+        self.base.about.setup_tabs()
         self.base.about.show()
 
 
@@ -1550,6 +1667,18 @@ class Prefs(QDialog, Ui_Prefs):
         """ Changes the Markdown format template
         """
         self.edit_template.set_default()
+        self.edit_template.split_chapters_frm.hide()
+        self.edit_template.exec_()
+
+    @Slot(QPoint)
+    def on_custom_template_btn_customContextMenuRequested(self, _):
+        """ Right click on the Edit template button
+
+        :type _: QPoint
+        :param _: The point of the click
+        """
+        self.edit_template.set_default()
+        self.edit_template.split_chapters_frm.show()
         self.edit_template.exec_()
 
     @Slot(int)
@@ -1581,11 +1710,34 @@ class About(QDialog, Ui_About):
         self.base = parent
 
     @Slot()
-    def on_about_qt_btn_clicked(self):
-        """ The `About Qt` button is pressed
+    def on_about_tabs_currentChanged(self):
+        self.setup_tabs()
+
+    def setup_tabs(self):
+        if self.about_tabs.currentWidget().objectName() == "info_tab":  # Information
+            self.create_text()
+        elif self.about_tabs.currentWidget().objectName() == "system_tab":  # System
+            self.system_txt.setPlainText(self.get_system_info())
+        elif self.about_tabs.currentWidget().objectName() == "usage_tab":  # Usage guide
+            self.create_usage_text()
+
+    @Slot(QUrl)
+    def on_usage_txt_anchorClicked(self, url):
+        """ Handles the link clicks on the track's properties
+
+        :type url: QUrl object
+        :parameter url: The link's command
         """
-        # noinspection PyCallByClass
-        QMessageBox.aboutQt(self, title=_("About Qt"))
+        link = unquote(url.toString())
+        if link.startswith("http"):
+            webbrowser.open(link)
+            return
+
+    @Slot()
+    def on_usage_btn_clicked(self):
+        """ The `Documentation` button is pressed
+        """
+        webbrowser.open("https://noembryo.github.io/KoHighlights/")
 
     @Slot()
     def on_updates_btn_clicked(self):
@@ -1672,6 +1824,35 @@ class About(QDialog, Ui_About):
         </body>""")
         self.text_lbl.setText(info)
 
+    def get_system_info(self):
+        """ Returns a text with all the system info we have
+        """
+        text = (f"{APP_NAME}:\t{self.base.version}\t[{platform.architecture()[0]}]\n"
+                f"Path:\t{APP_DIR}\n"
+                f"Settings path:\t{SETTINGS_DIR}\n"
+                f"Database path:\t{abspath(self.base.db_path)}\n"
+                f"\n"
+                f"Python:\t{platform.python_version()}\n"
+                f"Qt version:\t{qVersion()}\n"
+                f"Platform:\t{platform.platform()}\n"
+                f"System:\t{platform.system()}\n"
+                f"Release:\t{platform.release()}\n"
+                f"Version:\t{platform.version()}\n"
+                f"Name:\t{platform.node()}\n"
+                f"Processor:\t{platform.processor()}\n"
+                f"Machine:\t{platform.machine()}\n"
+                )
+        if platform.system() == "Windows":
+            text += f"WinInfo:\t{' '.join(platform.win32_ver())}\n"
+        return text
+
+    def create_usage_text(self):
+        with open(join(APP_DIR, "docs", "index.md"), encoding="utf8") as f:
+            text = f.read().replace("./images/", "docs/images/")
+            text = text.replace(" (Usage)", "")
+            text = text.split("___", 1)[1]
+            self.usage_txt.setMarkdown(text)
+
 
 class AutoInfo(QDialog, Ui_AutoInfo):
     def __init__(self, parent=None):
@@ -1723,6 +1904,7 @@ class EditTemplate(QDialog, Ui_EditTemplate):
                      "{2}=Highlighted text, {3}=Page number, {4}=Chapter name")
         self.body_help_lbl.setText(body_txt)
         self.setStyleSheet("QGroupBox{font-weight: bold;}")
+        self.split_chapters_frm.hide()
 
     @Slot()
     def on_head_edit_txt_textChanged(self):
@@ -1761,6 +1943,28 @@ class EditTemplate(QDialog, Ui_EditTemplate):
             self.body_preview_txt.setStyleSheet(style)
             return
         self.body_preview_txt.setMarkdown(text)
+
+    @Slot()
+    def on_split_chapters_chk_stateChanged(self):
+        """ Enables the spliting of chapters for different heading levels
+        """
+        self.base.split_chapters = self.split_chapters_chk.isChecked()
+
+    @Slot(int)
+    def on_head_min_box_currentIndexChanged(self, idx):
+        """ Changes the minimum heading level
+        """
+        self.base.head_min = idx + 1
+        if self.base.head_max < self.base.head_min:
+            self.head_max_box.setCurrentIndex(idx)
+
+    @Slot(int)
+    def on_head_max_box_currentIndexChanged(self, idx):
+        """ Changes the maximum heading level
+        """
+        self.base.head_max = idx + 1
+        if self.base.head_min > self.base.head_max:
+            self.head_min_box.setCurrentIndex(idx)
 
     @Slot()
     def on_default_btn_clicked(self):

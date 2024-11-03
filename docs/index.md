@@ -1,5 +1,6 @@
 ## User Guide
 
+---
 ### Table of contents
 
 * [Introduction](#introduction)
@@ -117,16 +118,16 @@ The Highlights panel shows the selected book's highlights and comments.
 
 ![2]
 
-1. **Scan Directory** [(Usage)](#scanning-for-books) - Used to select some directory that contains `.sdr` metadata folders of books, for scanning. Could be a reader's partition or a folder somewhere on a hard drive.
-2. **Export** [(Usage)](#exporting-highlights) - Used to export the highlights from the selected books. It opens a drop-down menu to select the format of the export.
+1. **Scan Directory**[ (Usage)](#scanning-for-books) - Used to select some directory that contains `.sdr` metadata folders of books, for scanning. Could be a reader's partition or a folder somewhere on a hard drive.
+2. **Export**[ (Usage)](#exporting-highlights) - Used to export the highlights from the selected books. It opens a drop-down menu to select the format of the export.
 3. **View** - Used to open the selected book with your system's default viewer.
-4. **Filter** [(Usage)](#filtering-content) - Used to filter the content of the Book Selector panel with keywords that can be found in the book's title, highlights or comments. 
+4. **Filter**[ (Usage)](#filtering-content) - Used to filter the content of the Book Selector panel with keywords that can be found in the book's title, highlights or comments. 
 5. **Merge/Sync** - This button is only activated if two entries of the _**same**_ book are selected in the book selector pane. It will try to sync the position and/or merge the highlights of the selected books.
-6. **Delete** [(Usage)](#deleting-highlights) - <u>Warning: Use this with extreme caution!</u> This button will open a drop-down menu to select one of the actions that will execute to the selected books. These are:
+6. **Delete**[ (Usage)](#deleting-highlights) - <u>Warning: Use this with extreme caution!</u> This button will open a drop-down menu to select one of the actions that will execute to the selected books. These are:
     - Delete their metadata
     - Delete the book files and their metadata
     - Delete the metadata of all the book entries with missing book files  
-7. **Clear List** [(Usage)](#clearing-the-book-list) - Removes all the entries from the Book Selector panel. Nothing gets deleted from the devices/drives.
+7. **Clear List**[ (Usage)](#clearing-the-book-list) - Removes all the entries from the Book Selector panel. Nothing gets deleted from the devices/drives.
 
 
 ### Usage Info - Common Tasks

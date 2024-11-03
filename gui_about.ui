@@ -28,6 +28,9 @@
      <property name="currentIndex">
       <number>0</number>
      </property>
+     <property name="documentMode">
+      <bool>true</bool>
+     </property>
      <widget class="QWidget" name="info_tab">
       <attribute name="title">
        <string>Information</string>
@@ -49,8 +52,8 @@
            <rect>
             <x>0</x>
             <y>0</y>
-            <width>454</width>
-            <height>485</height>
+            <width>460</width>
+            <height>490</height>
            </rect>
           </property>
           <property name="styleSheet">
@@ -91,18 +94,58 @@
        </item>
       </layout>
      </widget>
+     <widget class="QWidget" name="system_tab">
+      <attribute name="title">
+       <string>System</string>
+      </attribute>
+      <layout class="QVBoxLayout" name="verticalLayout_4">
+       <property name="margin">
+        <number>0</number>
+       </property>
+       <item>
+        <widget class="QTextEdit" name="system_txt">
+         <property name="textInteractionFlags">
+          <set>Qt::TextSelectableByMouse</set>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="usage_tab">
+      <attribute name="title">
+       <string>User Guide</string>
+      </attribute>
+      <layout class="QVBoxLayout" name="verticalLayout_3">
+       <property name="margin">
+        <number>0</number>
+       </property>
+       <item>
+        <widget class="QTextBrowser" name="usage_txt">
+         <property name="frameShape">
+          <enum>QFrame::WinPanel</enum>
+         </property>
+         <property name="textInteractionFlags">
+          <set>Qt::TextBrowserInteraction</set>
+         </property>
+         <property name="openLinks">
+          <bool>false</bool>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
      <widget class="QWidget" name="log_tab">
       <attribute name="title">
        <string>Log</string>
       </attribute>
       <layout class="QVBoxLayout" name="verticalLayout_8">
+       <property name="margin">
+        <number>0</number>
+       </property>
        <item>
         <widget class="QPlainTextEdit" name="log_txt">
          <property name="frameShape">
           <enum>QFrame::WinPanel</enum>
-         </property>
-         <property name="documentTitle">
-          <string notr="true"/>
          </property>
          <property name="undoRedoEnabled">
           <bool>false</bool>
@@ -132,20 +175,26 @@
        <number>0</number>
       </property>
       <item>
-       <widget class="QPushButton" name="about_qt_btn">
+       <widget class="QPushButton" name="usage_btn">
+        <property name="toolTip">
+         <string>View the User Guide online</string>
+        </property>
         <property name="text">
-         <string>About Qt</string>
+         <string>Online Guide</string>
+        </property>
+        <property name="autoDefault">
+         <bool>false</bool>
         </property>
        </widget>
       </item>
       <item>
-       <spacer name="horizontalSpacer_2">
+       <spacer name="horizontalSpacer_3">
         <property name="orientation">
          <enum>Qt::Horizontal</enum>
         </property>
         <property name="sizeHint" stdset="0">
          <size>
-          <width>92</width>
+          <width>40</width>
           <height>20</height>
          </size>
         </property>
@@ -158,6 +207,9 @@
         </property>
         <property name="text">
          <string>Check for Updates</string>
+        </property>
+        <property name="autoDefault">
+         <bool>false</bool>
         </property>
        </widget>
       </item>
