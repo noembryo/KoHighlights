@@ -41,7 +41,12 @@ ___
 
 ___
 
-## Usage/Features
+# [Full User Guide and Documentation](https://noembryo.github.io/KoHighlights/)
+___
+
+## Usage/Features at a glance
+
+
 * Load items by:
     * Selecting the reader's drive or any folder that contains books that where opened with Koreader. This will automatically load all the metadata files from all subdirectories.
     * Drag and drop files or folders. This will load the files and/or all the files inside the folders.  
