@@ -66,12 +66,11 @@ This Tooltip is shown when you hover your mouse over the corresponding control.
 
 The main toolbar of KH contains three types of buttons:
 
+A. Source buttons -- used to select sources of book's metadata  
+B. Views buttons -- used to switch between interface Views  
+C. Action buttons -- used to execute specific functionality of the program
+
 ![1]
-
-> A. Source buttons -- used to select sources of book's metadata  
-> B. Views buttons -- used to switch between interface Views  
-> C. Action buttons -- used to execute specific functionality of the program
-
 
 
 ### A. Metadata sources
