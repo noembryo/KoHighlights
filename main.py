@@ -3650,7 +3650,7 @@ class Base(QMainWindow, Ui_Base):
                                _("There is a newer version (v.{}) online.\n"
                                  "Open the site to download it now?").format(version_new),
                                icon=QMessageBox.Information, buttons=2,
-                               check_text=_("Don\"t alert me for this version again"))
+                               check_text=_("Don't alert me for this version again"))
             if popup.checked:
                 self.skip_version = version_new
             if popup.clickedButton().text() == "OK":
