@@ -44,7 +44,7 @@ import pickle
 
 
 __author__ = "noEmbryo"
-__version__ = "2.3.0.0"
+__version__ = "2.3.1.0"
 
 
 class Base(QMainWindow, Ui_Base):
@@ -1528,7 +1528,7 @@ class Base(QMainWindow, Ui_Base):
             for idx in annotations:
                 if high_text == annotations[idx]["text"]:
                     annotations[idx]["note"] = note.replace("\n", "\\\n")
-                    annotations[idx]["datetime"] = date  # update last edit date
+                    annotations[idx]["datetime_updated"] = date  # update last edit date
                     high_data["comment"] = note
                     break
         else:  # old format metadata
@@ -2576,28 +2576,34 @@ class Base(QMainWindow, Ui_Base):
                     continue  # don't check self
                 target = target[0]
                 for src_hi in source.values():
-                    if src_hi.get("pos0"):  # a highlight
-                        hi_text = src_hi.get("text", "")
+                    src_pos0 = src_hi.get("pos0")
+                    if src_pos0:  # a highlight
                         for trg_hi in target.values():
-                            if trg_hi.get("pos0"):  # a highlight not a bookmark
-                                if hi_text == trg_hi.get("text", ""):
-                                    if src_hi["datetime"] == trg_hi["datetime"]:
-                                        break  # it's the exact same annotation
-                                    src_comm = src_hi.get("note")  # try to get the
-                                    trg_comm = trg_hi.get("note")  # newest change
-                                    if src_hi["datetime"] > trg_hi["datetime"]:
-                                        if src_comm:  # this is the newer comment
-                                            trg_hi["note"] = src_comm
-                                        elif trg_comm:  # the comment was erased lately
-                                            trg_hi.pop("note", None)
-                                        trg_hi["datetime"] = src_hi["datetime"]
-                                    else:
-                                        if trg_comm:  # this is the newer comment
-                                            src_hi["note"] = trg_comm
-                                        elif src_comm:  # the comment was erased lately
-                                            src_hi.pop("note", None)
-                                        src_hi["datetime"] = trg_hi["datetime"]
-                                    break  # highlight found in target book
+                            trg_pos0 = trg_hi.get("pos0")
+                            if trg_pos0:  # a highlight not a bookmark
+                                if src_pos0 == trg_pos0:  # same highlight
+                                    if src_hi["pos1"] == trg_hi["pos1"]:
+                                        src_dt = (src_hi.get("datetime_updated")
+                                                  or src_hi.get("datetime"))
+                                        trg_dt = (trg_hi.get("datetime_updated")
+                                                  or trg_hi.get("datetime"))
+                                        if src_dt == trg_dt:
+                                            break  # it's the exact same annotation
+                                        src_comm = src_hi.get("note")  # try to get the
+                                        trg_comm = trg_hi.get("note")  # newest change
+                                        if src_dt > trg_dt:
+                                            if src_comm:  # this is the newer comment
+                                                trg_hi["note"] = src_comm
+                                            elif trg_comm:  # comment was erased lately
+                                                trg_hi.pop("note", None)
+                                            trg_hi["datetime_updated"] = src_dt
+                                        else:
+                                            if trg_comm:  # this is the newer comment
+                                                src_hi["note"] = trg_comm
+                                            elif src_comm:  # comment was erased lately
+                                                src_hi.pop("note", None)
+                                            src_hi["datetime_updated"] = trg_dt
+                                        break  # highlight found in target book
                         else:  # highlight was not found in target book
                             if src_hi["pos0"] + src_hi["pos1"] not in uni_check_hi:
                                 uni_check_hi.add(src_hi["pos0"] + src_hi["pos1"])
