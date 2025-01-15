@@ -184,7 +184,7 @@ However, you can create/edit notes (comments) of the highlights both in KOReader
 
 3.  When KH displays a warning, click "Yes" to proceed and "No" to cancel
 
-<ins>_**Warning: Do not use any of the options under the Delete button in the toolbar to delete specific highlights!**_</ins>  
+<u>_**Warning: Do not use any of the options under the Delete button in the toolbar to delete specific highlights!**_</u>  
 Those options are used only to delete the entire metadata file for the book or even the underlying epub book file too.  
 
 Note, if you are using KH to synchronize highlights across devices, the deleted highlights may be restored during the next synchronization, if other devices in the same [Sync Group](#iii-sync-groups-view) still contain the deleted highlights.  
