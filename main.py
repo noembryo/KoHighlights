@@ -2557,8 +2557,7 @@ class Base(QMainWindow, Ui_Base):
 
         self.reload_highlights = True
 
-    @staticmethod
-    def merge_new_highs(items):
+    def merge_new_highs(self, items):
         """ Merge the highlights of multiple books [new format]
 
         :type items: [[dict, int], ...]
@@ -2581,27 +2580,19 @@ class Base(QMainWindow, Ui_Base):
                         for trg_hi in target.values():
                             trg_pos0 = trg_hi.get("pos0")
                             if trg_pos0:  # a highlight not a bookmark
-                                if src_pos0 == trg_pos0:  # same highlight
-                                    if src_hi["pos1"] == trg_hi["pos1"]:
+                                if src_pos0 == trg_pos0:
+                                    if src_hi["pos1"] == trg_hi["pos1"]:  # same highlight
                                         src_dt = (src_hi.get("datetime_updated")
                                                   or src_hi.get("datetime"))
                                         trg_dt = (trg_hi.get("datetime_updated")
                                                   or trg_hi.get("datetime"))
                                         if src_dt == trg_dt:
                                             break  # it's the exact same annotation
-                                        src_comm = src_hi.get("note")  # try to get the
-                                        trg_comm = trg_hi.get("note")  # newest change
-                                        if src_dt > trg_dt:
-                                            if src_comm:  # this is the newer comment
-                                                trg_hi["note"] = src_comm
-                                            elif trg_comm:  # comment was erased lately
-                                                trg_hi.pop("note", None)
+                                        if src_dt > trg_dt:  # sync src_hi to trg_hi
+                                            self.sync_hi_data(src_hi, trg_hi)
                                             trg_hi["datetime_updated"] = src_dt
-                                        else:
-                                            if trg_comm:  # this is the newer comment
-                                                src_hi["note"] = trg_comm
-                                            elif src_comm:  # comment was erased lately
-                                                src_hi.pop("note", None)
+                                        else:  # sync trg_hi to src_hi
+                                            self.sync_hi_data(trg_hi, src_hi)
                                             src_hi["datetime_updated"] = trg_dt
                                         break  # highlight found in target book
                         else:  # highlight was not found in target book
@@ -2638,6 +2629,20 @@ class Base(QMainWindow, Ui_Base):
             for i, hi in enumerate(sorted(annots, key=lambda x: int(x["pageno"]))):
                 annots_upd[i + 1] = hi
             info[0].update(annots_upd)
+
+    @staticmethod
+    def sync_hi_data(hi1, hi2):
+        """ Sync the highlight data from hi1 to hi2
+
+        :type hi1: dict
+        :type hi2: dict
+        :param hi1: 1st highlight data
+        :param hi2: 2nd highlight data
+        """
+        for key in ["note", "color", "drawer"]:
+            hi2[key] = hi1.get(key)
+            if hi2[key] is None:    # if no hi1 value
+                hi2.pop(key, None)  # remove hi2 value too
 
     @staticmethod
     def merge_old_highs(items):
