@@ -2557,7 +2557,8 @@ class Base(QMainWindow, Ui_Base):
 
         self.reload_highlights = True
 
-    def merge_new_highs(self, items):
+    @staticmethod
+    def merge_new_highs(items):
         """ Merge the highlights of multiple books [new format]
 
         :type items: [[dict, int], ...]
@@ -2588,11 +2589,19 @@ class Base(QMainWindow, Ui_Base):
                                                   or trg_hi.get("datetime"))
                                         if src_dt == trg_dt:
                                             break  # it's the exact same annotation
-                                        if src_dt > trg_dt:  # sync src_hi to trg_hi
-                                            self.sync_hi_data(src_hi, trg_hi)
+                                        src_comm = src_hi.get("note")  # try to get the
+                                        trg_comm = trg_hi.get("note")  # newest change
+                                        if src_dt > trg_dt:
+                                            if src_comm:  # this is the newer comment
+                                                trg_hi["note"] = src_comm
+                                            elif trg_comm:  # comment was erased lately
+                                                trg_hi.pop("note", None)
                                             trg_hi["datetime_updated"] = src_dt
-                                        else:  # sync trg_hi to src_hi
-                                            self.sync_hi_data(trg_hi, src_hi)
+                                        else:
+                                            if trg_comm:  # this is the newer comment
+                                                src_hi["note"] = trg_comm
+                                            elif src_comm:  # comment was erased lately
+                                                src_hi.pop("note", None)
                                             src_hi["datetime_updated"] = trg_dt
                                         break  # highlight found in target book
                         else:  # highlight was not found in target book
@@ -2639,10 +2648,26 @@ class Base(QMainWindow, Ui_Base):
         :param hi1: 1st highlight data
         :param hi2: 2nd highlight data
         """
-        for key in ["note", "color", "drawer"]:
-            hi2[key] = hi1.get(key)
-            if hi2[key] is None:    # if no hi1 value
-                hi2.pop(key, None)  # remove hi2 value too
+        comm1 = hi1.get("note")
+        comm2 = hi2.get("note")
+        if comm1:
+            hi2["note"] = comm1
+        elif comm2:
+            hi2.pop("note", None)
+
+        color1 = hi1.get("color")
+        color2 = hi2.get("color")
+        if color1:
+            hi2["color"] = color1
+        elif color2:
+            hi2.pop("color", None)
+
+        style1 = hi1.get("drawer")
+        style2 = hi2.get("drawer")
+        if style1:
+            hi2["drawer"] = style1
+        elif style2:
+            hi2.pop("drawer", None)
 
     @staticmethod
     def merge_old_highs(items):

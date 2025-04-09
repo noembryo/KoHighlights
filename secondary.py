@@ -19,7 +19,7 @@ if QT5:  # ___ ______________ DEPENDENCIES __________________________
     from PySide2.QtWidgets import (QTableWidgetItem, QTableWidget, QMessageBox, QLineEdit,
                                    QApplication, QWidget, QDialog, QFileDialog,
                                    QStyleFactory, QActionGroup, QMenu, QAction,
-                                   QToolButton, QCheckBox)
+                                   QToolButton, QCheckBox, QPushButton)
 else:  # Qt6
     from PySide6.QtCore import (QObject, Qt, Signal, QEvent, QPoint, Slot, QSize, QRect,
                                 QTimer, QUrl)
@@ -27,7 +27,8 @@ else:  # Qt6
                                QPalette, QColor, QPixmap, QPainter, QPen)
     from PySide6.QtWidgets import (QTableWidgetItem, QTableWidget, QApplication,
                                    QLineEdit, QToolButton, QWidget, QMenu, QFileDialog,
-                                   QDialog, QMessageBox, QCheckBox, QStyleFactory)
+                                   QDialog, QMessageBox, QCheckBox, QStyleFactory,
+                                   QPushButton)
 import requests
 from bs4 import BeautifulSoup
 from future.moves.urllib.parse import unquote, urlencode
@@ -1709,16 +1710,47 @@ class About(QDialog, Ui_About):
         self.setWindowTitle(_(f"About {APP_NAME}"))
         self.base = parent
 
+        self.headers = set()
+        self.last_clicked_block = None
+        self.back_btn = QPushButton(self)
+        self.back_btn.setText("Back")
+        self.back_btn.clicked.connect(self.on_back_btn_clicked)
+        self.back_btn.hide()
+
+    def keyPressEvent(self, event):
+        """ Handles the key press events
+
+        :type event: QKeyEvent
+        :parameter event: The key press event
+        """
+        key, mod = event.key(), event.modifiers()
+        if key == Qt.Key_Backspace:
+            if self.last_clicked_block:
+                self.on_back_btn_clicked()
+                return True
+        if key == Qt.Key_Escape:
+            if self.back_btn.isVisible():
+                self.back_btn.hide()
+                return True
+        super().keyPressEvent(event)
+
+    def resizeEvent(self, event):
+        if self.back_btn.isVisible():
+            self.move_back_btn()
+        super().resizeEvent(event)
+
     @Slot()
     def on_about_tabs_currentChanged(self):
         self.setup_tabs()
+        self.back_btn.hide()
 
     def setup_tabs(self):
-        if self.about_tabs.currentWidget().objectName() == "info_tab":  # Information
+        name = self.about_tabs.currentWidget().objectName()
+        if name == "info_tab":  # Information
             self.create_text()
-        elif self.about_tabs.currentWidget().objectName() == "system_tab":  # System
+        elif name == "system_tab":  # System
             self.system_txt.setPlainText(self.get_system_info())
-        elif self.about_tabs.currentWidget().objectName() == "usage_tab":  # Usage guide
+        elif name == "usage_tab":  # Usage guide
             self.create_usage_text()
 
     @Slot(QUrl)
@@ -1728,10 +1760,40 @@ class About(QDialog, Ui_About):
         :type url: QUrl object
         :parameter url: The link's command
         """
-        link = unquote(url.toString())
-        if link.startswith("http"):
-            webbrowser.open(link)
-            return
+        anchor = url.fragment()  # Get the fragment part after '#'
+        if anchor in self.headers:
+            self.scroll_to_anchor(anchor)
+            cursor = self.usage_txt.textCursor()
+            self.last_clicked_block = cursor.block()  # Save the current block
+            self.move_back_btn()
+        else:
+            link = unquote(url.toString())
+            if link.startswith("http"):
+                webbrowser.open(link)
+                text = f"External link clicked: {link}"
+            else:
+                text = f"Unknown anchor clicked: {link}"
+            print(text)
+
+    def scroll_to_anchor(self, anchor):
+        """Scroll to the header that matches the anchor
+        """
+        doc = self.usage_txt.document()
+        block = doc.begin()
+        while block.isValid():
+            block_text = block.text()
+            block_format = block.blockFormat()
+            text = re.sub('[^0-9a-zA-Z]+', '-', block_text).lower()
+            if text == anchor and block_format.headingLevel() > 0:
+                cursor = self.usage_txt.textCursor()
+                cursor.setPosition(block.position())
+                scrollbar = self.usage_txt.verticalScrollBar()
+                position = self.usage_txt.cursorRect(cursor).top()
+                scrollbar.setValue(scrollbar.value() + position
+                                   - self.usage_txt.rect().top())
+                return
+            block = block.next()
+        log.warning(f"Header '{anchor}' not found in document!")
 
     @Slot()
     def on_usage_btn_clicked(self):
@@ -1852,6 +1914,47 @@ class About(QDialog, Ui_About):
             text = text.replace(" (Usage)", "")
             text = text.split("___", 1)[1]
             self.usage_txt.setMarkdown(text)
+            self.get_headers()
+
+    def get_headers(self):
+        """ Takes an inventory of headers
+        """
+        html = self.usage_txt.toHtml()
+        soup = BeautifulSoup(html, "html.parser")
+        self.headers = set()
+        for tag in soup.find_all(lambda t: t.name and t.name.startswith('h')):
+            header_text = tag.get_text(strip=True)
+            if tag.name == "html":
+                continue
+            if header_text:
+                self.headers.add(re.sub('[^0-9a-zA-Z]+', '-', header_text).lower())
+
+    def on_back_btn_clicked(self):
+        self.scroll_to_last_clicked_anchor()
+        self.last_clicked_block = None  # Clear it after navigating back
+        self.back_btn.hide()
+
+    def scroll_to_last_clicked_anchor(self):
+        if self.last_clicked_block:
+            cursor = self.usage_txt.textCursor()
+            cursor.setPosition(self.last_clicked_block.position())
+            self.usage_txt.setTextCursor(cursor)
+            self.usage_txt.ensureCursorVisible()
+
+    def move_back_btn(self):
+        right = self.about_tabs.width() - self.back_btn.width() - 15
+        top = self.about_tabs.y() + self.back_btn.height()
+        self.back_btn.move(right, top)
+        self.back_btn.show()
+
+    def closeEvent(self, event):
+        """ Accepts or rejects the `exit` command
+
+        :type event: QCloseEvent
+        :parameter event: The `exit` event
+        """
+        self.back_btn.hide()
+        event.accept()
 
 
 class AutoInfo(QDialog, Ui_AutoInfo):

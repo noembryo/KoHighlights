@@ -122,7 +122,7 @@ The Highlights panel shows the selected book's highlights and comments.
 3. **View** - Used to open the selected book with your system's default viewer.
 4. **Filter**[ (Usage)](#filtering-content) - Used to filter the content of the Book Selector panel with keywords that can be found in the book's title, highlights or comments. 
 5. **Merge/Sync** - This button is only activated if two entries of the _**same**_ book are selected in the book selector pane. It will try to sync the position and/or merge the highlights of the selected books.
-6. **Delete**[ (Usage)](#deleting-highlights) - <ins>_**Warning: Use this with extreme caution!**_</ins> This button will open a drop-down menu to select one of the actions that will execute to the selected books. These are:
+6. **Delete**[ (Usage)](#deleting-highlights) - <u>Warning: Use this with extreme caution!</u> This button will open a drop-down menu to select one of the actions that will execute to the selected books. These are:
     - Delete their metadata
     - Delete the book files and their metadata
     - Delete the metadata of all the book entries with missing book files  
@@ -184,7 +184,7 @@ However, you can create/edit notes (comments) of the highlights both in KOReader
 
 3.  When KH displays a warning, click "Yes" to proceed and "No" to cancel
 
-<ins>_**Warning: Do not use any of the options under the Delete button in the toolbar to delete specific highlights!**_</ins>  
+<u>Warning: Do not use any of the options under the Delete button in the toolbar to delete specific highlights!</u>  
 Those options are used only to delete the entire metadata file for the book or even the underlying epub book file too.  
 
 Note, if you are using KH to synchronize highlights across devices, the deleted highlights may be restored during the next synchronization, if other devices in the same [Sync Group](#iii-sync-groups-view) still contain the deleted highlights.  
@@ -214,7 +214,7 @@ Only book entries that contain these words will be displayed.
 
 #### Deleting metadata or .epub files from connected devices
 
-- <ins>_**Warning: use at your own risk with extreme caution!**_</ins>
+- <u>Warning: use at your own risk with extreme caution!</u>
 
 1.  Select a book in the selector panel (use ctr+click to select multiple books)
 
@@ -372,9 +372,7 @@ Right-clicking on a sync group will bring up the following menu:
 
 -  **Load group items** - Will load all metadata files in a group in the Books view
 
--  **Copy Archived to group**  
-  <ins>_**Caution! Using this feature will overwrite all highlights in the group files with the archived version stored in KH database.**_</ins>  
-  This feature can also be used when you edited the archived version of the book, and you want to propagate it to all devices.
+-  **Copy Archived to group** - <u>Caution! Using this feature will overwrite all highlights in the group files with the archived version stored in KH database.</u> This feature can also be used when you edited the archived version of the book, and you want to propagate it to all devices.
 
 -  **Delete selected** - Same as the "Delete" button (3).
 
@@ -510,7 +508,7 @@ In every case, the book gets re-saved, and the re-saved book is a totally differ
 The reason the MD5 check exists is that, if we try to sync the highlights of different books, all sorts of strange things can (and will) happen.  
 But if we're absolutely sure that nothing has actually changed in the contents of the epub, then, there is a way to bypass the MD5 check.  
 
-<ins>_**Warning! Use this at your own risk!**_</ins>  
+<u>Warning! Use this at your own risk!</u>  
 If there is an MD5 mismatch, you can right-click the erroneous sync path (13) and select "Ignore MD5" on the popup menu.  
 This will create an empty `ignore_md5` file next to the metadata file, and will allow sync to proceed.  
 Right-clicking again on this path, will give you the option to delete the `ignore_md5` file by un-checking the "Ignore MD5" option. 
