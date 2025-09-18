@@ -10,4 +10,6 @@ dependencies = [
     "packaging",
     "PySide2",
     "requests",
+    "pypiwin32; os_name == 'nt'",
+    "pywin32; os_name == 'nt'"
 ]
