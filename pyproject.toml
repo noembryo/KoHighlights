@@ -1,0 +1,13 @@
+[project]
+name = "KoHighlights"
+version = "2.3.1.0"
+description = "KOHighlights is a utility for viewing KOReader's highlights and/or export them to simple text, html, csv or markdown files."
+readme = "README.md"
+requires-python = ">=3.7"
+dependencies = [
+    "beautifulsoup4",
+    "future",
+    "packaging",
+    "PySide2",
+    "requests",
+]
