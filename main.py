@@ -13,9 +13,8 @@ from datetime import datetime
 from functools import partial
 from copy import deepcopy
 from collections import defaultdict
-from ntpath import normpath
 from os.path import (isdir, isfile, join, basename, splitext, dirname, split, getmtime,
-                     abspath, splitdrive)
+                     abspath, splitdrive, normpath)
 from pprint import pprint
 
 if QT5:
@@ -44,7 +43,7 @@ import pickle
 
 
 __author__ = "noEmbryo"
-__version__ = "2.3.1.0"
+__version__ = "2.3.1.1"
 
 
 class Base(QMainWindow, Ui_Base):
@@ -681,6 +680,7 @@ class Base(QMainWindow, Ui_Base):
         """
         if not item:  # empty list
             return
+        # noinspection PyUnresolvedReferences
         row = item.row()
         data = self.file_table.item(row, TITLE).data(Qt.UserRole)
         path = self.file_table.item(row, TYPE).data(Qt.UserRole)[0]
@@ -730,13 +730,12 @@ class Base(QMainWindow, Ui_Base):
                     else:  # older type file
                         value = data[stats][key]
 
-                    # no total pages if reference pages are used
+                    # use pagemap total pages if reference pages are used
                     annotations = data.get("annotations")  # new type metadata
                     if self.show_ref_pg and annotations is not None and len(annotations):
-                        annot = annotations[1]  # first annotation
-                        ref_page = annot.get("pageref")
+                        ref_page = annotations[1].get("pageref") # check first annotation
                         if ref_page and ref_page.isdigit():  # there is a ref page number
-                            value = _("|Ref|")
+                            value = data.get("pagemap_doc_pages", _("|Ref|"))
                 elif key == "keywords":
                     keywords = data["doc_props"][key].split("\n")
                     value = "; ".join([i.rstrip("\\") for i in keywords])
@@ -2297,7 +2296,7 @@ class Base(QMainWindow, Ui_Base):
             for item in items:
                 item["data"] = {}
                 item["path"] = normpath(item["path"])
-            json.dump(sync_groups, f, indent=4)
+            json.dump(sync_groups, f, indent=4)  # type: ignore
 
     # ___ ___________________ MERGING - SYNCING STUFF _______________
 
@@ -3736,6 +3735,7 @@ class Base(QMainWindow, Ui_Base):
                     pass
 
 
+# noinspection PyUnresolvedReferences
 class KOHighlights(QApplication):
 
     def __init__(self, *args, **kwargs):
@@ -4080,7 +4080,7 @@ class KOHighlights(QApplication):
                             continue
                         for file_ in dir_tuple[2]:  # get the .lua file not the .old
                             if splitext(file_)[1].lower() == ".lua":
-                                path = abspath(join(dir_path, file_))
+                                path = abspath(join(dir_path, file_))  # type: ignore
                                 paths.append(path)
                                 try:
                                     sys.stdout.write(fount_txt.format(path))
@@ -4093,7 +4093,7 @@ class KOHighlights(QApplication):
                           or basename(dir_path).lower() == "history"):
                         for file_ in dir_tuple[2]:
                             if splitext(file_)[1].lower() == ".lua":
-                                path = abspath(join(dir_path, file_))
+                                path = abspath(join(dir_path, file_))  # type: ignore
                                 paths.append(path)
                                 sys.stdout.write(fount_txt.format(path))
                         continue

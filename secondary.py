@@ -6,8 +6,7 @@ import os, re
 import webbrowser
 import platform
 from functools import partial
-from ntpath import normpath
-from os.path import join, basename, splitext, isfile, abspath
+from os.path import join, basename, splitext, isfile, abspath, normpath
 from copy import deepcopy
 from pprint import pprint
 
